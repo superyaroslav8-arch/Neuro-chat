@@ -1,1784 +1,1493 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    >
+  <meta charset="UTF-8">
 
-    <meta name="theme-color" content="#0b0b0d">
-    <meta name="color-scheme" content="dark">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  >
 
-    <title>Нейро-чат</title>
+  <meta
+    name="theme-color"
+    content="#0b0d12"
+  >
 
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="glass.css">
+  <meta
+    name="description"
+    content="Neuro-chat — современный AI-чат"
+  >
+
+  <title>Neuro-chat</title>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="glass.css">
 </head>
 
 <body>
 
-<!-- =========================================================
+<!-- =====================================================
      SVG ICONS
-========================================================= -->
+===================================================== -->
 
-<svg width="0" height="0" style="position:absolute">
-    <symbol id="icon-menu" viewBox="0 0 24 24">
-        <path d="M4 6h16M4 12h16M4 18h16"/>
-    </symbol>
+<svg
+  width="0"
+  height="0"
+  style="position:absolute"
+  aria-hidden="true"
+>
 
-    <symbol id="icon-plus" viewBox="0 0 24 24">
-        <path d="M12 5v14M5 12h14"/>
-    </symbol>
+  <symbol id="icon-menu" viewBox="0 0 24 24">
+    <path d="M4 6h16M4 12h16M4 18h16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"/>
+  </symbol>
 
-    <symbol id="icon-search" viewBox="0 0 24 24">
-        <circle cx="11" cy="11" r="6.5"/>
-        <path d="m16 16 4 4"/>
-    </symbol>
+  <symbol id="icon-plus" viewBox="0 0 24 24">
+    <path d="M12 5v14M5 12h14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"/>
+  </symbol>
 
-    <symbol id="icon-chat" viewBox="0 0 24 24">
-        <path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/>
-    </symbol>
+  <symbol id="icon-search" viewBox="0 0 24 24">
+    <circle
+      cx="11"
+      cy="11"
+      r="7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="m20 20-4-4"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </symbol>
 
-    <symbol id="icon-library" viewBox="0 0 24 24">
-        <path d="M5 4h14v16H5z"/>
-        <path d="M8 8h8M8 12h8M8 16h5"/>
-    </symbol>
+  <symbol id="icon-chat" viewBox="0 0 24 24">
+    <path
+      d="M5 5h14v10H9l-4 4V5Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-folder" viewBox="0 0 24 24">
-        <path d="M3.5 7.5h6l2 2h9v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/>
-    </symbol>
+  <symbol id="icon-library" viewBox="0 0 24 24">
+    <path
+      d="M5 4h14v16H5zM9 4v16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+  </symbol>
 
-    <symbol id="icon-tools" viewBox="0 0 24 24">
-        <path d="M14 5a5 5 0 0 0 5 7l-7.5 7.5a2 2 0 0 1-3-3L16 9a5 5 0 0 0-2-4Z"/>
-        <circle cx="7" cy="7" r="2"/>
-    </symbol>
+  <symbol id="icon-folder" viewBox="0 0 24 24">
+    <path
+      d="M3 7h7l2 2h9v10H3V7Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-clock" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="8"/>
-        <path d="M12 7v5l3 2"/>
-    </symbol>
+  <symbol id="icon-tools" viewBox="0 0 24 24">
+    <path
+      d="m14 6 4 4M4 20l7-7m2-7a5 5 0 0 0 6 6l-6 6-6-6 6-6Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-settings" viewBox="0 0 24 24">
-        <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
-        <path d="M19 13.5a7.7 7.7 0 0 0 0-3l2-1.5-2-3.5-2.3 1a8 8 0 0 0-2.5-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.5 1.5l-2.3-1-2 3.5 2 1.5a7.7 7.7 0 0 0 0 3l-2 1.5 2 3.5 2.3-1a8 8 0 0 0 2.5 1.5l.4 3h4l.4-3a8 8 0 0 0 2.5-1.5l2.3 1 2-3.5-2-1.5Z"/>
-    </symbol>
+  <symbol id="icon-clock" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="M12 7v5l3 2"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </symbol>
 
-    <symbol id="icon-help" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M9.5 9a2.7 2.7 0 1 1 4.5 2c-1.3 1-2 1.4-2 3"/>
-        <circle cx="12" cy="17" r=".7" fill="currentColor" stroke="none"/>
-    </symbol>
+  <symbol id="icon-settings" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.7-1L14.5 3h-4l-.3 3.1a8 8 0 0 0-1.7 1l-2.4-1-2 3.4L6.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.3 3.1h4l.3-3.1a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-logout" viewBox="0 0 24 24">
-        <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"/>
-        <path d="M14 8l4 4-4 4M18 12H9"/>
-    </symbol>
+  <symbol id="icon-help" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="M9.5 9a2.5 2.5 0 1 1 4.2 1.8c-1.2 1-1.7 1.4-1.7 2.7"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+    <circle
+      cx="12"
+      cy="17"
+      r="1"
+      fill="currentColor"
+    />
+  </symbol>
 
-    <symbol id="icon-attach" viewBox="0 0 24 24">
-        <path d="m8 12.5 6.8-6.8a4 4 0 0 1 5.7 5.7l-8.8 8.8a5.5 5.5 0 0 1-7.8-7.8l8.4-8.4"/>
-    </symbol>
+  <symbol id="icon-logout" viewBox="0 0 24 24">
+    <path
+      d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-image" viewBox="0 0 24 24">
-        <rect x="3" y="4" width="18" height="16" rx="2"/>
-        <circle cx="8" cy="9" r="1.5"/>
-        <path d="m4 18 5-5 3 3 2-2 6 5"/>
-    </symbol>
+  <symbol id="icon-attach" viewBox="0 0 24 24">
+    <path
+      d="m9 12 5.5-5.5a3 3 0 0 1 4.2 4.2L11 18.4a5 5 0 0 1-7-7L12 3.4"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </symbol>
 
-    <symbol id="icon-camera" viewBox="0 0 24 24">
-        <path d="M5 7h3l1.5-2h5L16 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/>
-        <circle cx="12" cy="13" r="3.5"/>
-    </symbol>
+  <symbol id="icon-image" viewBox="0 0 24 24">
+    <rect
+      x="3"
+      y="4"
+      width="18"
+      height="16"
+      rx="2"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <circle
+      cx="8"
+      cy="9"
+      r="1.5"
+      fill="currentColor"
+    />
+    <path
+      d="m4 17 5-5 3 3 2-2 6 6"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+  </symbol>
 
-    <symbol id="icon-cube" viewBox="0 0 24 24">
-        <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/>
-        <path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>
-    </symbol>
+  <symbol id="icon-camera" viewBox="0 0 24 24">
+    <path
+      d="M4 7h4l1.5-2h5L16 7h4v12H4V7Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+    <circle
+      cx="12"
+      cy="13"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+  </symbol>
 
-    <symbol id="icon-send" viewBox="0 0 24 24">
-        <path d="M4 4.5 20 12 4 19.5 6.5 13 15 12 6.5 11 4 4.5Z"/>
-    </symbol>
+  <symbol id="icon-cube" viewBox="0 0 24 24">
+    <path
+      d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+    <path
+      d="m4 7.5 8 4.5 8-4.5M12 12v9"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+  </symbol>
 
-    <symbol id="icon-trash" viewBox="0 0 24 24">
-        <path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>
-    </symbol>
+  <symbol id="icon-send" viewBox="0 0 24 24">
+    <path
+      d="m4 4 16 8-16 8 3-8-3-8Zm3 8h13"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-close" viewBox="0 0 24 24">
-        <path d="M6 6l12 12M18 6 6 18"/>
-    </symbol>
+  <symbol id="icon-trash" viewBox="0 0 24 24">
+    <path
+      d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3m-9 0 1 14h10l1-14"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-code" viewBox="0 0 24 24">
-        <path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>
-    </symbol>
+  <symbol id="icon-close" viewBox="0 0 24 24">
+    <path
+      d="m6 6 12 12M18 6 6 18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </symbol>
 
-    <symbol id="icon-globe" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3Z"/>
-    </symbol>
+  <symbol id="icon-code" viewBox="0 0 24 24">
+    <path
+      d="m9 7-5 5 5 5M15 7l5 5-5 5M13 4l-2 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-sparkles" viewBox="0 0 24 24">
-        <path d="M12 3l1.2 4.8L18 9l-4.8 1.2L12 15l-1.2-4.8L6 9l4.8-1.2L12 3ZM19 14l.7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14ZM5 15l.6 2L8 18l-2.4.7L5 21l-.6-2.3L2 18l2.4-1L5 15Z"/>
-    </symbol>
+  <symbol id="icon-globe" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+    />
+  </symbol>
 
-    <symbol id="icon-check" viewBox="0 0 24 24">
-        <path d="m5 12 4 4L19 6"/>
-    </symbol>
+  <symbol id="icon-sparkles" viewBox="0 0 24 24">
+    <path
+      d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3ZM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linejoin="round"
+    />
+  </symbol>
 
-    <symbol id="icon-user" viewBox="0 0 24 24">
-        <circle cx="12" cy="8" r="3.5"/>
-        <path d="M5 21a7 7 0 0 1 14 0"/>
-    </symbol>
+  <symbol id="icon-user" viewBox="0 0 24 24">
+    <circle
+      cx="12"
+      cy="8"
+      r="4"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path
+      d="M4 21a8 8 0 0 1 16 0"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  </symbol>
 
-    <symbol id="icon-more" viewBox="0 0 24 24">
-        <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-    </symbol>
 </svg>
 
 
-<!-- =========================================================
-     AUTH SCREEN
-========================================================= -->
+<!-- =====================================================
+     AUTH
+===================================================== -->
 
 <section id="login-screen" class="auth-screen">
 
-    <div class="auth-card">
+  <div class="auth-card">
 
-        <div class="auth-brand">
-            <div class="auth-brand-mark">
-                <svg>
-                    <use href="#icon-sparkles"></use>
-                </svg>
-            </div>
+    <div class="auth-logo">
+      <div class="logo-mark">
+        ${icon("sparkles")}
+      </div>
 
-            <div>
-                <h1>Нейро-чат</h1>
-                <p>Интеллектуальный AI-помощник</p>
-            </div>
-        </div>
+      <h1>Neuro-chat</h1>
 
-
-        <!-- LOGIN -->
-
-        <form
-            id="login-form"
-            class="auth-form"
-            onsubmit="event.preventDefault(); login();"
-        >
-
-            <div class="auth-heading">
-                <h2>С возвращением</h2>
-                <p>Войдите в свой аккаунт</p>
-            </div>
-
-
-            <div class="field">
-
-                <label for="username">
-                    Имя пользователя
-                </label>
-
-                <input
-                    id="username"
-                    type="text"
-                    autocomplete="username"
-                    placeholder="Введите имя"
-                >
-
-            </div>
-
-
-            <div class="field">
-
-                <label for="password">
-                    Пароль
-                </label>
-
-                <input
-                    id="password"
-                    type="password"
-                    autocomplete="current-password"
-                    placeholder="Введите пароль"
-                >
-
-            </div>
-
-
-            <div
-                id="login-error"
-                class="auth-error"
-                aria-live="polite"
-            ></div>
-
-
-            <button
-                id="login-button"
-                class="auth-submit"
-                type="submit"
-            >
-                Войти
-            </button>
-
-
-            <button
-                class="auth-switch"
-                type="button"
-                onclick="showRegister()"
-            >
-                Создать аккаунт
-            </button>
-
-        </form>
-
-
-        <!-- REGISTER -->
-
-        <form
-            id="register-form"
-            class="auth-form"
-            style="display:none"
-            onsubmit="event.preventDefault(); register();"
-        >
-
-            <div class="auth-heading">
-                <h2>Создать аккаунт</h2>
-                <p>Начните пользоваться Нейро-чатом</p>
-            </div>
-
-
-            <div class="field">
-
-                <label for="register-username">
-                    Имя пользователя
-                </label>
-
-                <input
-                    id="register-username"
-                    type="text"
-                    autocomplete="username"
-                    placeholder="Придумайте имя"
-                >
-
-            </div>
-
-
-            <div class="field">
-
-                <label for="register-password">
-                    Пароль
-                </label>
-
-                <input
-                    id="register-password"
-                    type="password"
-                    autocomplete="new-password"
-                    placeholder="Придумайте пароль"
-                >
-
-            </div>
-
-
-            <div class="field">
-
-                <label for="register-email">
-                    Email
-                    <span>необязательно</span>
-                </label>
-
-                <input
-                    id="register-email"
-                    type="email"
-                    autocomplete="email"
-                    placeholder="name@example.com"
-                >
-
-            </div>
-
-
-            <div class="field">
-
-                <label for="register-phone">
-                    Телефон
-                    <span>необязательно</span>
-                </label>
-
-                <input
-                    id="register-phone"
-                    type="tel"
-                    autocomplete="tel"
-                    placeholder="+7 ..."
-                >
-
-            </div>
-
-
-            <div
-                id="register-error"
-                class="auth-error"
-                aria-live="polite"
-            ></div>
-
-
-            <button
-                class="auth-submit"
-                type="submit"
-            >
-                Зарегистрироваться
-            </button>
-
-
-            <button
-                class="auth-switch"
-                type="button"
-                onclick="showLogin()"
-            >
-                Уже есть аккаунт
-            </button>
-
-        </form>
-
+      <p>
+        Ваш интеллектуальный AI-помощник
+      </p>
     </div>
+
+
+    <!-- LOGIN -->
+
+    <form
+      id="login-form"
+      class="auth-form"
+      onsubmit="event.preventDefault(); login();"
+    >
+
+      <label for="username">
+        Логин
+      </label>
+
+      <input
+        id="username"
+        type="text"
+        autocomplete="username"
+        placeholder="Введите логин"
+      >
+
+      <label for="password">
+        Пароль
+      </label>
+
+      <input
+        id="password"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Введите пароль"
+      >
+
+      <div
+        id="login-error"
+        class="auth-error"
+      ></div>
+
+      <button
+        id="login-button"
+        class="primary-button"
+        type="submit"
+      >
+        Войти
+      </button>
+
+      <button
+        class="text-button"
+        type="button"
+        onclick="showRegister()"
+      >
+        Создать аккаунт
+      </button>
+
+    </form>
+
+
+    <!-- REGISTER -->
+
+    <form
+      id="register-form"
+      class="auth-form hidden"
+      onsubmit="event.preventDefault(); register();"
+    >
+
+      <label for="register-username">
+        Логин
+      </label>
+
+      <input
+        id="register-username"
+        type="text"
+        autocomplete="username"
+        placeholder="Придумайте логин"
+      >
+
+      <label for="register-password">
+        Пароль
+      </label>
+
+      <input
+        id="register-password"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Придумайте пароль"
+      >
+
+      <label for="register-email">
+        Email
+      </label>
+
+      <input
+        id="register-email"
+        type="email"
+        autocomplete="email"
+        placeholder="example@mail.com"
+      >
+
+      <label for="register-phone">
+        Телефон
+      </label>
+
+      <input
+        id="register-phone"
+        type="tel"
+        autocomplete="tel"
+        placeholder="+7..."
+      >
+
+      <div
+        id="register-error"
+        class="auth-error"
+      ></div>
+
+      <button
+        class="primary-button"
+        type="submit"
+      >
+        Зарегистрироваться
+      </button>
+
+      <button
+        class="text-button"
+        type="button"
+        onclick="showLogin()"
+      >
+        Уже есть аккаунт
+      </button>
+
+    </form>
+
+  </div>
 
 </section>
 
 
-<!-- =========================================================
-     APPLICATION
-========================================================= -->
+<!-- =====================================================
+     APP
+===================================================== -->
 
-<div
-    id="app"
-    class="app-shell"
-    style="display:none"
->
+<div id="app" class="app-shell hidden">
 
 
-    <!-- =====================================================
-         SIDEBAR
-    ====================================================== -->
+  <!-- ===================================================
+       SIDEBAR
+  =================================================== -->
 
-    <aside
-        id="sidebar"
-        class="sidebar"
+  <aside id="sidebar" class="sidebar">
+
+    <div class="sidebar-header">
+
+      <div class="brand">
+
+        <div class="brand-icon">
+          <svg>
+            <use href="#icon-sparkles"></use>
+          </svg>
+        </div>
+
+        <span>Neuro-chat</span>
+
+      </div>
+
+      <button
+        class="sidebar-collapse"
+        type="button"
+        onclick="toggleSidebar()"
+      >
+        <svg>
+          <use href="#icon-menu"></use>
+        </svg>
+      </button>
+
+    </div>
+
+
+    <button
+      id="new-chat-button"
+      class="new-chat-button"
+      type="button"
+      onclick="newChat()"
     >
+      <svg>
+        <use href="#icon-plus"></use>
+      </svg>
 
-        <div class="sidebar-top">
+      <span>Новый чат</span>
+    </button>
 
-            <div class="sidebar-brand">
 
-                <div class="sidebar-logo">
-                    <svg>
-                        <use href="#icon-sparkles"></use>
-                    </svg>
-                </div>
+    <div class="chat-search">
 
-                <span>Нейро-чат</span>
+      <svg>
+        <use href="#icon-search"></use>
+      </svg>
 
-            </div>
-
-
-            <button
-                class="sidebar-collapse icon-button"
-                type="button"
-                onclick="toggleSidebar()"
-                aria-label="Свернуть меню"
-            >
-                <svg>
-                    <use href="#icon-menu"></use>
-                </svg>
-            </button>
-
-        </div>
-
-
-        <!-- NEW CHAT -->
-
-        <button
-            id="new-chat-button"
-            class="new-chat-button"
-            type="button"
-            onclick="newChat()"
-        >
-
-            <svg>
-                <use href="#icon-plus"></use>
-            </svg>
-
-            <span>Новый чат</span>
-
-        </button>
-
-
-        <!-- SEARCH -->
-
-        <div class="sidebar-search">
-
-            <svg>
-                <use href="#icon-search"></use>
-            </svg>
-
-            <input
-                id="chat-search"
-                type="search"
-                placeholder="Поиск"
-                autocomplete="off"
-                oninput="searchChats(this.value)"
-            >
-
-        </div>
-
-
-        <!-- NAVIGATION -->
-
-        <nav class="main-navigation">
-
-            <button
-                class="nav-item active"
-                type="button"
-                data-section="chat"
-                data-action="chat"
-            >
-
-                <svg>
-                    <use href="#icon-chat"></use>
-                </svg>
-
-                <span>Чат</span>
-
-            </button>
-
-
-            <button
-                class="nav-item"
-                type="button"
-                data-section="library"
-                data-action="library"
-            >
-
-                <svg>
-                    <use href="#icon-library"></use>
-                </svg>
-
-                <span>Библиотека</span>
-
-            </button>
-
-
-            <button
-                class="nav-item"
-                type="button"
-                data-section="projects"
-                data-action="projects"
-            >
-
-                <svg>
-                    <use href="#icon-folder"></use>
-                </svg>
-
-                <span>Проекты</span>
-
-            </button>
-
-
-            <button
-                class="nav-item"
-                type="button"
-                data-section="plugins"
-                data-action="plugins"
-            >
-
-                <svg>
-                    <use href="#icon-tools"></use>
-                </svg>
-
-                <span>Инструменты</span>
-
-            </button>
-
-
-            <button
-                class="nav-item"
-                type="button"
-                data-section="scheduled"
-                data-action="scheduled"
-            >
-
-                <svg>
-                    <use href="#icon-clock"></use>
-                </svg>
-
-                <span>Задачи</span>
-
-            </button>
-
-
-            <button
-                class="nav-item"
-                type="button"
-                data-section="more"
-                data-action="more"
-            >
-
-                <svg>
-                    <use href="#icon-more"></use>
-                </svg>
-
-                <span>Ещё</span>
-
-            </button>
-
-        </nav>
-
-
-        <!-- CHAT HISTORY -->
-
-        <div class="chat-history-wrapper">
-
-            <div class="sidebar-label">
-                Ваши чаты
-            </div>
-
-            <div
-                id="chat-history"
-                class="chat-history"
-            ></div>
-
-        </div>
-
-
-        <!-- SIDEBAR BOTTOM -->
-
-        <div class="sidebar-bottom">
-
-            <button
-                type="button"
-                onclick="openSettings()"
-            >
-
-                <svg>
-                    <use href="#icon-settings"></use>
-                </svg>
-
-                <span>Настройки</span>
-
-            </button>
-
-
-            <button
-                type="button"
-                onclick="openSupport()"
-            >
-
-                <svg>
-                    <use href="#icon-help"></use>
-                </svg>
-
-                <span>Поддержка</span>
-
-            </button>
-
-
-            <button
-                type="button"
-                onclick="logout()"
-            >
-
-                <svg>
-                    <use href="#icon-logout"></use>
-                </svg>
-
-                <span>Выйти</span>
-
-            </button>
-
-        </div>
-
-    </aside>
-
-
-    <!-- =====================================================
-         MAIN
-    ====================================================== -->
-
-    <main class="main-content">
-
-
-        <!-- TOPBAR -->
-
-        <header class="topbar">
-
-            <div class="topbar-left">
-
-                <button
-                    class="mobile-menu-button icon-button"
-                    type="button"
-                    onclick="toggleSidebar()"
-                    aria-label="Меню"
-                >
-
-                    <svg>
-                        <use href="#icon-menu"></use>
-                    </svg>
-
-                </button>
-
-
-                <button
-                    id="model-button"
-                    class="model-button"
-                    type="button"
-                >
-
-                    <span id="chat-title">
-                        Нейро-чат
-                    </span>
-
-                    <span class="model-chevron">
-                        ▾
-                    </span>
-
-                </button>
-
-            </div>
-
-
-            <div class="topbar-actions">
-
-                <button
-                    class="icon-button"
-                    type="button"
-                    onclick="clearChat()"
-                    title="Очистить чат"
-                    aria-label="Очистить чат"
-                >
-
-                    <svg>
-                        <use href="#icon-trash"></use>
-                    </svg>
-
-                </button>
-
-
-                <button
-                    class="icon-button"
-                    type="button"
-                    onclick="openSettings()"
-                    title="Настройки"
-                    aria-label="Настройки"
-                >
-
-                    <svg>
-                        <use href="#icon-settings"></use>
-                    </svg>
-
-                </button>
-
-            </div>
-
-        </header>
-
-
-        <!-- =================================================
-             CHAT SECTION
-        ================================================== -->
-
-        <section
-            id="chat-section"
-            class="chat-section app-section"
-        >
-
-            <!-- MESSAGES -->
-
-            <div
-                id="messages"
-                class="messages"
-                aria-live="polite"
-            ></div>
-
-
-            <!-- WELCOME -->
-
-            <div
-                id="welcome-screen"
-                class="welcome-screen"
-            >
-
-                <div class="welcome-mark">
-
-                    <svg>
-                        <use href="#icon-sparkles"></use>
-                    </svg>
-
-                </div>
-
-
-                <h2>
-                    Чем могу помочь?
-                </h2>
-
-
-                <p>
-                    Задайте вопрос, опишите задачу или расскажите о своей идее.
-                </p>
-
-
-                <div class="quick-prompts">
-
-
-                    <button
-                        type="button"
-                        onclick="quickPrompt('Напиши рабочий код для современного сайта')"
-                    >
-
-                        <span class="prompt-icon">
-                            <svg>
-                                <use href="#icon-code"></use>
-                            </svg>
-                        </span>
-
-                        <span>
-                            <strong>Написать код</strong>
-                            <small>Создать или исправить код</small>
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="quickPrompt('Помоги придумать идею нового проекта')"
-                    >
-
-                        <span class="prompt-icon">
-                            <svg>
-                                <use href="#icon-sparkles"></use>
-                            </svg>
-                        </span>
-
-                        <span>
-                            <strong>Придумать идею</strong>
-                            <small>Найти интересную концепцию</small>
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="quickPrompt('Объясни простыми словами, как это работает')"
-                    >
-
-                        <span class="prompt-icon">
-                            <svg>
-                                <use href="#icon-help"></use>
-                            </svg>
-                        </span>
-
-                        <span>
-                            <strong>Объяснить</strong>
-                            <small>Разобраться в сложной теме</small>
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="quickPrompt('Создай современный сайт по моему описанию')"
-                    >
-
-                        <span class="prompt-icon">
-                            <svg>
-                                <use href="#icon-globe"></use>
-                            </svg>
-                        </span>
-
-                        <span>
-                            <strong>Создать сайт</strong>
-                            <small>Сгенерировать веб-проект</small>
-                        </span>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-
-            <!-- ATTACHED FILES -->
-
-            <div
-                id="attached-files"
-                class="attached-files"
-            ></div>
-
-
-            <!-- COMPOSER -->
-
-            <div class="composer-area">
-
-
-                <!-- ATTACH MENU -->
-
-                <div
-                    id="attach-menu"
-                    class="attach-menu"
-                    style="display:none"
-                >
-
-                    <button
-                        type="button"
-                        onclick="attachType('file')"
-                    >
-
-                        <svg>
-                            <use href="#icon-attach"></use>
-                        </svg>
-
-                        <span>Файл</span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="attachType('photo')"
-                    >
-
-                        <svg>
-                            <use href="#icon-image"></use>
-                        </svg>
-
-                        <span>Фото</span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="attachType('camera')"
-                    >
-
-                        <svg>
-                            <use href="#icon-camera"></use>
-                        </svg>
-
-                        <span>Камера</span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        onclick="attachType('3d')"
-                    >
-
-                        <svg>
-                            <use href="#icon-cube"></use>
-                        </svg>
-
-                        <span>3D-модель</span>
-
-                    </button>
-
-                </div>
-
-
-                <!-- COMPOSER -->
-
-                <div class="composer">
-
-
-                    <button
-                        id="attach-button"
-                        class="composer-icon-button"
-                        type="button"
-                        onclick="toggleAttach()"
-                        aria-label="Прикрепить"
-                        title="Прикрепить"
-                    >
-
-                        <svg>
-                            <use href="#icon-plus"></use>
-                        </svg>
-
-                    </button>
-
-
-                    <textarea
-                        id="user-input"
-                        rows="1"
-                        maxlength="10000"
-                        placeholder="Сообщение для Нейро-чата"
-                        autocomplete="off"
-                        spellcheck="true"
-                        aria-label="Сообщение"
-                    ></textarea>
-
-
-                    <button
-                        id="send-button"
-                        class="send-button"
-                        type="button"
-                        onclick="sendMessage()"
-                        aria-label="Отправить"
-                        title="Отправить"
-                    >
-
-                        <svg>
-                            <use href="#icon-send"></use>
-                        </svg>
-
-                    </button>
-
-                </div>
-
-
-                <div class="composer-hint">
-                    Enter — отправить
-                    <span>·</span>
-                    Shift + Enter — новая строка
-                </div>
-
-            </div>
-
-
-            <!-- FILE INPUTS -->
-
-            <input
-                id="file-input"
-                type="file"
-                hidden
-            >
-
-            <input
-                id="photo-input"
-                type="file"
-                accept="image/*"
-                hidden
-            >
-
-            <input
-                id="camera-input"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                hidden
-            >
-
-            <input
-                id="model-file-input"
-                type="file"
-                accept=".stl,.obj,.step,.stp,.3mf,.gcode"
-                hidden
-            >
-
-        </section>
-
-
-        <!-- =================================================
-             LIBRARY
-        ================================================== -->
-
-        <section
-            id="library-section"
-            class="app-section"
-            style="display:none"
-        >
-
-            <div class="page-container">
-
-                <div class="page-heading">
-
-                    <div class="page-icon">
-                        <svg>
-                            <use href="#icon-library"></use>
-                        </svg>
-                    </div>
-
-                    <div>
-                        <h2>Библиотека</h2>
-                        <p>
-                            Сохранённые файлы, материалы и результаты.
-                        </p>
-                    </div>
-
-                </div>
-
-
-                <div
-                    id="library-content"
-                    class="library-content"
-                ></div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             PROJECTS
-        ================================================== -->
-
-        <section
-            id="projects-section"
-            class="app-section"
-            style="display:none"
-        >
-
-            <div class="page-container">
-
-                <div class="page-heading">
-
-                    <div class="page-icon">
-                        <svg>
-                            <use href="#icon-folder"></use>
-                        </svg>
-                    </div>
-
-                    <div>
-                        <h2>Проекты</h2>
-                        <p>
-                            Создавайте и управляйте своими проектами.
-                        </p>
-                    </div>
-
-                </div>
-
-
-                <button
-                    class="premium-action"
-                    type="button"
-                    onclick="createProject()"
-                >
-
-                    <svg>
-                        <use href="#icon-plus"></use>
-                    </svg>
-
-                    Создать проект
-
-                </button>
-
-
-                <div
-                    id="projects-list"
-                    class="projects-list"
-                ></div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             TOOLS
-        ================================================== -->
-
-        <section
-            id="plugins-section"
-            class="app-section"
-            style="display:none"
-        >
-
-            <div class="page-container">
-
-                <div class="page-heading">
-
-                    <div class="page-icon">
-                        <svg>
-                            <use href="#icon-tools"></use>
-                        </svg>
-                    </div>
-
-                    <div>
-                        <h2>Инструменты</h2>
-                        <p>
-                            Дополнительные возможности Нейро-чата.
-                        </p>
-                    </div>
-
-                </div>
-
-
-                <div class="feature-grid">
-
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="openCodeMode()"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-code"></use>
-                            </svg>
-                        </div>
-
-                        <strong>Режим кода</strong>
-
-                        <span>
-                            Создание, анализ и исправление программного кода.
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="openSitePreview()"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-globe"></use>
-                            </svg>
-                        </div>
-
-                        <strong>Предпросмотр сайта</strong>
-
-                        <span>
-                            Открывайте HTML-проекты прямо внутри Нейро-чата.
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="quickPrompt('Помоги мне с программированием')"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-sparkles"></use>
-                            </svg>
-                        </div>
-
-                        <strong>AI-помощник</strong>
-
-                        <span>
-                            Получайте помощь в работе над проектами.
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="attachType('3d')"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-cube"></use>
-                            </svg>
-                        </div>
-
-                        <strong>3D-модели</strong>
-
-                        <span>
-                            Загружайте STL, OBJ, STEP и другие файлы.
-                        </span>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             SCHEDULED
-        ================================================== -->
-
-        <section
-            id="scheduled-section"
-            class="app-section"
-            style="display:none"
-        >
-
-            <div class="page-container">
-
-                <div class="page-heading">
-
-                    <div class="page-icon">
-                        <svg>
-                            <use href="#icon-clock"></use>
-                        </svg>
-                    </div>
-
-                    <div>
-                        <h2>Задачи</h2>
-                        <p>
-                            Управление запланированными действиями.
-                        </p>
-                    </div>
-
-                </div>
-
-
-                <button
-                    class="premium-action"
-                    type="button"
-                    onclick="createScheduledTask()"
-                >
-
-                    <svg>
-                        <use href="#icon-plus"></use>
-                    </svg>
-
-                    Создать задачу
-
-                </button>
-
-
-                <div
-                    id="scheduled-list"
-                    class="scheduled-list"
-                ></div>
-
-            </div>
-
-        </section>
-
-
-        <!-- =================================================
-             MORE
-        ================================================== -->
-
-        <section
-            id="more-section"
-            class="app-section"
-            style="display:none"
-        >
-
-            <div class="page-container">
-
-                <div class="page-heading">
-
-                    <div class="page-icon">
-                        <svg>
-                            <use href="#icon-more"></use>
-                        </svg>
-                    </div>
-
-                    <div>
-                        <h2>Ещё</h2>
-                        <p>
-                            Дополнительные функции приложения.
-                        </p>
-                    </div>
-
-                </div>
-
-
-                <div class="feature-grid">
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="openSettings()"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-settings"></use>
-                            </svg>
-                        </div>
-
-                        <strong>Настройки</strong>
-
-                        <span>
-                            Параметры AI, модели и интерфейса.
-                        </span>
-
-                    </button>
-
-
-                    <button
-                        class="feature-card"
-                        type="button"
-                        onclick="openSupport()"
-                    >
-
-                        <div class="feature-card-icon">
-                            <svg>
-                                <use href="#icon-help"></use>
-                            </svg>
-                        </div>
-
-                        <strong>Поддержка</strong>
-
-                        <span>
-                            Информация и помощь по работе приложения.
-                        </span>
-
-                    </button>
-
-                </div>
-
-            </div>
-
-        </section>
-
-    </main>
-
-</div>
-
-
-<!-- =========================================================
-     SETTINGS MODAL
-========================================================= -->
-
-<div
-    id="settings-modal"
-    class="modal"
-    style="display:none"
-    role="dialog"
-    aria-modal="true"
->
-
-    <div class="modal-backdrop" onclick="closeSettings()"></div>
-
-    <div class="modal-window">
-
-        <div class="modal-header">
-
-            <div>
-
-                <h2>Настройки</h2>
-
-                <p>
-                    Настройте Нейро-чат под себя.
-                </p>
-
-            </div>
-
-
-            <button
-                class="modal-close"
-                type="button"
-                onclick="closeSettings()"
-            >
-
-                <svg>
-                    <use href="#icon-close"></use>
-                </svg>
-
-            </button>
-
-        </div>
-
-
-        <div class="modal-body">
-
-
-            <!-- API -->
-
-            <div class="settings-group">
-
-                <label for="api-key">
-                    API-ключ
-                </label>
-
-                <input
-                    id="api-key"
-                    type="password"
-                    autocomplete="off"
-                    placeholder="Введите API-ключ"
-                >
-
-                <small id="api-key-status"></small>
-
-
-                <button
-                    id="save-api-key"
-                    class="premium-action"
-                    type="button"
-                    onclick="saveApiKey()"
-                >
-                    Сохранить ключ
-                </button>
-
-            </div>
-
-
-            <!-- MODEL -->
-
-            <div class="settings-group">
-
-                <label for="model">
-                    Модель
-                </label>
-
-                <select id="model">
-
-                    <option value="gpt-5">
-                        GPT-5
-                    </option>
-
-                    <option value="gpt-5-mini">
-                        GPT-5 mini
-                    </option>
-
-                    <option value="gpt-4.1">
-                        GPT-4.1
-                    </option>
-
-                </select>
-
-            </div>
-
-
-            <!-- THEME -->
-
-            <div class="settings-group">
-
-                <label for="theme">
-                    Тема интерфейса
-                </label>
-
-                <select
-                    id="theme"
-                    onchange="changeTheme(this.value)"
-                >
-
-                    <option value="dark">
-                        Тёмная
-                    </option>
-
-                    <option value="light">
-                        Светлая
-                    </option>
-
-                </select>
-
-            </div>
-
-
-            <!-- TEMPORARY -->
-
-            <label class="settings-toggle">
-
-                <div>
-
-                    <strong>
-                        Временный чат
-                    </strong>
-
-                    <span>
-                        Не сохранять историю этого чата.
-                    </span>
-
-                </div>
-
-                <input
-                    id="temporary-chat"
-                    type="checkbox"
-                >
-
-            </label>
-
-
-            <!-- SITE BUILDER -->
-
-            <label class="settings-toggle">
-
-                <div>
-
-                    <strong>
-                        Создание сайтов
-                    </strong>
-
-                    <span>
-                        Использовать режим работы с веб-проектами.
-                    </span>
-
-                </div>
-
-                <input
-                    id="site-builder-mode"
-                    type="checkbox"
-                >
-
-            </label>
-
-        </div>
+      <input
+        id="chat-search"
+        type="search"
+        placeholder="Поиск чатов..."
+      >
 
     </div>
 
-</div>
 
+    <nav class="sidebar-nav">
+
+      <button
+        class="nav-item active"
+        type="button"
+        data-section="chat"
+        onclick="navigate('chat')"
+      >
+        <svg>
+          <use href="#icon-chat"></use>
+        </svg>
+
+        <span>Чаты</span>
+      </button>
+
+
+      <button
+        class="nav-item"
+        type="button"
+        data-section="library"
+        onclick="navigate('library')"
+      >
+        <svg>
+          <use href="#icon-library"></use>
+        </svg>
+
+        <span>Библиотека</span>
+      </button>
+
+
+      <button
+        class="nav-item"
+        type="button"
+        data-section="projects"
+        onclick="navigate('projects')"
+      >
+        <svg>
+          <use href="#icon-folder"></use>
+        </svg>
+
+        <span>Проекты</span>
+      </button>
+
+
+      <button
+        class="nav-item"
+        type="button"
+        data-section="plugins"
+        onclick="navigate('plugins')"
+      >
+        <svg>
+          <use href="#icon-tools"></use>
+        </svg>
+
+        <span>Инструменты</span>
+      </button>
+
+
+      <button
+        class="nav-item"
+        type="button"
+        data-section="scheduled"
+        onclick="navigate('scheduled')"
+      >
+        <svg>
+          <use href="#icon-clock"></use>
+        </svg>
+
+        <span>Задачи</span>
+      </button>
+
+    </nav>
 
-<!-- =========================================================
-     SUPPORT MODAL
-========================================================= -->
-
-<div
-    id="support-modal"
-    class="modal"
-    style="display:none"
-    role="dialog"
-    aria-modal="true"
->
-
-    <div class="modal-backdrop" onclick="closeSupport()"></div>
-
-    <div class="modal-window">
-
-        <div class="modal-header">
-
-            <div>
-
-                <h2>Поддержка</h2>
-
-                <p>
-                    Помощь по работе Нейро-чата.
-                </p>
-
-            </div>
-
-
-            <button
-                class="modal-close"
-                type="button"
-                onclick="closeSupport()"
-            >
-
-                <svg>
-                    <use href="#icon-close"></use>
-                </svg>
-
-            </button>
-
-        </div>
-
-
-        <div class="modal-body support-body">
-
-            <div class="support-icon">
-
-                <svg>
-                    <use href="#icon-help"></use>
-                </svg>
-
-            </div>
-
-
-            <h3>
-                Нужна помощь?
-            </h3>
-
-
-            <p>
-                Если функция работает неправильно,
-                обновите страницу и проверьте настройки приложения.
-            </p>
-
-
-            <button
-                class="premium-action"
-                type="button"
-                onclick="closeSupport()"
-            >
-                Понятно
-            </button>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-<!-- =========================================================
-     CODE MODE
-========================================================= -->
-
-<div
-    id="code-modal"
-    class="modal"
-    style="display:none"
-    role="dialog"
-    aria-modal="true"
->
-
-    <div class="modal-backdrop" onclick="closeCodeMode()"></div>
-
-    <div class="modal-window code-window">
-
-        <div class="modal-header">
-
-            <div>
-
-                <h2>Режим кода</h2>
-
-                <p>
-                    Создание и редактирование кода.
-                </p>
-
-            </div>
-
-
-            <button
-                class="modal-close"
-                type="button"
-                onclick="closeCodeMode()"
-            >
-
-                <svg>
-                    <use href="#icon-close"></use>
-                </svg>
-
-            </button>
-
-        </div>
-
-
-        <div class="code-toolbar">
-
-            <button
-                type="button"
-                onclick="selectCodeFile()"
-            >
-
-                <svg>
-                    <use href="#icon-folder"></use>
-                </svg>
-
-                Выбрать файл
-
-            </button>
-
-
-            <button
-                type="button"
-                onclick="runCode()"
-            >
-
-                <svg>
-                    <use href="#icon-send"></use>
-                </svg>
-
-                Запустить
-
-            </button>
-
-
-            <button
-                type="button"
-                onclick="askCodeAI()"
-            >
-
-                <svg>
-                    <use href="#icon-sparkles"></use>
-                </svg>
-
-                Спросить AI
-
-            </button>
-
-        </div>
-
-
-        <textarea
-            id="code-editor"
-            class="code-editor"
-            spellcheck="false"
-            placeholder="// Напишите код здесь..."
-        ></textarea>
-
-    </div>
-
-</div>
-
-
-<!-- =========================================================
-     SITE PREVIEW
-========================================================= -->
-
-<div
-    id="site-preview-modal"
-    class="modal"
-    style="display:none"
-    role="dialog"
-    aria-modal="true"
->
 
     <div
-        class="modal-backdrop"
-        onclick="closeSitePreview()"
+      id="chat-history"
+      class="chat-history"
     ></div>
 
 
-    <div class="modal-window preview-window">
+    <div class="sidebar-footer">
 
-        <div class="modal-header">
+      <button
+        class="nav-item"
+        type="button"
+        onclick="openSettings()"
+      >
+        <svg>
+          <use href="#icon-settings"></use>
+        </svg>
 
-            <div>
-
-                <h2>Предпросмотр сайта</h2>
-
-                <p>
-                    Результат работы веб-проекта.
-                </p>
-
-            </div>
-
-
-            <button
-                class="modal-close"
-                type="button"
-                onclick="closeSitePreview()"
-            >
-
-                <svg>
-                    <use href="#icon-close"></use>
-                </svg>
-
-            </button>
-
-        </div>
+        <span>Настройки</span>
+      </button>
 
 
-        <div class="preview-container">
+      <button
+        class="nav-item"
+        type="button"
+        onclick="openSupport()"
+      >
+        <svg>
+          <use href="#icon-help"></use>
+        </svg>
 
-            <iframe
-                id="site-preview-frame"
-                title="Предпросмотр сайта"
-                sandbox="allow-scripts allow-forms allow-modals"
-            ></iframe>
+        <span>Помощь</span>
+      </button>
 
-        </div>
+
+      <button
+        class="nav-item logout-item"
+        type="button"
+        onclick="logout()"
+      >
+        <svg>
+          <use href="#icon-logout"></use>
+        </svg>
+
+        <span>Выйти</span>
+      </button>
 
     </div>
+
+  </aside>
+
+
+  <!-- ===================================================
+       MAIN
+  =================================================== -->
+
+  <main class="main-content">
+
+    <header class="topbar">
+
+      <button
+        class="mobile-menu-button"
+        type="button"
+        onclick="toggleSidebar()"
+      >
+        <svg>
+          <use href="#icon-menu"></use>
+        </svg>
+      </button>
+
+
+      <div class="topbar-title">
+        <span>Neuro-chat</span>
+      </div>
+
+
+      <button
+        class="model-button"
+        type="button"
+        onclick="openSettings()"
+      >
+        <span>AI</span>
+        <small>Настройки</small>
+      </button>
+
+    </header>
+
+
+    <!-- =================================================
+         CHAT
+    ================================================= -->
+
+    <section
+      id="chat-section"
+      class="app-section"
+    >
+
+      <div
+        id="messages"
+        class="messages"
+      ></div>
+
+
+      <div
+        id="welcome-screen"
+        class="welcome-screen"
+      >
+
+        <div class="welcome-mark">
+          <svg>
+            <use href="#icon-sparkles"></use>
+          </svg>
+        </div>
+
+        <h1>
+          Чем я могу помочь?
+        </h1>
+
+        <p>
+          Задайте вопрос, придумайте идею
+          или создайте что-нибудь новое.
+        </p>
+
+
+        <div class="quick-prompts">
+
+          <button
+            type="button"
+            onclick="quickPrompt('Помоги мне придумать идею для проекта')"
+          >
+            💡 Идея проекта
+          </button>
+
+          <button
+            type="button"
+            onclick="quickPrompt('Напиши современный HTML-сайт')"
+          >
+            💻 Создать сайт
+          </button>
+
+          <button
+            type="button"
+            onclick="quickPrompt('Помоги мне написать код')"
+          >
+            👨‍💻 Написать код
+          </button>
+
+          <button
+            type="button"
+            onclick="quickPrompt('Объясни мне сложную тему простыми словами')"
+          >
+            🧠 Объяснить тему
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- COMPOSER -->
+
+      <div class="composer-wrapper">
+
+        <div
+          id="attached-files"
+          class="attached-files"
+        ></div>
+
+
+        <div class="composer">
+
+          <button
+            id="attach-button"
+            class="icon-button"
+            type="button"
+            onclick="toggleAttach()"
+            aria-label="Прикрепить"
+          >
+            <svg>
+              <use href="#icon-attach"></use>
+            </svg>
+          </button>
+
+
+          <textarea
+            id="user-input"
+            rows="1"
+            placeholder="Напишите сообщение..."
+          ></textarea>
+
+
+          <button
+            id="send-button"
+            class="send-button"
+            type="button"
+            onclick="sendMessage()"
+            aria-label="Отправить"
+          >
+            <svg>
+              <use href="#icon-send"></use>
+            </svg>
+          </button>
+
+        </div>
+
+
+        <!-- ATTACH MENU -->
+
+        <div
+          id="attach-menu"
+          class="attach-menu hidden"
+        >
+
+          <button
+            type="button"
+            onclick="attachType('file')"
+          >
+            <svg>
+              <use href="#icon-attach"></use>
+            </svg>
+            <span>Файл</span>
+          </button>
+
+
+          <button
+            type="button"
+            onclick="attachType('photo')"
+          >
+            <svg>
+              <use href="#icon-image"></use>
+            </svg>
+            <span>Фото</span>
+          </button>
+
+
+          <button
+            type="button"
+            onclick="attachType('camera')"
+          >
+            <svg>
+              <use href="#icon-camera"></use>
+            </svg>
+            <span>Камера</span>
+          </button>
+
+
+          <button
+            type="button"
+            onclick="attachType('3d')"
+          >
+            <svg>
+              <use href="#icon-cube"></use>
+            </svg>
+            <span>3D-модель</span>
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- HIDDEN INPUTS -->
+
+      <input
+        id="file-input"
+        type="file"
+        hidden
+        multiple
+      >
+
+      <input
+        id="photo-input"
+        type="file"
+        accept="image/*"
+        hidden
+        multiple
+      >
+
+      <input
+        id="camera-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+      >
+
+      <input
+        id="model-file-input"
+        type="file"
+        accept=".stl,.obj,.3mf,.step,.stp"
+        hidden
+        multiple
+      >
+
+    </section>
+
+
+    <!-- =================================================
+         LIBRARY
+    ================================================= -->
+
+    <section
+      id="library-section"
+      class="app-section hidden"
+    >
+
+      <div class="page-header">
+        <h1>Библиотека</h1>
+        <p>
+          Ваши сохранённые материалы.
+        </p>
+      </div>
+
+      <div class="empty-state">
+        <svg>
+          <use href="#icon-library"></use>
+        </svg>
+
+        <h2>Библиотека пуста</h2>
+
+        <p>
+          Здесь будут ваши файлы и материалы.
+        </p>
+      </div>
+
+    </section>
+
+
+    <!-- =================================================
+         PROJECTS
+    ================================================= -->
+
+    <section
+      id="projects-section"
+      class="app-section hidden"
+    >
+
+      <div class="page-header">
+
+        <div>
+          <h1>Проекты</h1>
+          <p>
+            Управляйте своими проектами.
+          </p>
+        </div>
+
+        <button
+          class="primary-button"
+          type="button"
+          onclick="createProject()"
+        >
+          <svg>
+            <use href="#icon-plus"></use>
+          </svg>
+
+          Новый проект
+        </button>
+
+      </div>
+
+
+      <div
+        id="projects-list"
+        class="cards-grid"
+      ></div>
+
+    </section>
+
+
+    <!-- =================================================
+         PLUGINS
+    ================================================= -->
+
+    <section
+      id="plugins-section"
+      class="app-section hidden"
+    >
+
+      <div class="page-header">
+
+        <h1>Инструменты</h1>
+
+        <p>
+          Дополнительные возможности Neuro-chat.
+        </p>
+
+      </div>
+
+
+      <div class="feature-grid">
+
+        <button
+          class="feature-card"
+          type="button"
+          onclick="openCodeMode()"
+        >
+          <div class="feature-icon">
+            <svg>
+              <use href="#icon-code"></use>
+            </svg>
+          </div>
+
+          <h3>Редактор кода</h3>
+
+          <p>
+            Пишите и тестируйте HTML,
+            CSS и JavaScript.
+          </p>
+        </button>
+
+
+        <button
+          class="feature-card"
+          type="button"
+          onclick="openSitePreview()"
+        >
+          <div class="feature-icon">
+            <svg>
+              <use href="#icon-globe"></use>
+            </svg>
+          </div>
+
+          <h3>Предпросмотр сайта</h3>
+
+          <p>
+            Просматривайте результат
+            прямо внутри Neuro-chat.
+          </p>
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- =================================================
+         SCHEDULED
+    ================================================= -->
+
+    <section
+      id="scheduled-section"
+      class="app-section hidden"
+    >
+
+      <div class="page-header">
+
+        <div>
+          <h1>Задачи</h1>
+
+          <p>
+            Запланированные задачи.
+          </p>
+        </div>
+
+        <button
+          class="primary-button"
+          type="button"
+          onclick="createScheduledTask()"
+        >
+          <svg>
+            <use href="#icon-plus"></use>
+          </svg>
+
+          Добавить
+        </button>
+
+      </div>
+
+
+      <div
+        id="scheduled-list"
+        class="cards-grid"
+      ></div>
+
+    </section>
+
+  </main>
 
 </div>
 
 
-<!-- =========================================================
-     HIDDEN FILE INPUT
-========================================================= -->
+<!-- =====================================================
+     SETTINGS MODAL
+===================================================== -->
+
+<div
+  id="settings-modal"
+  class="modal hidden"
+>
+
+  <div class="modal-card">
+
+    <div class="modal-header">
+
+      <div>
+        <h2>Настройки</h2>
+        <p>Настройте Neuro-chat под себя.</p>
+      </div>
+
+      <button
+        type="button"
+        class="icon-button"
+        onclick="closeSettings()"
+      >
+        <svg>
+          <use href="#icon-close"></use>
+        </svg>
+      </button>
+
+    </div>
+
+
+    <div class="settings-content">
+
+      <label for="api-key">
+        API-ключ
+      </label>
+
+      <input
+        id="api-key"
+        type="password"
+        placeholder="Введите API-ключ"
+        autocomplete="off"
+      >
+
+      <div
+        id="api-key-status"
+        class="api-key-status"
+      >
+        API-ключ не подключён
+      </div>
+
+      <button
+        id="save-api-key"
+        class="secondary-button"
+        type="button"
+        onclick="saveApiKey()"
+      >
+        Сохранить API-ключ
+      </button>
+
+
+      <label for="model">
+        Модель
+      </label>
+
+      <select id="model">
+
+        <option value="gpt-4o-mini">
+          GPT-4o mini
+        </option>
+
+        <option value="gpt-4o">
+          GPT-4o
+        </option>
+
+      </select>
+
+
+      <label for="theme">
+        Тема
+      </label>
+
+      <select id="theme">
+
+        <option value="dark">
+          Тёмная
+        </option>
+
+        <option value="light">
+          Светлая
+        </option>
+
+      </select>
+
+
+      <label class="toggle-row">
+
+        <span>
+          Временный чат
+        </span>
+
+        <input
+          id="temporary-chat"
+          type="checkbox"
+        >
+
+      </label>
+
+
+      <label class="toggle-row">
+
+        <span>
+          Режим создания сайтов
+        </span>
+
+        <input
+          id="site-builder-mode"
+          type="checkbox"
+        >
+
+      </label>
+
+    </div>
+
+
+    <div class="modal-footer">
+
+      <button
+        class="secondary-button"
+        type="button"
+        onclick="closeSettings()"
+      >
+        Отмена
+      </button>
+
+      <button
+        class="primary-button"
+        type="button"
+        onclick="saveAllSettings(); closeSettings();"
+      >
+        Сохранить
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- =====================================================
+     SUPPORT MODAL
+===================================================== -->
+
+<div
+  id="support-modal"
+  class="modal hidden"
+>
+
+  <div class="modal-card">
+
+    <div class="modal-header">
+
+      <div>
+        <h2>Помощь</h2>
+
+        <p>
+          Neuro-chat
+        </p>
+      </div>
+
+      <button
+        class="icon-button"
+        type="button"
+        onclick="closeSupport()"
+      >
+        <svg>
+          <use href="#icon-close"></use>
+        </svg>
+      </button>
+
+    </div>
+
+
+    <div class="support-content">
+
+      <h3>Как пользоваться?</h3>
+
+      <p>
+        Напишите сообщение в поле внизу
+        и нажмите кнопку отправки.
+      </p>
+
+      <h3>Файлы</h3>
+
+      <p>
+        Через кнопку скрепки можно
+        прикрепить файл, фотографию
+        или 3D-модель.
+      </p>
+
+      <h3>Настройки</h3>
+
+      <p>
+        В настройках можно выбрать модель,
+        тему интерфейса и API-ключ.
+      </p>
+
+    </div>
+
+
+    <div class="modal-footer">
+
+      <button
+        class="primary-button"
+        type="button"
+        onclick="closeSupport()"
+      >
+        Понятно
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- =====================================================
+     CODE MODAL
+===================================================== -->
+
+<div
+  id="code-modal"
+  class="modal modal-large hidden"
+>
+
+  <div class="modal-card code-modal-card">
+
+    <div class="modal-header">
+
+      <div>
+        <h2>Редактор кода</h2>
+
+        <p>
+          Создавайте и тестируйте веб-код.
+        </p>
+      </div>
+
+      <button
+        class="icon-button"
+        type="button"
+        onclick="closeCodeMode()"
+      >
+        <svg>
+          <use href="#icon-close"></use>
+        </svg>
+      </button>
+
+    </div>
+
+
+    <textarea
+      id="code-editor"
+      class="code-editor"
+      spellcheck="false"
+      placeholder="Введите HTML-код..."
+    ></textarea>
+
+
+    <div class="code-actions">
+
+      <button
+        class="secondary-button"
+        type="button"
+        onclick="selectCodeFile()"
+      >
+        Открыть файл
+      </button>
+
+      <button
+        class="secondary-button"
+        type="button"
+        onclick="askCodeAI()"
+      >
+        ✨ AI
+      </button>
+
+      <button
+        class="secondary-button"
+        type="button"
+        onclick="openSitePreview()"
+      >
+        Предпросмотр
+      </button>
+
+      <button
+        class="primary-button"
+        type="button"
+        onclick="runCode()"
+      >
+        Запустить
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- =====================================================
+     SITE PREVIEW
+===================================================== -->
+
+<div
+  id="site-preview-modal"
+  class="modal modal-large hidden"
+>
+
+  <div class="modal-card preview-modal-card">
+
+    <div class="modal-header">
+
+      <div>
+        <h2>Предпросмотр</h2>
+        <p>Результат выполнения кода.</p>
+      </div>
+
+      <button
+        class="icon-button"
+        type="button"
+        onclick="closeSitePreview()"
+      >
+        <svg>
+          <use href="#icon-close"></use>
+        </svg>
+      </button>
+
+    </div>
+
+
+    <iframe
+      id="site-preview-frame"
+      class="site-preview-frame"
+      title="Предпросмотр сайта"
+      sandbox="allow-scripts allow-forms allow-modals"
+    ></iframe>
+
+  </div>
+
+</div>
+
+
+<!-- =====================================================
+     HIDDEN CODE FILE INPUT
+===================================================== -->
 
 <input
-    id="code-file-input"
-    type="file"
-    accept=".html,.css,.js,.json,.txt,.jsx,.tsx,.py"
-    hidden
+  id="code-file-input"
+  type="file"
+  accept=".html,.htm,.css,.js,.txt"
+  hidden
 >
 
 
-<!-- =========================================================
-     SCRIPT
-========================================================= -->
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
 
 <script src="script.js"></script>
 
