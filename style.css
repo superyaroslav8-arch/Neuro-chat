@@ -31,19 +31,17 @@ body {
   max-width: 360px;
 }
 
-.logo {
-  width: 90px;
-  margin-bottom: 20px;
-}
-
-.login-box h1 {
-  font-size: 28px;
-  margin-bottom: 6px;
+.logo-text {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
 }
 
 .subtitle {
   color: #888;
   margin-bottom: 30px;
+  font-size: 16px;
 }
 
 #login-screen input {
@@ -93,14 +91,22 @@ body {
 .sidebar-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 16px;
   font-weight: 600;
   font-size: 18px;
 }
 
-.sidebar-logo {
-  width: 28px;
+.sidebar-logo-text {
+  width: 32px;
+  height: 32px;
+  background: #0a84ff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
 }
 
 .nav-item {
@@ -209,9 +215,10 @@ body {
   max-width: 500px;
 }
 
-.welcome-logo {
-  width: 70px;
-  margin-bottom: 16px;
+.welcome-logo-text {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 12px;
 }
 
 .suggestions {
