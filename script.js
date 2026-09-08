@@ -1,11 +1,8 @@
-// ===================== НАСТРОЙКИ =====================
 const DEFAULT_API_KEY = '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';
 const API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-5';
 
 let OPENAI_API_KEY = localStorage.getItem('neuro_api_key') || DEFAULT_API_KEY;
-// =====================================================
-
 let currentUser = null;
 let messages = [];
 
@@ -25,13 +22,11 @@ function backToUsername() {
 function login() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-
   if (!password) return alert('Введите пароль');
 
   let users = JSON.parse(localStorage.getItem('neuro_users') || '{}');
-
   if (!users[username]) {
-    users[username] = { password: password };
+    users[username] = { password };
   } else if (users[username].password !== password) {
     return alert('Неверный пароль');
   }
@@ -60,9 +55,12 @@ window.onload = () => {
   }
 
   const savedKey = localStorage.getItem('neuro_api_key');
-  if (savedKey) {
-    OPENAI_API_KEY = savedKey;
-  }
+  if (savedKey) OPENAI_API_KEY = savedKey;
+
+  const savedTheme = localStorage.getItem('neuro_theme') || 'dark';
+  changeTheme(savedTheme);
+  const themeSelect = document.getElementById('theme-select');
+  if (themeSelect) themeSelect.value = savedTheme;
 };
 
 function newChat() {
@@ -77,9 +75,15 @@ function newChat() {
         <button onclick="quickPrompt('Напиши код на Python')">Написать код</button>
         <button onclick="quickPrompt('Создай сценарий короткого видео')">Создать видео</button>
         <button onclick="quickPrompt('Сочини песню')">Создать музыку</button>
-        <button onclick="quickPrompt('Сделай 3D-модель куба для печати')">3D-модель</button>
+        <button onclick="quickPrompt('Сделай 3D-модель для печати')">3D-модель</button>
       </div>
     </div>`;
+}
+
+function clearChat() {
+  if (confirm('Очистить текущий чат?')) {
+    newChat();
+  }
 }
 
 function quickPrompt(text) {
@@ -93,14 +97,17 @@ async function sendMessage() {
   if (!text) return;
 
   input.value = '';
+  input.style.height = 'auto';
   addMessage('user', text);
+
+  // Показываем индикатор печатания
+  showTyping();
 
   let systemPrompt = `Ты — Нейро-чат, умный русскоязычный ассистент. Отвечай только на русском языке. Будь полезным, точным и дружелюбным.`;
 
   const lower = text.toLowerCase();
-
   if (lower.includes('сайт') || lower.includes('лендинг')) {
-    systemPrompt += `\nПользователь хочет создать сайт. Сгенерируй полный рабочий HTML + CSS + JS код в одном файле.`;
+    systemPrompt += `\nПользователь хочет создать сайт. Сгенерируй полный рабочий HTML+CSS+JS код в одном файле.`;
   } else if (lower.includes('код') || lower.includes('программ') || lower.includes('скрипт')) {
     systemPrompt += `\nПользователь хочет код. Напиши чистый рабочий код с комментариями на русском.`;
   } else if (lower.includes('видео')) {
@@ -110,8 +117,6 @@ async function sendMessage() {
   } else if (lower.includes('3d') || lower.includes('модель') || lower.includes('печат')) {
     systemPrompt += `\nПользователь хочет 3D-модель. Сгенерируй код на OpenSCAD + инструкцию.`;
   }
-
-  addMessage('bot', 'Думаю...');
 
   try {
     const response = await fetch(`${API_BASE_URL}/chat/completions`, {
@@ -135,18 +140,20 @@ async function sendMessage() {
     });
 
     const data = await response.json();
+    removeTyping();
 
     if (data.error) {
-      updateLastBotMessage('Ошибка API: ' + (data.error.message || 'Неизвестная ошибка'));
+      addMessage('bot', 'Ошибка API: ' + (data.error.message || 'Неизвестная ошибка'));
       return;
     }
 
     const reply = data.choices[0].message.content;
-    updateLastBotMessage(reply);
+    addMessage('bot', reply);
     messages.push({ role: 'bot', text: reply });
 
   } catch (err) {
-    updateLastBotMessage('Ошибка соединения. Проверьте интернет или API-ключ.');
+    removeTyping();
+    addMessage('bot', 'Ошибка соединения. Проверьте интернет или API-ключ.');
   }
 }
 
@@ -162,9 +169,21 @@ function addMessage(role, text) {
   container.scrollTop = container.scrollHeight;
 }
 
-function updateLastBotMessage(text) {
-  const bots = document.querySelectorAll('.message.bot');
-  if (bots.length) bots[bots.length - 1].textContent = text;
+function showTyping() {
+  const container = document.getElementById('messages');
+  if (container.querySelector('.welcome')) container.innerHTML = '';
+  
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.id = 'typing-indicator';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  container.appendChild(typing);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTyping() {
+  const typing = document.getElementById('typing-indicator');
+  if (typing) typing.remove();
 }
 
 function toggleSidebar() {
@@ -190,6 +209,14 @@ function closeSettings() {
   document.getElementById('settings-modal').style.display = 'none';
 }
 
+function openSupport() {
+  document.getElementById('support-modal').style.display = 'flex';
+}
+
+function closeSupport() {
+  document.getElementById('support-modal').style.display = 'none';
+}
+
 function saveApiKey() {
   const key = document.getElementById('api-key').value.trim();
   if (key) {
@@ -199,9 +226,20 @@ function saveApiKey() {
   }
 }
 
+function changeTheme(theme) {
+  document.body.classList.toggle('light', theme === 'light');
+  localStorage.setItem('neuro_theme', theme);
+}
+
+// Авто-высота textarea
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('user-input');
   if (input) {
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 130) + 'px';
+    });
+
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
