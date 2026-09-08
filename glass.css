@@ -1,0 +1,79 @@
+/* ===== Эффект стекла (Glassmorphism) как на iPhone ===== */
+
+.sidebar {
+  background: rgba(20, 20, 22, 0.72) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.input-box {
+  background: rgba(28, 28, 30, 0.65) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-content {
+  background: rgba(28, 28, 30, 0.78) !important;
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.message.bot {
+  background: rgba(28, 28, 30, 0.7) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.suggestions button {
+  background: rgba(28, 28, 30, 0.6) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.suggestions button:active {
+  transform: scale(0.96);
+  background: rgba(40, 40, 42, 0.8) !important;
+}
+
+.sidebar-footer button,
+.nav-item,
+.chat-item {
+  transition: background 0.2s ease;
+}
+
+.nav-item:hover,
+.chat-item:hover,
+.sidebar-footer button:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Красивая кнопка отправки */
+.send-btn {
+  box-shadow: 0 4px 15px rgba(10, 132, 255, 0.4);
+}
+
+/* Плавное появление модалок */
+.modal {
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  animation: scaleIn 0.25s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
