@@ -1,67 +1,89 @@
-/* ===== Эффект стекла (Glassmorphism) как на iPhone ===== */
+/* Эффект стекла + улучшения */
 
 .sidebar {
-  background: rgba(20, 20, 22, 0.72) !important;
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 20, 22, 0.75) !important;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.light .sidebar {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .input-box {
-  background: rgba(28, 28, 30, 0.65) !important;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(28, 28, 30, 0.68) !important;
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+body.light .input-box {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .modal-content {
-  background: rgba(28, 28, 30, 0.78) !important;
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  background: rgba(28, 28, 30, 0.82) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.45);
+}
+
+body.light .modal-content {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .message.bot {
-  background: rgba(28, 28, 30, 0.7) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(28, 28, 30, 0.72) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+body.light .message.bot {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .suggestions button {
   background: rgba(28, 28, 30, 0.6) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   transition: all 0.2s ease;
+}
+
+body.light .suggestions button {
+  background: rgba(255, 255, 255, 0.7) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .suggestions button:active {
   transform: scale(0.96);
-  background: rgba(40, 40, 42, 0.8) !important;
-}
-
-.sidebar-footer button,
-.nav-item,
-.chat-item {
-  transition: background 0.2s ease;
 }
 
 .nav-item:hover,
 .chat-item:hover,
 .sidebar-footer button:hover {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Красивая кнопка отправки */
+body.light .nav-item:hover,
+body.light .chat-item:hover,
+body.light .sidebar-footer button:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
 .send-btn {
-  box-shadow: 0 4px 15px rgba(10, 132, 255, 0.4);
+  box-shadow: 0 4px 18px rgba(10, 132, 255, 0.45);
 }
 
-/* Плавное появление модалок */
 .modal {
-  animation: fadeIn 0.25s ease;
+  animation: fadeIn 0.28s ease;
 }
 
 @keyframes fadeIn {
@@ -70,10 +92,16 @@
 }
 
 .modal-content {
-  animation: scaleIn 0.25s ease;
+  animation: scaleIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes scaleIn {
-  from { transform: scale(0.92); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
