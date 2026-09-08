@@ -1,171 +1,2585 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Нейро-чат</title>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="glass.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>Нейро-чат</title>
+
+<meta name="theme-color" content="#080808">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="glass.css">
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #080808;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                 "Segoe UI", sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.screen {
+    width: 100%;
+    height: 100%;
+}
+
+/* =========================
+   LOGIN
+========================= */
+
+#login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background:
+        radial-gradient(circle at 50% 20%, rgba(120,120,255,.12), transparent 35%),
+        #080808;
+}
+
+.login-box {
+    width: 100%;
+    max-width: 430px;
+    padding: 34px;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 28px;
+    background: rgba(22,22,22,.75);
+    backdrop-filter: blur(30px);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+}
+
+.logo-text {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    text-align: center;
+}
+
+.subtitle {
+    color: #8f8f8f;
+    text-align: center;
+    margin: 8px 0 30px;
+}
+
+.login-box input {
+    width: 100%;
+    height: 54px;
+    border: 1px solid #2b2b2b;
+    background: #111;
+    color: white;
+    border-radius: 15px;
+    padding: 0 17px;
+    outline: none;
+    margin-bottom: 12px;
+}
+
+.login-box input:focus {
+    border-color: #666;
+}
+
+.login-box button {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 15px;
+    background: white;
+    color: black;
+    font-weight: 700;
+    margin-top: 5px;
+}
+
+.login-box .secondary {
+    background: #1b1b1b;
+    color: white;
+}
+
+/* =========================
+   APP
+========================= */
+
+#app {
+    display: flex;
+    overflow: hidden;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.sidebar {
+    width: 285px;
+    height: 100%;
+    flex-shrink: 0;
+    background: #0d0d0d;
+    border-right: 1px solid #202020;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+}
+
+.sidebar-header {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    font-size: 18px;
+    padding: 0 8px 15px;
+}
+
+.sidebar-logo-text {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: white;
+    color: black;
+    font-weight: 900;
+}
+
+.sidebar-search {
+    width: 100%;
+    height: 42px;
+    background: #171717;
+    border: 1px solid #242424;
+    color: white;
+    border-radius: 12px;
+    padding: 0 13px;
+    margin-bottom: 12px;
+    outline: none;
+}
+
+.sidebar-new-chat {
+    width: 100%;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: white;
+    color: black;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: #aaa;
+    padding: 11px 12px;
+    border-radius: 11px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.nav-item:hover,
+.nav-item.active {
+    color: white;
+    background: #1a1a1a;
+}
+
+.icon {
+    width: 22px;
+    text-align: center;
+}
+
+.sidebar-section {
+    margin-top: 22px;
+}
+
+.section-title {
+    color: #666;
+    font-size: 12px;
+    text-transform: uppercase;
+    padding: 0 10px 7px;
+}
+
+.chat-item {
+    color: #aaa;
+    padding: 10px;
+    border-radius: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.chat-item:hover {
+    background: #181818;
+    color: white;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.sidebar-footer button {
+    width: 100%;
+    text-align: left;
+    padding: 11px;
+    border: 0;
+    background: transparent;
+    color: #aaa;
+    border-radius: 10px;
+}
+
+.sidebar-footer button:hover {
+    background: #181818;
+    color: white;
+}
+
+.sidebar-footer .logout {
+    color: #ff6b6b;
+}
+
+/* =========================
+   MAIN
+========================= */
+
+.main {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #080808;
+}
+
+.top-bar {
+    height: 62px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    border-bottom: 1px solid #1c1c1c;
+    gap: 12px;
+}
+
+.menu-btn,
+.top-actions button {
+    border: 0;
+    background: #151515;
+    color: white;
+    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+}
+
+.chat-title {
+    font-weight: 700;
+    flex: 1;
+}
+
+.top-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* =========================
+   SECTIONS
+========================= */
+
+.app-section {
+    display: none;
+    flex: 1;
+    overflow: auto;
+}
+
+.app-section.active {
+    display: flex;
+}
+
+/* =========================
+   CHAT
+========================= */
+
+#chat-section {
+    flex-direction: column;
+}
+
+.messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 35px 20px 160px;
+}
+
+.welcome {
+    max-width: 850px;
+    margin: 100px auto 0;
+    text-align: center;
+}
+
+.welcome-logo-text {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -2px;
+}
+
+.welcome p {
+    color: #777;
+    font-size: 17px;
+}
+
+.suggestions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 28px;
+}
+
+.suggestions button {
+    min-height: 58px;
+    border-radius: 15px;
+    border: 1px solid #252525;
+    background: #111;
+    color: #ddd;
+    padding: 10px;
+}
+
+.suggestions button:hover {
+    background: #1c1c1c;
+}
+
+/* =========================
+   MESSAGES
+========================= */
+
+.message {
+    max-width: 850px;
+    margin: 0 auto 22px;
+}
+
+.message.user {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.message-bubble {
+    max-width: 80%;
+    padding: 14px 17px;
+    border-radius: 18px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.message.user .message-bubble {
+    background: #252525;
+}
+
+.message.assistant .message-bubble {
+    background: transparent;
+}
+
+/* =========================
+   INPUT
+========================= */
+
+.input-area {
+    position: absolute;
+    bottom: 0;
+    left: 285px;
+    right: 0;
+    padding: 15px 20px 12px;
+    background: linear-gradient(
+        transparent,
+        #080808 25%
+    );
+}
+
+.input-box {
+    max-width: 850px;
+    margin: auto;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 9px;
+    border: 1px solid #303030;
+    background: #111;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3);
+}
+
+.input-box textarea {
+    flex: 1;
+    resize: none;
+    min-height: 40px;
+    max-height: 180px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: white;
+    padding: 10px 5px;
+}
+
+.attach-btn,
+.send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    border: 0;
+    flex-shrink: 0;
+}
+
+.attach-btn {
+    background: #1d1d1d;
+    color: white;
+}
+
+.send-btn {
+    background: white;
+    color: black;
+    font-weight: 900;
+}
+
+.disclaimer {
+    max-width: 850px;
+    margin: 7px auto 0;
+    text-align: center;
+    font-size: 11px;
+    color: #555;
+}
+
+.attach-menu {
+    max-width: 850px;
+    margin: 8px auto;
+    background: #151515;
+    border: 1px solid #292929;
+    border-radius: 15px;
+    padding: 8px;
+}
+
+.attach-menu button {
+    background: transparent;
+    border: 0;
+    color: white;
+    padding: 10px 13px;
+}
+
+/* =========================
+   GENERATION STATUS
+========================= */
+
+#generation-status {
+    display: none;
+    max-width: 850px;
+    margin: 10px auto;
+    color: #999;
+    font-size: 13px;
+}
+
+#stop-generation {
+    display: none;
+    background: #222;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 9px;
+    padding: 6px 10px;
+}
+
+/* =========================
+   OTHER SECTIONS
+========================= */
+
+.section-page {
+    width: 100%;
+    max-width: 1000px;
+    margin: auto;
+    padding: 40px 25px;
+}
+
+.section-page h1 {
+    font-size: 34px;
+    margin-bottom: 8px;
+}
+
+.section-page p {
+    color: #777;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-top: 25px;
+}
+
+.feature-card {
+    padding: 22px;
+    border-radius: 18px;
+    border: 1px solid #252525;
+    background: #111;
+}
+
+.feature-card h3 {
+    margin-top: 0;
+}
+
+.feature-card p {
+    line-height: 1.5;
+}
+
+/* =========================
+   CODE MODE
+========================= */
+
+#code-section {
+    flex-direction: column;
+}
+
+.code-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 15px;
+    border-bottom: 1px solid #222;
+}
+
+.code-toolbar button {
+    background: #171717;
+    border: 1px solid #292929;
+    color: white;
+    padding: 8px 13px;
+    border-radius: 9px;
+}
+
+.code-toolbar .primary {
+    background: white;
+    color: black;
+}
+
+.code-workspace {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+.code-files {
+    width: 180px;
+    background: #0c0c0c;
+    border-right: 1px solid #222;
+    padding: 10px;
+}
+
+.code-file {
+    padding: 10px;
+    border-radius: 8px;
+    color: #aaa;
+    cursor: pointer;
+}
+
+.code-file.active,
+.code-file:hover {
+    background: #1a1a1a;
+    color: white;
+}
+
+.code-editor-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.code-editor {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: 0;
+    outline: 0;
+    background: #090909;
+    color: #e7e7e7;
+    padding: 18px;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    tab-size: 2;
+}
+
+.code-preview {
+    width: 45%;
+    border-left: 1px solid #222;
+    background: white;
+}
+
+#site-preview-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: white;
+}
+
+/* =========================
+   MODALS
+========================= */
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.65);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: auto;
+    background: #111;
+    border: 1px solid #292929;
+    border-radius: 22px;
+    box-shadow: 0 30px 100px rgba(0,0,0,.6);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    padding: 18px 20px;
+    border-bottom: 1px solid #222;
+}
+
+.modal-header h3 {
+    flex: 1;
+    margin: 0;
+}
+
+.modal-header button {
+    background: #1b1b1b;
+    color: white;
+    border: 0;
+    width: 35px;
+    height: 35px;
+    border-radius: 10px;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.setting-item {
+    margin-bottom: 22px;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 8px;
+    color: #aaa;
+}
+
+.setting-item input,
+.setting-item select {
+    width: 100%;
+    height: 45px;
+    background: #191919;
+    color: white;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+    padding: 0 12px;
+}
+
+.setting-item button {
+    margin-top: 8px;
+    height: 40px;
+    border: 0;
+    border-radius: 10px;
+    padding: 0 15px;
+    background: white;
+    color: black;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media(max-width: 800px) {
+
+    .sidebar {
+        position: fixed;
+        z-index: 500;
+        left: -300px;
+        transition: .25s;
+    }
+
+    .sidebar.open {
+        left: 0;
+    }
+
+    .input-area {
+        left: 0;
+    }
+
+    .suggestions {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome {
+        margin-top: 50px;
+    }
+
+    .welcome-logo-text {
+        font-size: 38px;
+    }
+
+    .code-workspace {
+        flex-direction: column;
+    }
+
+    .code-files {
+        width: 100%;
+        display: flex;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid #222;
+    }
+
+    .code-preview {
+        width: 100%;
+        height: 45%;
+        border-left: 0;
+        border-top: 1px solid #222;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =========================
+     AUTH
+========================= -->
+
+<div id="login-screen" class="screen">
+
+    <div class="login-box">
+
+        <div class="logo-text">Нейро-чат</div>
+        <p class="subtitle">AI-помощник нового поколения</p>
+
+        <div id="auth-mode">
+            <button
+                style="width:50%;float:left;background:#222;color:white;"
+                onclick="showLogin()">
+                Войти
+            </button>
+
+            <button
+                style="width:50%;float:left;background:#222;color:white;"
+                onclick="showRegister()">
+                Регистрация
+            </button>
+        </div>
+
+        <div style="clear:both;height:20px;"></div>
+
+        <!-- LOGIN -->
+
+        <div id="login-form">
+
+            <input
+                id="username"
+                type="text"
+                placeholder="username@neuro"
+                autocomplete="username">
+
+            <input
+                id="password"
+                type="password"
+                placeholder="Пароль"
+                autocomplete="current-password">
+
+            <button onclick="login()">Войти</button>
+
+            <p id="login-error"
+               style="color:#ff7070;font-size:13px;text-align:center;"></p>
+
+        </div>
+
+        <!-- REGISTER -->
+
+        <div id="register-form" style="display:none;">
+
+            <input
+                id="register-username"
+                type="text"
+                placeholder="username@neuro"
+                autocomplete="username">
+
+            <input
+                id="register-password"
+                type="password"
+                placeholder="Пароль"
+                autocomplete="new-password">
+
+            <input
+                id="register-phone"
+                type="tel"
+                placeholder="Телефон (необязательно)">
+
+            <input
+                id="register-email"
+                type="email"
+                placeholder="Email (необязательно)">
+
+            <button onclick="register()">Создать аккаунт</button>
+
+            <p style="
+                color:#666;
+                font-size:12px;
+                text-align:center;
+                line-height:1.5;">
+                Телефон и email подтверждать не нужно.
+            </p>
+
+            <p id="register-error"
+               style="color:#ff7070;font-size:13px;text-align:center;"></p>
+
+        </div>
+
+    </div>
+</div>
+
+
+<!-- =========================
+     APP
+========================= -->
+
+<div id="app" class="screen" style="display:none;">
+
+    <!-- SIDEBAR -->
+
+    <aside id="sidebar" class="sidebar">
+
+        <div class="sidebar-header">
+            <span class="sidebar-logo-text">Н</span>
+            <span>Нейро-чат</span>
+        </div>
+
+        <input
+            id="chat-search"
+            class="sidebar-search"
+            placeholder="Поиск чатов...">
+
+        <button
+            id="sidebar-new-chat"
+            class="sidebar-new-chat"
+            onclick="newChat()">
+            ＋ Новый чат
+        </button>
+
+        <nav id="main-navigation">
+
+            <a href="#"
+               class="nav-item active"
+               data-section="chat-section">
+                <span class="icon">💬</span>
+                Чат
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="code-section">
+                <span class="icon">💻</span>
+                Программирование
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="library-section">
+                <span class="icon">📚</span>
+                Библиотека
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="projects-section">
+                <span class="icon">📁</span>
+                Проекты
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="plugins-section">
+                <span class="icon">🔌</span>
+                Плагины
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="scheduled-section">
+                <span class="icon">⏰</span>
+                Запланированные
+            </a>
+
+            <a href="#"
+               class="nav-item"
+               data-section="more-section">
+                <span class="icon">⋯</span>
+                Больше
+            </a>
+
+        </nav>
+
+        <div class="sidebar-section">
+
+            <div class="section-title">
+                Закреплено
+            </div>
+
+            <div id="pinned-chats">
+                <div class="chat-item">
+                    Мой проект
+                </div>
+
+                <div class="chat-item">
+                    Создание сайта
+                </div>
+            </div>
+
+        </div>
+
+        <div class="sidebar-section">
+
+            <div class="section-title">
+                Недавнее
+            </div>
+
+            <div id="recent-chats"></div>
+
+        </div>
+
+        <div class="sidebar-footer">
+
+            <button onclick="openSupport()">
+                📞 Поддержка
+            </button>
+
+            <button onclick="openSettings()">
+                ⚙️ Настройки
+            </button>
+
+            <button onclick="logout()" class="logout">
+                Выйти
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN -->
+
+    <main class="main">
+
+        <!-- CHAT -->
+
+        <section id="chat-section"
+                 class="app-section active">
+
+            <div class="top-bar">
+
+                <button
+                    class="menu-btn"
+                    onclick="toggleSidebar()">
+                    ☰
+                </button>
+
+                <div
+                    class="chat-title"
+                    id="chat-title">
+                    Новый чат
+                </div>
+
+                <div class="top-actions">
+
+                    <button
+                        onclick="clearChat()"
+                        title="Очистить">
+                        🗑
+                    </button>
+
+                    <button
+                        onclick="newChat()"
+                        title="Новый чат">
+                        ＋
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div id="messages" class="messages">
+
+                <div id="welcome-screen" class="welcome">
+
+                    <div class="welcome-logo-text">
+                        Нейро-чат
+                    </div>
+
+                    <p>
+                        Что будем делать?
+                    </p>
+
+                    <div class="suggestions">
+
+                        <button onclick="quickPrompt(
+                            'Создай современный сайт по моему описанию.
+                             Сначала продумай структуру, затем создай HTML CSS и JavaScript.'
+                        )">
+                            🌐 Создать сайт
+                        </button>
+
+                        <button onclick="quickPrompt(
+                            'Напиши полноценный рабочий код на Python
+                             и объясни его.'
+                        )">
+                            💻 Написать код
+                        </button>
+
+                        <button onclick="openCodeMode()">
+                            🧑‍💻 Режим программирования
+                        </button>
+
+                        <button onclick="quickPrompt(
+                            'Проанализируй мою задачу и предложи лучшее решение.'
+                        )">
+                            🧠 Решить задачу
+                        </button>
+
+                        <button onclick="quickPrompt(
+                            'Создай проект сайта с красивым современным интерфейсом.'
+                        )">
+                            🎨 Создать проект
+                        </button>
+
+                        <button onclick="quickPrompt(
+                            'Объясни сложную тему простыми словами.'
+                        )">
+                            📖 Объяснить
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div id="generation-status">
+
+                <span id="generation-text">
+                    Нейро-чат думает...
+                </span>
+
+                <button
+                    id="stop-generation"
+                    onclick="stopGeneration()">
+                    Остановить
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- CODE -->
+
+        <section id="code-section"
+                 class="app-section">
+
+            <div class="code-toolbar">
+
+                <strong>
+                    💻 Программирование
+                </strong>
+
+                <span style="flex:1;"></span>
+
+                <button onclick="askCodeAI()">
+                    ✨ AI
+                </button>
+
+                <button
+                    class="primary"
+                    onclick="runCode()">
+                    ▶ Запустить
+                </button>
+
+                <button onclick="openSitePreview()">
+                    🌐 Preview
+                </button>
+
+            </div>
+
+
+            <div class="code-workspace">
+
+                <div class="code-files">
+
+                    <div
+                        class="code-file active"
+                        onclick="selectCodeFile('html')">
+                        index.html
+                    </div>
+
+                    <div
+                        class="code-file"
+                        onclick="selectCodeFile('css')">
+                        style.css
+                    </div>
+
+                    <div
+                        class="code-file"
+                        onclick="selectCodeFile('js')">
+                        script.js
+                    </div>
+
+                </div>
+
+
+                <div class="code-editor-wrap">
+
+                    <textarea
+                        id="code-editor"
+                        class="code-editor"
+                        spellcheck="false"
+                        placeholder="Пиши код здесь..."></textarea>
+
+                </div>
+
+
+                <div class="code-preview">
+
+                    <iframe
+                        id="site-preview-frame"
+                        sandbox="allow-scripts"
+                        title="Предпросмотр">
+                    </iframe>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- LIBRARY -->
+
+        <section
+            id="library-section"
+            class="app-section">
+
+            <div class="section-page">
+
+                <h1>📚 Библиотека</h1>
+
+                <p>
+                    Здесь будут храниться файлы,
+                    документы, изображения и созданные материалы.
+                </p>
+
+                <div
+                    id="library-content"
+                    class="feature-grid">
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- PROJECTS -->
+
+        <section
+            id="projects-section"
+            class="app-section">
+
+            <div class="section-page">
+
+                <h1>📁 Проекты</h1>
+
+                <p>
+                    Создавай полноценные проекты
+                    и редактируй их вместе с AI.
+                </p>
+
+                <button
+                    onclick="createProject()"
+                    style="
+                    margin-top:20px;
+                    padding:12px 18px;
+                    border:0;
+                    border-radius:12px;
+                    background:white;
+                    color:black;">
+                    ＋ Создать проект
+                </button>
+
+                <div
+                    id="projects-content"
+                    class="feature-grid">
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- PLUGINS -->
+
+        <section
+            id="plugins-section"
+            class="app-section">
+
+            <div class="section-page">
+
+                <h1>🔌 Плагины</h1>
+
+                <p>
+                    Подключай дополнительные инструменты
+                    и возможности AI.
+                </p>
+
+                <div
+                    id="plugins-content"
+                    class="feature-grid">
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- SCHEDULED -->
+
+        <section
+            id="scheduled-section"
+            class="app-section">
+
+            <div class="section-page">
+
+                <h1>⏰ Запланированные</h1>
+
+                <p>
+                    Управление задачами,
+                    напоминаниями и автоматизацией.
+                </p>
+
+                <button
+                    onclick="createScheduledTask()"
+                    style="
+                    margin-top:20px;
+                    padding:12px 18px;
+                    border:0;
+                    border-radius:12px;
+                    background:white;
+                    color:black;">
+                    ＋ Новая задача
+                </button>
+
+                <div
+                    id="scheduled-content"
+                    class="feature-grid">
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- MORE -->
+
+        <section
+            id="more-section"
+            class="app-section">
+
+            <div class="section-page">
+
+                <h1>⋯ Больше</h1>
+
+                <div
+                    id="more-content"
+                    class="feature-grid">
+
+                    <div class="feature-card">
+                        <h3>🌐 Создание сайтов</h3>
+                        <p>
+                            Создание HTML/CSS/JS
+                            проектов по описанию.
+                        </p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>🧠 AI-режим</h3>
+                        <p>
+                            Обычный интеллектуальный
+                            чат с контекстом.
+                        </p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>💻 Code Mode</h3>
+                        <p>
+                            Редактор, запуск и
+                            предпросмотр кода.
+                        </p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>📦 Проекты</h3>
+                        <p>
+                            Несколько файлов в одном
+                            рабочем пространстве.
+                        </p>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- CHAT INPUT -->
+
+    <div class="input-area">
+
+        <div
+            class="input-box">
+
+            <button
+                class="attach-btn"
+                onclick="toggleAttach()">
+                ＋
+            </button>
+
+            <textarea
+                id="user-input"
+                rows="1"
+                placeholder="Спросить Нейро-чат..."></textarea>
+
+            <button
+                id="send-button"
+                class="send-btn"
+                onclick="sendMessage()">
+                ➤
+            </button>
+
+        </div>
+
+
+        <div
+            id="attach-menu"
+            class="attach-menu"
+            style="display:none;">
+
+            <button onclick="attachType('camera')">
+                📷 Камера
+            </button>
+
+            <button onclick="attachType('photo')">
+                🖼️ Фото
+            </button>
+
+            <button onclick="attachType('file')">
+                📎 Файл
+            </button>
+
+        </div>
+
+        <p class="disclaimer">
+            Нейро-чат может допускать ошибки.
+            Проверяйте важную информацию.
+        </p>
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     SETTINGS
+========================= -->
+
+<div
+    id="settings-modal"
+    class="modal"
+    style="display:none;">
+
+    <div class="modal-content">
+
+        <div class="modal-header">
+
+            <h3>Настройки</h3>
+
+            <button onclick="closeSettings()">
+                ✕
+            </button>
+
+        </div>
+
+        <div class="modal-body">
+
+            <div class="setting-item">
+
+                <label>
+                    Ваш API-ключ
+                </label>
+
+                <input
+                    type="password"
+                    id="api-key"
+                    placeholder="sk-...">
+
+                <button onclick="saveApiKey()">
+                    Сохранить
+                </button>
+
+                <div
+                    id="api-key-status"
+                    style="
+                    color:#777;
+                    margin-top:7px;
+                    font-size:12px;">
+                </div>
+
+            </div>
+
+
+            <div class="setting-item">
+
+                <label>
+                    Модель AI
+                </label>
+
+                <select id="model">
+
+                    <option value="gpt-5">
+                        GPT-5
+                    </option>
+
+                    <option value="gpt-4o">
+                        GPT-4o
+                    </option>
+
+                    <option value="gpt-4o-mini">
+                        GPT-4o mini
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="setting-item">
+
+                <label>
+                    Тема
+                </label>
+
+                <select
+                    id="theme-select"
+                    onchange="changeTheme(this.value)">
+
+                    <option value="dark">
+                        Тёмная
+                    </option>
+
+                    <option value="light">
+                        Светлая
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="setting-item">
+
+                <label>
+                    Временный чат
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="temporary-chat-toggle">
+
+            </div>
+
+
+            <div class="setting-item">
+
+                <label>
+                    Автосохранение
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="autosave-toggle"
+                    checked>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     SUPPORT
+========================= -->
+
+<div
+    id="support-modal"
+    class="modal"
+    style="display:none;">
+
+    <div class="modal-content">
+
+        <div class="modal-header">
+
+            <h3>
+                Поддержка
+            </h3>
+
+            <button onclick="closeSupport()">
+                ✕
+            </button>
+
+        </div>
+
+        <div class="modal-body">
+
+            <p>
+                Если что-то не работает,
+                свяжитесь с разработчиком.
+            </p>
+
+            <p>
+                Telegram: @superyaroslav8
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     SITE PREVIEW
+========================= -->
+
+<div
+    id="site-preview-modal"
+    class="modal"
+    style="display:none;">
+
+    <div
+        class="modal-content"
+        style="
+        max-width:1200px;
+        height:90vh;">
+
+        <div class="modal-header">
+
+            <h3>
+                🌐 Предпросмотр сайта
+            </h3>
+
+            <button onclick="closeSitePreview()">
+                ✕
+            </button>
+
+        </div>
+
+        <div
+            style="
+            height:calc(100% - 72px);
+            background:white;">
+
+            <iframe
+                id="site-preview-frame-modal"
+                style="
+                width:100%;
+                height:100%;
+                border:0;">
+            </iframe>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- FILE INPUTS -->
+
+<input
+    id="file-input"
+    type="file"
+    multiple
+    style="display:none;">
+
+<input
+    id="photo-input"
+    type="file"
+    accept="image/*"
+    multiple
+    style="display:none;">
+
+<input
+    id="camera-input"
+    type="file"
+    accept="image/*"
+    capture="environment"
+    style="display:none;">
+
+
+<script src="script.js"></script>
+
+<script>
+
+/*
+==================================================
+НЕЙРО-ЧАТ — БАЗОВАЯ ЛОГИКА
+==================================================
+*/
+
+let currentUser = null;
+let currentSection = "chat-section";
+
+let codeFiles = {
+    html: `<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Экран входа -->
-  <div id="login-screen" class="screen">
-    <div class="login-box">
-      <div class="logo-text">Нейро-чат</div>
-      <p class="subtitle">Умный помощник</p>
 
-      <div id="step-username">
-        <input type="text" id="username" placeholder="Имя пользователя" autocomplete="username">
-        <button onclick="nextStep()">Далее</button>
-      </div>
+<h1>Мой сайт</h1>
+<p>Создай что-нибудь через AI.</p>
 
-      <div id="step-password" style="display:none;">
-        <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
-        <button onclick="login()">Войти</button>
-        <button class="secondary" onclick="backToUsername()">Назад</button>
-      </div>
-    </div>
-  </div>
+<script src="script.js"><\/script>
+</body>
+</html>`,
 
-  <!-- Основной интерфейс -->
-  <div id="app" class="screen" style="display:none;">
-    <!-- Боковое меню -->
-    <div id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-logo-text">Н</span>
-        <span>Нейро-чат</span>
-      </div>
+    css: `body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    padding: 40px;
+}
 
-      <nav>
-        <a href="#" class="nav-item active"><span class="icon">💬</span> Чат</a>
-        <a href="#" class="nav-item"><span class="icon">📚</span> Библиотека</a>
-        <a href="#" class="nav-item"><span class="icon">📁</span> Проекты</a>
-        <a href="#" class="nav-item"><span class="icon">🔌</span> Плагины</a>
-        <a href="#" class="nav-item"><span class="icon">⏰</span> Запланированные</a>
-        <a href="#" class="nav-item"><span class="icon">⋯</span> Больше</a>
-      </nav>
+h1 {
+    font-size: 48px;
+}`,
 
-      <div class="sidebar-section">
-        <div class="section-title">Закреплено</div>
-        <div class="chat-item">3 бойца</div>
-        <div class="chat-item">Стикеры «3D гусь»</div>
-      </div>
+    js: `console.log("Нейро-чат запущен");`
+};
 
-      <div class="sidebar-section">
-        <div class="section-title">Недавнее</div>
-        <div class="chat-item">Редактирование ТЗ сайта</div>
-        <div class="chat-item">Ежедневные фото</div>
-        <div class="chat-item">Поиск Airwheel SE3S</div>
-        <div class="chat-item">Где взять ключ</div>
-      </div>
+let currentCodeFile = "html";
 
-      <div class="sidebar-footer">
-        <button onclick="openSupport()">📞 Поддержка</button>
-        <button onclick="openSettings()">⚙️ Настройки</button>
-        <button onclick="logout()" class="logout">Выйти</button>
-      </div>
-    </div>
 
-    <!-- Основная область -->
-    <div class="main">
-      <div class="top-bar">
-        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-        <div class="chat-title" id="chat-title">Временный чат</div>
-        <div class="top-actions">
-          <button onclick="clearChat()" title="Очистить чат">🗑</button>
-          <button onclick="newChat()" title="Новый чат">＋</button>
-        </div>
-      </div>
+/* =========================
+   AUTH UI
+========================= */
 
-      <div id="messages" class="messages">
+function showLogin() {
+
+    document.getElementById("login-form").style.display = "block";
+    document.getElementById("register-form").style.display = "none";
+
+}
+
+function showRegister() {
+
+    document.getElementById("login-form").style.display = "none";
+    document.getElementById("register-form").style.display = "block";
+
+}
+
+
+/* =========================
+   TEMP AUTH
+========================= */
+
+async function register() {
+
+    const username =
+        document.getElementById("register-username").value.trim();
+
+    const password =
+        document.getElementById("register-password").value;
+
+    const phone =
+        document.getElementById("register-phone").value.trim();
+
+    const email =
+        document.getElementById("register-email").value.trim();
+
+    const error =
+        document.getElementById("register-error");
+
+    error.textContent = "";
+
+    if (!/^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+$/.test(username)) {
+
+        error.textContent =
+            "Имя пользователя должно быть в формате username@neuro";
+
+        return;
+    }
+
+    if (password.length < 8) {
+
+        error.textContent =
+            "Пароль должен содержать минимум 8 символов.";
+
+        return;
+    }
+
+    /*
+       ВРЕМЕННО:
+       пока backend не подключён,
+       аккаунт хранится локально.
+
+       После подключения server.js
+       эта функция будет отправлять данные
+       на /api/register.
+    */
+
+    const accounts =
+        JSON.parse(localStorage.getItem("neuro_accounts") || "{}");
+
+    if (accounts[username]) {
+
+        document.getElementById("username").value = username;
+
+        showLogin();
+
+        document.getElementById("login-error").textContent =
+            "Такой пользователь уже существует. Выполните вход.";
+
+        return;
+    }
+
+    accounts[username] = {
+        username,
+        password,
+        phone,
+        email,
+        createdAt: Date.now()
+    };
+
+    localStorage.setItem(
+        "neuro_accounts",
+        JSON.stringify(accounts)
+    );
+
+    currentUser = username;
+
+    localStorage.setItem(
+        "neuro_current_user",
+        username
+    );
+
+    openApp();
+}
+
+
+/* =========================
+   LOGIN
+========================= */
+
+async function login() {
+
+    const username =
+        document.getElementById("username").value.trim();
+
+    const password =
+        document.getElementById("password").value;
+
+    const error =
+        document.getElementById("login-error");
+
+    error.textContent = "";
+
+    if (!username || !password) {
+
+        error.textContent =
+            "Введите имя пользователя и пароль.";
+
+        return;
+    }
+
+    const accounts =
+        JSON.parse(localStorage.getItem("neuro_accounts") || "{}");
+
+    const account = accounts[username];
+
+    if (!account) {
+
+        error.textContent =
+            "Пользователь не найден.";
+
+        return;
+    }
+
+    if (account.password !== password) {
+
+        error.textContent =
+            "Неверный пароль.";
+
+        return;
+    }
+
+    currentUser = username;
+
+    localStorage.setItem(
+        "neuro_current_user",
+        username
+    );
+
+    openApp();
+}
+
+
+/* =========================
+   APP
+========================= */
+
+function openApp() {
+
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app").style.display = "flex";
+
+    updateUserInterface();
+
+}
+
+
+function updateUserInterface() {
+
+    const title =
+        document.getElementById("chat-title");
+
+    if (title && currentUser) {
+
+        title.textContent =
+            "Новый чат";
+
+    }
+
+}
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+function logout() {
+
+    localStorage.removeItem("neuro_current_user");
+
+    currentUser = null;
+
+    location.reload();
+
+}
+
+
+/* =========================
+   SIDEBAR
+========================= */
+
+function toggleSidebar() {
+
+    document
+        .getElementById("sidebar")
+        .classList.toggle("open");
+
+}
+
+
+/* =========================
+   NAVIGATION
+========================= */
+
+document
+    .querySelectorAll(".nav-item")
+    .forEach(item => {
+
+        item.addEventListener("click", e => {
+
+            e.preventDefault();
+
+            const section =
+                item.dataset.section;
+
+            switchSection(section);
+
+        });
+
+    });
+
+
+function switchSection(section) {
+
+    document
+        .querySelectorAll(".app-section")
+        .forEach(el => {
+
+            el.classList.remove("active");
+
+        });
+
+    const target =
+        document.getElementById(section);
+
+    if (target) {
+
+        target.classList.add("active");
+
+    }
+
+    document
+        .querySelectorAll(".nav-item")
+        .forEach(item => {
+
+            item.classList.toggle(
+                "active",
+                item.dataset.section === section
+            );
+
+        });
+
+    currentSection = section;
+
+}
+
+
+/* =========================
+   CHAT
+========================= */
+
+function newChat() {
+
+    document.getElementById("messages").innerHTML = `
         <div class="welcome">
-          <div class="welcome-logo-text">Нейро-чат</div>
-          <p>Чем я могу помочь?</p>
-          <div class="suggestions">
-            <button onclick="quickPrompt('Создай современный сайт-портфолио')">Создать сайт</button>
-            <button onclick="quickPrompt('Напиши код на Python')">Написать код</button>
-            <button onclick="quickPrompt('Создай сценарий короткого видео')">Создать видео</button>
-            <button onclick="quickPrompt('Сочини песню')">Создать музыку</button>
-            <button onclick="quickPrompt('Сделай 3D-модель для печати')">3D-модель</button>
-          </div>
-        </div>
-      </div>
+            <div class="welcome-logo-text">
+                Нейро-чат
+            </div>
 
-      <div class="input-area">
-        <div class="input-box">
-          <button class="attach-btn" onclick="toggleAttach()">＋</button>
-          <textarea id="user-input" placeholder="Спросить Нейро-чат" rows="1"></textarea>
-          <button class="send-btn" onclick="sendMessage()">➤</button>
+            <p>
+                Новый чат создан.
+                Чем я могу помочь?
+            </p>
         </div>
-        <div class="attach-menu" id="attach-menu" style="display:none;">
-          <button onclick="attachType('camera')">📷 Камера</button>
-          <button onclick="attachType('photo')">🖼️ Фото</button>
-          <button onclick="attachType('file')">📎 Файлы</button>
-          <button onclick="attachType('plugin')">🔌 Плагины</button>
-        </div>
-        <p class="disclaimer">Нейро-чат может допускать ошибки. Проверяйте важную информацию.</p>
-      </div>
-    </div>
-  </div>
+    `;
 
-  <!-- Настройки -->
-  <div id="settings-modal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Настройки</h3>
-        <button onclick="closeSettings()">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="setting-item">
-          <label>API-ключ OpenAI</label>
-          <input type="password" id="api-key" placeholder="sk-...">
-          <button onclick="saveApiKey()">Сохранить ключ</button>
-        </div>
-        <div class="setting-item">
-          <label>Модель</label>
-          <select id="model">
-            <option value="gpt-5">GPT-5</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o-mini</option>
-          </select>
-        </div>
-        <div class="setting-item">
-          <label>Тема</label>
-          <select id="theme-select" onchange="changeTheme(this.value)">
-            <option value="dark">Тёмная</option>
-            <option value="light">Светлая</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
+    document.getElementById("chat-title")
+        .textContent = "Новый чат";
 
-  <!-- Поддержка -->
-    <div id="support-modal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Поддержка</h3>
-        <button onclick="closeSupport()">✕</button>
-      </div>
-      <div class="modal-body support-body">
-        <div class="support-item">
-          <div class="support-label">Telegram</div>
-          <a href="https://t.me/+79388750405" class="support-link">+7 938 875 0405</a>
-        </div>
-        <div class="support-item">
-          <div class="support-label">Звонки</div>
-          <a href="tel:+79002373222" class="support-link">+7 900 237 3222</a>
-        </div>
-        <div class="support-item">
-          <div class="support-label">Почта</div>
-          <a href="mailto:superyaroslav8@iCloud.com" class="support-link">superyaroslav8@iCloud.com</a>
-        </div>
-      </div>
-    </div>
-  </div>
+}
 
-  <script src="script.js"></script>
+
+function clearChat() {
+
+    if (!confirm("Очистить этот чат?")) {
+        return;
+    }
+
+    document.getElementById("messages").innerHTML = "";
+
+}
+
+
+function quickPrompt(text) {
+
+    document.getElementById("user-input").value = text;
+
+    sendMessage();
+
+}
+
+
+/* =========================
+   MESSAGE
+========================= */
+
+function addMessage(text, type) {
+
+    const messages =
+        document.getElementById("messages");
+
+    const message =
+        document.createElement("div");
+
+    message.className =
+        "message " + type;
+
+    const bubble =
+        document.createElement("div");
+
+    bubble.className =
+        "message-bubble";
+
+    bubble.textContent =
+        text;
+
+    message.appendChild(bubble);
+
+    messages.appendChild(message);
+
+    messages.scrollTop =
+        messages.scrollHeight;
+
+    return bubble;
+}
+
+
+/* =========================
+   SEND
+========================= */
+
+async function sendMessage() {
+
+    const input =
+        document.getElementById("user-input");
+
+    const text =
+        input.value.trim();
+
+    if (!text) {
+        return;
+    }
+
+    input.value = "";
+
+    addMessage(text, "user");
+
+    /*
+       Здесь будет подключён настоящий
+       /api/chat backend.
+
+       Сейчас интерфейс уже готов.
+    */
+
+    const thinking =
+        addMessage(
+            "Я готов подключиться к AI через сервер.",
+            "assistant"
+        );
+
+}
+
+
+/* =========================
+   ATTACHMENTS
+========================= */
+
+function toggleAttach() {
+
+    const menu =
+        document.getElementById("attach-menu");
+
+    menu.style.display =
+        menu.style.display === "none"
+            ? "block"
+            : "none";
+
+}
+
+
+function attachType(type) {
+
+    if (type === "file") {
+
+        document
+            .getElementById("file-input")
+            .click();
+
+    }
+
+    if (type === "photo") {
+
+        document
+            .getElementById("photo-input")
+            .click();
+
+    }
+
+    if (type === "camera") {
+
+        document
+            .getElementById("camera-input")
+            .click();
+
+    }
+
+}
+
+
+/* =========================
+   CODE MODE
+========================= */
+
+function openCodeMode() {
+
+    switchSection("code-section");
+
+    loadCodeFile();
+
+}
+
+
+function selectCodeFile(file) {
+
+    saveCurrentCode();
+
+    currentCodeFile = file;
+
+    document
+        .querySelectorAll(".code-file")
+        .forEach(el => {
+
+            el.classList.remove("active");
+
+        });
+
+    const files =
+        document.querySelectorAll(".code-file");
+
+    files.forEach(el => {
+
+        if (
+            el.textContent.includes(
+                file === "html"
+                    ? "index.html"
+                    : file === "css"
+                        ? "style.css"
+                        : "script.js"
+            )
+        ) {
+
+            el.classList.add("active");
+
+        }
+
+    });
+
+    loadCodeFile();
+
+}
+
+
+function loadCodeFile() {
+
+    document.getElementById("code-editor").value =
+        codeFiles[currentCodeFile];
+
+}
+
+
+function saveCurrentCode() {
+
+    codeFiles[currentCodeFile] =
+        document.getElementById("code-editor").value;
+
+}
+
+
+/* =========================
+   RUN WEBSITE
+========================= */
+
+function buildPreviewHTML() {
+
+    saveCurrentCode();
+
+    let html =
+        codeFiles.html;
+
+    const css =
+        `<style>${codeFiles.css}</style>`;
+
+    const js =
+        `<script>
+        ${codeFiles.js}
+        <\/script>`;
+
+    html =
+        html.replace(
+            "</head>",
+            css + "</head>"
+        );
+
+    html =
+        html.replace(
+            "</body>",
+            js + "</body>"
+        );
+
+    return html;
+
+}
+
+
+function runCode() {
+
+    const html =
+        buildPreviewHTML();
+
+    const frame =
+        document.getElementById(
+            "site-preview-frame"
+        );
+
+    frame.srcdoc =
+        html;
+
+}
+
+
+function openSitePreview() {
+
+    runCode();
+
+    const html =
+        buildPreviewHTML();
+
+    const frame =
+        document.getElementById(
+            "site-preview-frame-modal"
+        );
+
+    frame.srcdoc =
+        html;
+
+    document.getElementById(
+        "site-preview-modal"
+    ).style.display = "flex";
+
+}
+
+
+function closeSitePreview() {
+
+    document.getElementById(
+        "site-preview-modal"
+    ).style.display = "none";
+
+}
+
+
+/* =========================
+   AI CODE
+========================= */
+
+function askCodeAI() {
+
+    const prompt =
+        window.prompt(
+            "Что должен создать или изменить AI?"
+        );
+
+    if (!prompt) {
+        return;
+    }
+
+    /*
+       В дальнейшем здесь будет:
+
+       POST /api/code
+
+       AI получит:
+       - текущий index.html
+       - текущий style.css
+       - текущий script.js
+       - описание пользователя
+
+       И вернёт изменённые файлы.
+    */
+
+    alert(
+        "Запрос принят. После подключения backend AI сможет создавать и изменять код автоматически."
+    );
+
+}
+
+
+/* =========================
+   GENERATION
+========================= */
+
+function stopGeneration() {
+
+    if (window.currentAbortController) {
+
+        window.currentAbortController.abort();
+
+        window.currentAbortController = null;
+
+    }
+
+    document.getElementById(
+        "generation-status"
+    ).style.display = "none";
+
+}
+
+
+/* =========================
+   SETTINGS
+========================= */
+
+function openSettings() {
+
+    document.getElementById(
+        "settings-modal"
+    ).style.display = "flex";
+
+}
+
+
+function closeSettings() {
+
+    document.getElementById(
+        "settings-modal"
+    ).style.display = "none";
+
+}
+
+
+function saveApiKey() {
+
+    const key =
+        document.getElementById("api-key").value.trim();
+
+    if (!key) {
+        return;
+    }
+
+    /*
+       ВРЕМЕННО сохраняется локально.
+
+       Для настоящего приложения API-ключ
+       должен храниться на сервере.
+    */
+
+    localStorage.setItem(
+        "neuro_user_api_key",
+        key
+    );
+
+    document.getElementById(
+        "api-key-status"
+    ).textContent =
+        "Ключ сохранён.";
+
+}
+
+
+function changeTheme(theme) {
+
+    document.body.dataset.theme =
+        theme;
+
+}
+
+
+/* =========================
+   SUPPORT
+========================= */
+
+function openSupport() {
+
+    document.getElementById(
+        "support-modal"
+    ).style.display = "flex";
+
+}
+
+
+function closeSupport() {
+
+    document.getElementById(
+        "support-modal"
+    ).style.display = "none";
+
+}
+
+
+/* =========================
+   PROJECTS
+========================= */
+
+function createProject() {
+
+    const name =
+        prompt("Название проекта:");
+
+    if (!name) {
+        return;
+    }
+
+    const container =
+        document.getElementById(
+            "projects-content"
+        );
+
+    const card =
+        document.createElement("div");
+
+    card.className =
+        "feature-card";
+
+    card.innerHTML = `
+        <h3>📁 ${name}</h3>
+        <p>Проект создан.</p>
+    `;
+
+    container.appendChild(card);
+
+}
+
+
+/* =========================
+   SCHEDULED
+========================= */
+
+function createScheduledTask() {
+
+    const task =
+        prompt("Что нужно запланировать?");
+
+    if (!task) {
+        return;
+    }
+
+    const container =
+        document.getElementById(
+            "scheduled-content"
+        );
+
+    const card =
+        document.createElement("div");
+
+    card.className =
+        "feature-card";
+
+    card.innerHTML = `
+        <h3>⏰ Задача</h3>
+        <p>${task}</p>
+    `;
+
+    container.appendChild(card);
+
+}
+
+
+/* =========================
+   RESTORE SESSION
+========================= */
+
+(function restoreSession() {
+
+    const saved =
+        localStorage.getItem(
+            "neuro_current_user"
+        );
+
+    if (saved) {
+
+        currentUser = saved;
+
+        openApp();
+
+    }
+
+})();
+
+
+/* =========================
+   ENTER TO SEND
+========================= */
+
+document
+    .getElementById("user-input")
+    .addEventListener("keydown", e => {
+
+        if (
+            e.key === "Enter" &&
+            !e.shiftKey
+        ) {
+
+            e.preventDefault();
+
+            sendMessage();
+
+        }
+
+    });
+
+
+/* =========================
+   CODE TAB
+========================= */
+
+document
+    .getElementById("code-editor")
+    .addEventListener("input", () => {
+
+        codeFiles[currentCodeFile] =
+            document.getElementById(
+                "code-editor"
+            ).value;
+
+    });
+
+</script>
+
 </body>
 </html>
