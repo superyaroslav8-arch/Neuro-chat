@@ -2,14 +2,12 @@
 
 /*
  * NEURO-CHAT
- * Основной клиентский JavaScript
+ * Полная клиентская версия под текущий index.html
  *
- * ВАЖНО:
+ * server.js НЕ изменяется.
  * API-ключ НЕ хранится в браузере.
- * AI-запрос отправляется на /api/chat.
  */
 
-const APP_NAME = 'Нейро-чат';
 const STORAGE_PREFIX = 'neurochat_';
 
 const DEFAULT_MODEL = 'gpt-4o-mini';
@@ -27,12 +25,12 @@ let siteBuilderMode = false;
 
 let isGenerating = false;
 let abortController = null;
-
+let initialized = false;
 let currentSearchQuery = '';
 
 /* =========================================================
-   УТИЛИТЫ
-   ========================================================= */
+   DOM / UTILS
+========================================================= */
 
 function $(selector) {
     return document.querySelector(selector);
@@ -45,7 +43,25 @@ function $$(selector) {
 function createId(prefix = 'id') {
     return `${prefix}_${Date.now()}_${Math.random()
         .toString(36)
-        .slice(2, 10)}`;
+        .slice(2, 9)}`;
+}
+
+function storageKey(name) {
+    return `${STORAGE_PREFIX}${name}`;
+}
+
+function userKey(name) {
+    return currentUser
+        ? `${STORAGE_PREFIX}${currentUser}_${name}`
+        : storageKey(name);
+}
+
+function parseJSON(value, fallback) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return fallback;
+    }
 }
 
 function escapeHTML(value) {
@@ -57,93 +73,37 @@ function escapeHTML(value) {
         .replace(/'/g, '&#039;');
 }
 
-function parseJSON(value, fallback) {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return fallback;
-    }
-}
+function notify(message, type = 'info') {
+    const container = $('#toast-container');
 
-function storageKey(name) {
-    return `${STORAGE_PREFIX}${name}`;
-}
-
-function userKey(name) {
-    if (!currentUser) {
-        return storageKey(name);
+    if (!container) {
+        console.log(`[${type}] ${message}`);
+        return;
     }
 
-    return `${storageKey(currentUser)}_${name}`;
-}
+    const toast = document.createElement('div');
 
-function notify(text, type = 'info') {
-    let toast = $('#neuro-toast');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
 
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'neuro-toast';
+    container.appendChild(toast);
 
-        Object.assign(toast.style, {
-            position: 'fixed',
-            left: '50%',
-            bottom: '24px',
-            transform: 'translateX(-50%)',
-            zIndex: '999999',
-            maxWidth: 'calc(100vw - 32px)',
-            padding: '12px 18px',
-            borderRadius: '14px',
-            background: '#202020',
-            color: '#fff',
-            fontSize: '14px',
-            boxShadow: '0 12px 40px rgba(0,0,0,.35)',
-            opacity: '0',
-            pointerEvents: 'none',
-            transition: 'opacity .2s ease'
-        });
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
 
-        document.body.appendChild(toast);
-    }
+    setTimeout(() => {
+        toast.classList.remove('show');
 
-    toast.textContent = text;
-
-    if (type === 'error') {
-        toast.style.background = '#a52a2a';
-    } else if (type === 'success') {
-        toast.style.background = '#197a4b';
-    } else {
-        toast.style.background = '#202020';
-    }
-
-    toast.style.opacity = '1';
-
-    clearTimeout(toast._timer);
-
-    toast._timer = setTimeout(() => {
-        toast.style.opacity = '0';
+        setTimeout(() => {
+            toast.remove();
+        }, 250);
     }, 2800);
 }
 
 /* =========================================================
-   АВТОРИЗАЦИЯ
-   ========================================================= */
-
-function getCurrentUser() {
-    return localStorage.getItem(storageKey('current_user')) || '';
-}
-
-function setCurrentUser(username) {
-    if (username) {
-        localStorage.setItem(
-            storageKey('current_user'),
-            username
-        );
-    } else {
-        localStorage.removeItem(
-            storageKey('current_user')
-        );
-    }
-}
+   AUTH
+========================================================= */
 
 function getUsers() {
     return parseJSON(
@@ -159,6 +119,25 @@ function saveUsers(users) {
     );
 }
 
+function getCurrentUser() {
+    return localStorage.getItem(
+        storageKey('current_user')
+    ) || '';
+}
+
+function setCurrentUser(username) {
+    if (username) {
+        localStorage.setItem(
+            storageKey('current_user'),
+            username
+        );
+    } else {
+        localStorage.removeItem(
+            storageKey('current_user')
+        );
+    }
+}
+
 function normalizeUsername(value) {
     return String(value || '')
         .trim()
@@ -166,22 +145,215 @@ function normalizeUsername(value) {
         .slice(0, 40);
 }
 
-function register(event) {
-    if (event) {
-        event.preventDefault();
+function showLogin() {
+    const loginForm = $('#login-form');
+    const registerForm = $('#register-form');
+
+    if (loginForm) {
+        loginForm.classList.remove('hidden');
+        loginForm.style.display = '';
     }
 
+    if (registerForm) {
+        registerForm.classList.add('hidden');
+        registerForm.style.display = 'none';
+    }
+
+    const message = $('#auth-message');
+
+    if (message) {
+        message.textContent = '';
+    }
+}
+
+function showRegister() {
+    const loginForm = $('#login-form');
+    const registerForm = $('#register-form');
+
+    if (loginForm) {
+        loginForm.classList.add('hidden');
+        loginForm.style.display = 'none';
+    }
+
+    if (registerForm) {
+        registerForm.classList.remove('hidden');
+        registerForm.style.display = '';
+    }
+
+    const message = $('#auth-message');
+
+    if (message) {
+        message.textContent = '';
+    }
+}
+
+function showAuthScreen() {
+    const loginScreen = $('#login-screen');
+    const mainApp = $('#main-app');
+
+    if (mainApp) {
+        mainApp.classList.add('hidden');
+
+        mainApp.style.display = 'none';
+        mainApp.style.visibility = 'hidden';
+        mainApp.style.pointerEvents = 'none';
+    }
+
+    if (loginScreen) {
+        loginScreen.classList.remove('hidden');
+
+        loginScreen.style.display = 'flex';
+        loginScreen.style.visibility = 'visible';
+        loginScreen.style.pointerEvents = 'auto';
+        loginScreen.style.position = 'fixed';
+        loginScreen.style.inset = '0';
+        loginScreen.style.zIndex = '99999';
+    }
+}
+
+function showMainApplication() {
+    const loginScreen = $('#login-screen');
+    const mainApp = $('#main-app');
+
+    /*
+     * КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+     * login-screen полностью убирается из отображения,
+     * а main-app принудительно включается.
+     */
+
+    if (loginScreen) {
+        loginScreen.classList.add('hidden');
+
+        loginScreen.style.display = 'none';
+        loginScreen.style.visibility = 'hidden';
+        loginScreen.style.pointerEvents = 'none';
+        loginScreen.style.position = 'static';
+    }
+
+    if (mainApp) {
+        mainApp.classList.remove('hidden');
+
+        mainApp.style.display = 'flex';
+        mainApp.style.visibility = 'visible';
+        mainApp.style.pointerEvents = 'auto';
+    }
+
+    updateUserProfile();
+}
+
+function login(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const usernameInput = $('#username');
+    const passwordInput = $('#password');
+
     const username = normalizeUsername(
-        $('#username')?.value
+        usernameInput?.value
     );
 
     const password = String(
-        $('#password')?.value || ''
+        passwordInput?.value || ''
     );
 
     if (!username) {
-        notify('Введите имя пользователя.', 'error');
-        $('#username')?.focus();
+        notify(
+            'Введите имя пользователя.',
+            'error'
+        );
+
+        usernameInput?.focus();
+
+        return false;
+    }
+
+    if (!password) {
+        notify(
+            'Введите пароль.',
+            'error'
+        );
+
+        passwordInput?.focus();
+
+        return false;
+    }
+
+    const users = getUsers();
+
+    if (!users[username]) {
+        notify(
+            'Пользователь не найден. Сначала создайте аккаунт.',
+            'error'
+        );
+
+        return false;
+    }
+
+    if (users[username].password !== password) {
+        notify(
+            'Неверный пароль.',
+            'error'
+        );
+
+        return false;
+    }
+
+    /*
+     * Сохраняем сессию ДО показа приложения.
+     */
+    currentUser = username;
+
+    setCurrentUser(username);
+
+    showMainApplication();
+
+    initializeApplication();
+
+    notify(
+        'Вход выполнен.',
+        'success'
+    );
+
+    return false;
+}
+
+function register(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const usernameInput =
+        $('#register-username');
+
+    const passwordInput =
+        $('#register-password');
+
+    const confirmInput =
+        $('#register-password-confirm');
+
+    const username = normalizeUsername(
+        usernameInput?.value
+    );
+
+    const password = String(
+        passwordInput?.value || ''
+    );
+
+    const confirmPassword = String(
+        confirmInput?.value || ''
+    );
+
+    if (!username) {
+        notify(
+            'Введите имя пользователя.',
+            'error'
+        );
+
+        usernameInput?.focus();
+
         return false;
     }
 
@@ -190,6 +362,7 @@ function register(event) {
             'Имя пользователя должно содержать минимум 3 символа.',
             'error'
         );
+
         return false;
     }
 
@@ -198,6 +371,18 @@ function register(event) {
             'Пароль должен содержать минимум 4 символа.',
             'error'
         );
+
+        return false;
+    }
+
+    if (password !== confirmPassword) {
+        notify(
+            'Пароли не совпадают.',
+            'error'
+        );
+
+        confirmInput?.focus();
+
         return false;
     }
 
@@ -208,6 +393,7 @@ function register(event) {
             'Такой пользователь уже существует.',
             'error'
         );
+
         return false;
     }
 
@@ -219,103 +405,15 @@ function register(event) {
     saveUsers(users);
 
     currentUser = username;
+
     setCurrentUser(username);
 
-    openApplication();
+    showMainApplication();
+
+    initializeApplication();
 
     notify(
         'Аккаунт успешно создан.',
-        'success'
-    );
-
-    return false;
-}
-
-function login(event) {
-    if (event) {
-        event.preventDefault();
-    }
-
-    const username = normalizeUsername(
-        $('#username')?.value
-    );
-
-    const password = String(
-        $('#password')?.value || ''
-    );
-
-    if (!username) {
-        notify(
-            'Введите имя пользователя.',
-            'error'
-        );
-        $('#username')?.focus();
-        return false;
-    }
-
-    if (!password) {
-        notify(
-            'Введите пароль.',
-            'error'
-        );
-        $('#password')?.focus();
-        return false;
-    }
-
-    const users = getUsers();
-
-    /*
-     * Если старый пользователь был создан
-     * предыдущей версией Neuro-chat,
-     * поддерживаем его старый формат.
-     */
-    const oldPassword = localStorage.getItem(
-        storageKey(`password_${username}`)
-    );
-
-    if (users[username]) {
-        if (users[username].password !== password) {
-            notify(
-                'Неверный пароль.',
-                'error'
-            );
-            return false;
-        }
-    } else if (oldPassword !== null) {
-        if (oldPassword !== password) {
-            notify(
-                'Неверный пароль.',
-                'error'
-            );
-            return false;
-        }
-
-        users[username] = {
-            password,
-            createdAt: Date.now()
-        };
-
-        saveUsers(users);
-    } else {
-        /*
-         * Для обратной совместимости:
-         * если аккаунта ещё нет, создаём его.
-         */
-        users[username] = {
-            password,
-            createdAt: Date.now()
-        };
-
-        saveUsers(users);
-    }
-
-    currentUser = username;
-    setCurrentUser(username);
-
-    openApplication();
-
-    notify(
-        'Вход выполнен.',
         'success'
     );
 
@@ -332,17 +430,6 @@ function logout() {
 
     setCurrentUser('');
 
-    const app = $('#app');
-    const loginScreen = $('#login-screen');
-
-    if (app) {
-        app.style.display = 'none';
-    }
-
-    if (loginScreen) {
-        loginScreen.style.display = '';
-    }
-
     const username = $('#username');
     const password = $('#password');
 
@@ -355,83 +442,76 @@ function logout() {
     }
 
     clearAttachedFiles();
-}
 
-function showLogin() {
-    const loginForm = $('#login-form');
-    const registerForm = $('#register-form');
+    showAuthScreen();
+    showLogin();
 
-    if (loginForm) {
-        loginForm.style.display = '';
-    }
-
-    if (registerForm) {
-        registerForm.style.display = 'none';
-    }
-}
-
-function showRegister() {
-    const loginForm = $('#login-form');
-    const registerForm = $('#register-form');
-
-    if (loginForm) {
-        loginForm.style.display = 'none';
-    }
-
-    if (registerForm) {
-        registerForm.style.display = '';
-    }
-}
-
-function openApplication() {
-    const loginScreen = $('#login-screen');
-    const app = $('#app');
-
-    if (loginScreen) {
-        loginScreen.style.display = 'none';
-    }
-
-    if (app) {
-        app.style.display = 'flex';
-    }
-
-    initializeApplication();
+    notify(
+        'Вы вышли из аккаунта.',
+        'success'
+    );
 }
 
 function restoreSession() {
     const savedUser = getCurrentUser();
 
     if (!savedUser) {
-        const app = $('#app');
-        const loginScreen = $('#login-screen');
+        showAuthScreen();
+        showLogin();
+        return false;
+    }
 
-        if (app) {
-            app.style.display = 'none';
-        }
+    const users = getUsers();
 
-        if (loginScreen) {
-            loginScreen.style.display = '';
-        }
-
+    /*
+     * Если в localStorage осталась повреждённая
+     * сессия — удаляем её.
+     */
+    if (!users[savedUser]) {
+        setCurrentUser('');
+        showAuthScreen();
+        showLogin();
         return false;
     }
 
     currentUser = savedUser;
 
-    openApplication();
+    showMainApplication();
+
+    initializeApplication();
 
     return true;
 }
 
-/* =========================================================
-   НАСТРОЙКИ
-   ========================================================= */
-
-function getSettings() {
+function updateUserProfile() {
     if (!currentUser) {
-        return {};
+        return;
     }
 
+    const username =
+        $('#sidebar-username');
+
+    const avatar =
+        $('#user-avatar');
+
+    if (username) {
+        username.textContent =
+            currentUser;
+    }
+
+    if (avatar) {
+        avatar.textContent =
+            currentUser
+                .charAt(0)
+                .toUpperCase();
+    }
+}
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+function getSettings() {
     return parseJSON(
         localStorage.getItem(
             userKey('settings')
@@ -441,14 +521,34 @@ function getSettings() {
 }
 
 function saveSettings(settings) {
-    if (!currentUser) {
-        return;
-    }
-
     localStorage.setItem(
         userKey('settings'),
         JSON.stringify(settings)
     );
+}
+
+function modelFromUI(value) {
+    switch (value) {
+        case 'fast':
+            return 'gpt-4o-mini';
+
+        case 'smart':
+            return 'gpt-4o';
+
+        case 'default':
+        default:
+            return DEFAULT_MODEL;
+    }
+}
+
+function modelToUI(model) {
+    if (model === 'gpt-4o') {
+        return 'smart';
+    }
+
+    return model === 'gpt-4o-mini'
+        ? 'fast'
+        : 'default';
 }
 
 function loadSettings() {
@@ -464,17 +564,14 @@ function loadSettings() {
     siteBuilderMode =
         settings.siteBuilderMode === true;
 
-    const model =
-        $('#model') ||
-        $('#model-select');
+    const model = $('#model');
 
     if (model) {
-        model.value = selectedModel;
+        model.value =
+            modelToUI(selectedModel);
     }
 
-    const theme =
-        $('#theme') ||
-        $('#theme-select');
+    const theme = $('#theme');
 
     if (theme) {
         theme.value =
@@ -482,14 +579,8 @@ function loadSettings() {
             'dark';
     }
 
-    applyTheme(
-        settings.theme ||
-        'dark'
-    );
-
     const temporary =
-        $('#temporary-chat') ||
-        $('#temporary-chat-toggle');
+        $('#temporary-chat');
 
     if (temporary) {
         temporary.checked =
@@ -497,68 +588,55 @@ function loadSettings() {
     }
 
     const siteBuilder =
-        $('#site-builder-mode') ||
-        $('#site-builder-toggle');
+        $('#site-builder-mode');
 
     if (siteBuilder) {
         siteBuilder.checked =
             siteBuilderMode;
     }
+
+    applyTheme(
+        settings.theme ||
+        'dark'
+    );
 }
 
 function saveAllSettings() {
-    const model =
-        $('#model') ||
-        $('#model-select');
-
-    const theme =
-        $('#theme') ||
-        $('#theme-select');
-
-    const temporary =
-        $('#temporary-chat') ||
-        $('#temporary-chat-toggle');
-
-    const siteBuilder =
-        $('#site-builder-mode') ||
-        $('#site-builder-toggle');
+    const model = $('#model');
+    const theme = $('#theme');
+    const temporary = $('#temporary-chat');
+    const siteBuilder = $('#site-builder-mode');
 
     if (model) {
-        selectedModel = model.value;
+        selectedModel =
+            modelFromUI(model.value);
     }
 
     if (temporary) {
-        temporaryChat = Boolean(
-            temporary.checked
-        );
+        temporaryChat =
+            temporary.checked;
     }
 
     if (siteBuilder) {
-        siteBuilderMode = Boolean(
-            siteBuilder.checked
-        );
+        siteBuilderMode =
+            siteBuilder.checked;
     }
 
-    const settings = getSettings();
+    saveSettings({
+        model: selectedModel,
+        theme:
+            theme?.value ||
+            'dark',
+        temporaryChat,
+        siteBuilderMode
+    });
 
-    settings.model = selectedModel;
-
-    settings.theme =
+    applyTheme(
         theme?.value ||
-        settings.theme ||
-        'dark';
+        'dark'
+    );
 
-    settings.temporaryChat =
-        temporaryChat;
-
-    settings.siteBuilderMode =
-        siteBuilderMode;
-
-    saveSettings(settings);
-
-    applyTheme(settings.theme);
-
-    closeSettings();
+    closeModal('settings');
 
     notify(
         'Настройки сохранены.',
@@ -568,11 +646,12 @@ function saveAllSettings() {
 
 function saveApiKey() {
     /*
-     * API-ключ теперь не сохраняем в браузере.
-     * AI работает через /api/chat.
+     * API-ключ намеренно не сохраняется.
+     * Серверная часть должна использовать
+     * переменную окружения.
      */
     notify(
-        'API-ключ на сайте больше не хранится. Используется серверный AI.',
+        'API-ключ управляется сервером Neuro-chat.',
         'success'
     );
 }
@@ -585,6 +664,14 @@ function applyTheme(theme) {
         document.body.classList.add(
             'light-theme'
         );
+    } else if (theme === 'system') {
+        document.body.classList.toggle(
+            'light-theme',
+            window.matchMedia &&
+            window.matchMedia(
+                '(prefers-color-scheme: light)'
+            ).matches
+        );
     } else {
         document.body.classList.remove(
             'light-theme'
@@ -592,15 +679,56 @@ function applyTheme(theme) {
     }
 }
 
-/* =========================================================
-   ЧАТЫ
-   ========================================================= */
+function openSettings() {
+    loadSettings();
+    openModal('settings');
+}
 
-function getChats() {
-    if (!currentUser) {
-        return [];
+function closeSettings() {
+    closeModal('settings');
+}
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+function openModal(name) {
+    const modal =
+        $(`#${name}-modal`);
+
+    if (!modal) {
+        return;
     }
 
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+}
+
+function closeModal(name) {
+    const modal =
+        $(`#${name}-modal`);
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+}
+
+function closeSupport() {
+    closeModal('support');
+}
+
+function openSupport() {
+    openModal('support');
+}
+
+/* =========================================================
+   CHATS
+========================================================= */
+
+function getChats() {
     return parseJSON(
         localStorage.getItem(
             userKey('chats')
@@ -610,10 +738,6 @@ function getChats() {
 }
 
 function saveChats(chats) {
-    if (!currentUser) {
-        return;
-    }
-
     localStorage.setItem(
         userKey('chats'),
         JSON.stringify(
@@ -631,8 +755,8 @@ function createChatTitle(text) {
         return 'Новый чат';
     }
 
-    return clean.length > 42
-        ? `${clean.slice(0, 42)}…`
+    return clean.length > 45
+        ? `${clean.slice(0, 45)}…`
         : clean;
 }
 
@@ -640,21 +764,19 @@ function saveCurrentChat() {
     if (
         !currentUser ||
         !currentChatId ||
-        temporaryChat
+        temporaryChat ||
+        !messages.length
     ) {
-        return;
-    }
-
-    if (!messages.length) {
         return;
     }
 
     const chats = getChats();
 
-    const index = chats.findIndex(
-        chat =>
-            chat.id === currentChatId
-    );
+    const existingIndex =
+        chats.findIndex(
+            chat =>
+                chat.id === currentChatId
+        );
 
     const firstUserMessage =
         messages.find(
@@ -662,26 +784,27 @@ function saveCurrentChat() {
                 message.role === 'user'
         );
 
+    const oldChat =
+        existingIndex >= 0
+            ? chats[existingIndex]
+            : null;
+
     const chat = {
         id: currentChatId,
-        title: createChatTitle(
-            firstUserMessage?.content ||
-            'Новый чат'
-        ),
+        title:
+            oldChat?.title ||
+            createChatTitle(
+                firstUserMessage?.content
+            ),
         messages: messages.slice(),
         createdAt:
-            index >= 0
-                ? chats[index].createdAt
-                : Date.now(),
-        updatedAt: Date.now(),
-        pinned:
-            index >= 0
-                ? Boolean(chats[index].pinned)
-                : false
+            oldChat?.createdAt ||
+            Date.now(),
+        updatedAt: Date.now()
     };
 
-    if (index >= 0) {
-        chats[index] = chat;
+    if (existingIndex >= 0) {
+        chats[existingIndex] = chat;
     } else {
         chats.unshift(chat);
     }
@@ -707,36 +830,50 @@ function newChat() {
     attachedFiles = [];
 
     clearAttachedFiles();
+
+    $('#current-chat-title')
+        ?.replaceChildren(
+            document.createTextNode(
+                'Новый чат'
+            )
+        );
+
     renderMessages();
-    renderChatHistory();
-    showWelcomeScreen();
 
-    const input = $('#user-input');
+    const welcome =
+        $('#welcome-screen');
 
-    if (input) {
-        input.value = '';
-        input.focus();
+    if (welcome) {
+        welcome.style.display = '';
     }
+
+    updateChatCount();
+    renderChatHistory();
+
+    $('#user-input')?.focus();
 }
 
 function clearChat() {
     messages = [];
-    attachedFiles = [];
 
-    clearAttachedFiles();
     renderMessages();
-    showWelcomeScreen();
+
+    const welcome =
+        $('#welcome-screen');
+
+    if (welcome) {
+        welcome.style.display = '';
+    }
 
     saveCurrentChat();
 }
 
 function selectChat(id) {
-    openChat(id);
-}
+    const chats = getChats();
 
-function openChat(id) {
-    const chat = getChats().find(
-        item => item.id === id
+    const chat = chats.find(
+        item =>
+            item.id === id
     );
 
     if (!chat) {
@@ -752,19 +889,39 @@ function openChat(id) {
             ? chat.messages.slice()
             : [];
 
+    const title =
+        $('#current-chat-title');
+
+    if (title) {
+        title.textContent =
+            chat.title ||
+            'Новый чат';
+    }
+
     renderMessages();
+
+    const welcome =
+        $('#welcome-screen');
+
+    if (welcome) {
+        welcome.style.display =
+            messages.length
+                ? 'none'
+                : '';
+    }
+
     renderChatHistory();
-    hideWelcomeScreen();
+
+    closeSidebarMobile();
 }
 
 function deleteChat(id, event) {
-    if (event) {
-        event.stopPropagation();
-    }
+    event?.stopPropagation();
 
     const chats =
         getChats().filter(
-            chat => chat.id !== id
+            chat =>
+                chat.id !== id
         );
 
     saveChats(chats);
@@ -776,28 +933,7 @@ function deleteChat(id, event) {
     }
 
     renderChatHistory();
-}
-
-function togglePinChat(id, event) {
-    if (event) {
-        event.stopPropagation();
-    }
-
-    const chats = getChats();
-
-    const chat = chats.find(
-        item => item.id === id
-    );
-
-    if (!chat) {
-        return;
-    }
-
-    chat.pinned =
-        !Boolean(chat.pinned);
-
-    saveChats(chats);
-    renderChatHistory();
+    updateChatCount();
 }
 
 function renderChatHistory() {
@@ -814,117 +950,47 @@ function renderChatHistory() {
         const query =
             currentSearchQuery.toLowerCase();
 
-        chats = chats.filter(chat =>
-            String(
-                chat.title || ''
-            )
-                .toLowerCase()
-                .includes(query)
-        );
+        chats =
+            chats.filter(
+                chat =>
+                    String(
+                        chat.title || ''
+                    )
+                        .toLowerCase()
+                        .includes(query)
+            );
     }
-
-    chats.sort((a, b) => {
-        if (
-            Boolean(a.pinned) !==
-            Boolean(b.pinned)
-        ) {
-            return a.pinned
-                ? -1
-                : 1;
-        }
-
-        return (
-            b.updatedAt -
-            a.updatedAt
-        );
-    });
 
     container.innerHTML = '';
 
-    if (!chats.length) {
-        const empty =
-            document.createElement(
-                'div'
-            );
-
-        empty.className =
-            'chat-history-empty';
-
-        empty.textContent =
-            currentSearchQuery
-                ? 'Ничего не найдено'
-                : 'История чатов пуста';
-
-        container.appendChild(empty);
-
-        return;
-    }
-
     chats.forEach(chat => {
         const item =
-            document.createElement(
-                'div'
-            );
+            document.createElement('button');
 
+        item.type = 'button';
         item.className =
-            'chat-item' +
-            (
-                chat.id ===
-                currentChatId
-                    ? ' active'
-                    : ''
-            );
+            'chat-history-item';
+
+        if (
+            chat.id ===
+            currentChatId
+        ) {
+            item.classList.add('active');
+        }
 
         const title =
-            document.createElement(
-                'span'
-            );
-
-        title.className =
-            'chat-item-title';
+            document.createElement('span');
 
         title.textContent =
-            chat.pinned
-                ? `📌 ${chat.title || 'Новый чат'}`
-                : (
-                    chat.title ||
-                    'Новый чат'
-                );
-
-        const actions =
-            document.createElement(
-                'div'
-            );
-
-        actions.className =
-            'chat-item-actions';
-
-        const pin =
-            document.createElement(
-                'button'
-            );
-
-        pin.type = 'button';
-        pin.textContent =
-            chat.pinned
-                ? '📌'
-                : '○';
-
-        pin.addEventListener(
-            'click',
-            event =>
-                togglePinChat(
-                    chat.id,
-                    event
-                )
-        );
+            chat.title ||
+            'Новый чат';
 
         const remove =
-            document.createElement(
-                'button'
-            );
+            document.createElement('span');
 
-        remove.type = 'button';
+        remove.className =
+            'chat-delete';
+
         remove.textContent = '×';
 
         remove.addEventListener(
@@ -936,32 +1002,77 @@ function renderChatHistory() {
                 )
         );
 
-        actions.appendChild(pin);
-        actions.appendChild(remove);
-
         item.appendChild(title);
-        item.appendChild(actions);
+        item.appendChild(remove);
 
         item.addEventListener(
             'click',
             () =>
-                openChat(chat.id)
+                selectChat(
+                    chat.id
+                )
         );
 
         container.appendChild(item);
     });
+
+    updateChatCount();
+}
+
+function updateChatCount() {
+    const counter =
+        $('#chat-count');
+
+    if (counter) {
+        counter.textContent =
+            String(
+                getChats().length
+            );
+    }
 }
 
 function searchChats(value) {
     currentSearchQuery =
-        String(value || '').trim();
+        String(value || '')
+            .trim();
 
     renderChatHistory();
 }
 
 /* =========================================================
-   СООБЩЕНИЯ
-   ========================================================= */
+   MESSAGES
+========================================================= */
+
+function formatMessage(text) {
+    let value =
+        escapeHTML(text);
+
+    value =
+        value.replace(
+            /```([\s\S]*?)```/g,
+            '<pre><code>$1</code></pre>'
+        );
+
+    value =
+        value.replace(
+            /\*\*(.*?)\*\*/g,
+            '<strong>$1</strong>'
+        );
+
+    value =
+        value.replace(
+            /`([^`]+)`/g,
+            '<code>$1</code>'
+        );
+
+    value =
+        value.replace(
+            /\n/g,
+            '<br>'
+        );
+
+    return value;
+}
 
 function renderMessages() {
     const container =
@@ -973,9 +1084,12 @@ function renderMessages() {
 
     container.innerHTML = '';
 
-    messages.forEach(message => {
-        addMessageToDOM(message);
-    });
+    messages.forEach(
+        message =>
+            addMessageToDOM(
+                message
+            )
+    );
 
     scrollMessages();
 }
@@ -989,9 +1103,7 @@ function addMessageToDOM(message) {
     }
 
     const wrapper =
-        document.createElement(
-            'div'
-        );
+        document.createElement('div');
 
     wrapper.className =
         `message ${
@@ -1001,9 +1113,7 @@ function addMessageToDOM(message) {
         }`;
 
     const bubble =
-        document.createElement(
-            'div'
-        );
+        document.createElement('div');
 
     bubble.className =
         'message-bubble';
@@ -1013,76 +1123,18 @@ function addMessageToDOM(message) {
             message.content
         );
 
-    wrapper.appendChild(bubble);
-    container.appendChild(wrapper);
-
-    return wrapper;
-}
-
-function formatMessage(text) {
-    let value = escapeHTML(
-        String(text || '')
+    wrapper.appendChild(
+        bubble
     );
 
-    /*
-     * Простая поддержка markdown-подобного текста.
-     */
-    value = value.replace(
-        /```([\s\S]*?)```/g,
-        '<pre><code>$1</code></pre>'
-    );
-
-    value = value.replace(
-        /\*\*(.*?)\*\*/g,
-        '<strong>$1</strong>'
-    );
-
-    value = value.replace(
-        /`([^`]+)`/g,
-        '<code>$1</code>'
-    );
-
-    value = value.replace(
-        /\n/g,
-        '<br>'
-    );
-
-    return value;
-}
-
-function showWelcomeScreen() {
-    const welcome =
-        $('#welcome-screen');
-
-    if (welcome) {
-        welcome.style.display = '';
-    }
-}
-
-function hideWelcomeScreen() {
-    const welcome =
-        $('#welcome-screen');
-
-    if (welcome) {
-        welcome.style.display = 'none';
-    }
-}
-
-function updateChatTitle(title) {
-    const elements = $$(
-        '[data-chat-title]'
-    );
-
-    elements.forEach(
-        element =>
-            element.textContent =
-                title
+    container.appendChild(
+        wrapper
     );
 }
 
 function scrollMessages() {
     const container =
-        $('#messages');
+        $('#messages-container');
 
     if (!container) {
         return;
@@ -1094,12 +1146,52 @@ function scrollMessages() {
     });
 }
 
+function quickPrompt(text) {
+    const input =
+        $('#user-input');
+
+    if (!input) {
+        return;
+    }
+
+    input.value = text;
+
+    updateComposerState();
+
+    input.focus();
+}
+
+function updateComposerState() {
+    const input =
+        $('#user-input');
+
+    const button =
+        $('#send-button');
+
+    const counter =
+        $('#char-counter');
+
+    const length =
+        input?.value.length || 0;
+
+    if (button) {
+        button.disabled =
+            !length &&
+            attachedFiles.length === 0;
+    }
+
+    if (counter) {
+        counter.textContent =
+            `${length} / 20000`;
+    }
+}
+
 /* =========================================================
    AI
-   ========================================================= */
+========================================================= */
 
 async function callAI() {
-    const contextMessages =
+    const context =
         messages
             .slice(-MAX_CONTEXT_MESSAGES)
             .map(message => ({
@@ -1107,44 +1199,38 @@ async function callAI() {
                 content: message.content
             }));
 
-    const settings =
-        getSettings();
-
-    const model =
-        settings.model ||
-        selectedModel ||
-        DEFAULT_MODEL;
-
     const response =
         await fetch(
             '/api/chat',
             {
                 method: 'POST',
+
                 headers: {
                     'Content-Type':
                         'application/json'
                 },
+
                 body: JSON.stringify({
-                    model,
+                    model:
+                        selectedModel ||
+                        DEFAULT_MODEL,
+
                     messages:
-                        contextMessages,
+                        context,
+
                     temperature: 0.7,
+
                     max_tokens: 8192
                 }),
+
                 signal:
                     abortController?.signal
             }
         );
 
-    let data = null;
-
-    try {
-        data = await response.json();
-    } catch {
-        throw new Error(
-            'Сервер вернул некорректный ответ.'
-        );
-    }
+    const data =
+        await response.json()
+            .catch(() => null);
 
     if (!response.ok) {
         throw new Error(
@@ -1153,9 +1239,9 @@ async function callAI() {
         );
     }
 
-    if (!data.message) {
+    if (!data?.message) {
         throw new Error(
-            'AI не вернул сообщение.'
+            'AI не вернул ответ.'
         );
     }
 
@@ -1163,11 +1249,20 @@ async function callAI() {
 }
 
 async function sendMessage(event) {
-    if (event) {
-        event.preventDefault();
-    }
+    event?.preventDefault();
 
     if (isGenerating) {
+        return;
+    }
+
+    if (!currentUser) {
+        notify(
+            'Сначала войдите в аккаунт.',
+            'error'
+        );
+
+        showAuthScreen();
+
         return;
     }
 
@@ -1181,46 +1276,62 @@ async function sendMessage(event) {
     const text =
         input.value.trim();
 
-    if (!text && !attachedFiles.length) {
+    if (
+        !text &&
+        !attachedFiles.length
+    ) {
         return;
     }
 
-    if (!currentUser) {
-        notify(
-            'Сначала войдите в аккаунт.',
-            'error'
-        );
-        return;
+    if (!currentChatId) {
+        currentChatId =
+            createId('chat');
     }
-
-    hideWelcomeScreen();
 
     const userMessage = {
         id: createId('message'),
         role: 'user',
         content:
             text ||
-            'Отправлены вложения.',
+            'Отправлены файлы.',
         createdAt: Date.now()
     };
 
     if (attachedFiles.length) {
         userMessage.attachments =
-            attachedFiles.map(file => ({
-                name: file.name,
-                type: file.type,
-                size: file.size
-            }));
+            attachedFiles.map(
+                file => ({
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                })
+            );
     }
 
-    messages.push(userMessage);
+    messages.push(
+        userMessage
+    );
 
     input.value = '';
 
     clearAttachedFiles();
+    updateComposerState();
+
+    const welcome =
+        $('#welcome-screen');
+
+    if (welcome) {
+        welcome.style.display =
+            'none';
+    }
+
     renderMessages();
 
     isGenerating = true;
+
+    setConnectionStatus(
+        '● Генерация…'
+    );
 
     showTypingIndicator();
 
@@ -1236,12 +1347,14 @@ async function sendMessage(event) {
             role: 'assistant',
             content:
                 answer.content ||
-                'Пустой ответ AI.',
+                'Пустой ответ.',
             createdAt: Date.now()
         });
 
         renderMessages();
+
         saveCurrentChat();
+
     } catch (error) {
         if (
             error?.name ===
@@ -1254,86 +1367,74 @@ async function sendMessage(event) {
             id: createId('message'),
             role: 'assistant',
             content:
-                `⚠️ ${error.message || 'Не удалось получить ответ от AI.'}`,
+                `⚠️ ${error?.message || 'Не удалось получить ответ.'}`,
             createdAt: Date.now()
         });
 
         renderMessages();
+
     } finally {
         hideTypingIndicator();
 
         isGenerating = false;
         abortController = null;
+
+        setConnectionStatus(
+            '● Готов'
+        );
+
+        updateComposerState();
     }
 }
 
 function stopGeneration() {
-    if (abortController) {
-        abortController.abort();
-        abortController = null;
-    }
+    abortController?.abort();
 
+    abortController = null;
     isGenerating = false;
+
     hideTypingIndicator();
+
+    setConnectionStatus(
+        '● Готов'
+    );
+}
+
+function setConnectionStatus(text) {
+    const element =
+        $('#connection-status');
+
+    if (element) {
+        element.textContent =
+            text;
+    }
 }
 
 function showTypingIndicator() {
-    const container =
-        $('#messages');
+    const indicator =
+        $('#typing-indicator');
 
-    if (!container) {
-        return;
-    }
-
-    hideTypingIndicator();
-
-    const typing =
-        document.createElement(
-            'div'
+    if (indicator) {
+        indicator.classList.remove(
+            'hidden'
         );
-
-    typing.id =
-        'neuro-typing';
-
-    typing.className =
-        'message assistant-message';
-
-    typing.innerHTML = `
-        <div class="message-bubble typing-indicator">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    `;
-
-    container.appendChild(typing);
-
-    scrollMessages();
+    }
 }
 
 function hideTypingIndicator() {
-    $('#neuro-typing')?.remove();
-}
+    const indicator =
+        $('#typing-indicator');
 
-/* =========================================================
-   БЫСТРЫЕ ЗАПРОСЫ
-   ========================================================= */
-
-function quickPrompt(text) {
-    const input =
-        $('#user-input');
-
-    if (!input) {
-        return;
+    if (indicator) {
+        indicator.classList.add(
+            'hidden'
+        );
     }
-
-    input.value = text;
-    input.focus();
 }
 
 /* =========================================================
-   ВЛОЖЕНИЯ
-   ========================================================= */
+   ATTACHMENTS
+========================================================= */
 
 function toggleAttach() {
     const menu =
@@ -1343,42 +1444,26 @@ function toggleAttach() {
         return;
     }
 
-    menu.classList.toggle('open');
-
-    if (menu.style.display === 'none') {
-        menu.style.display = '';
-    }
-}
-
-function closeAttachMenu() {
-    const menu =
-        $('#attach-menu');
-
-    if (menu) {
-        menu.classList.remove(
-            'open'
-        );
-    }
+    menu.classList.toggle(
+        'hidden'
+    );
 }
 
 function attachType(type) {
-    closeAttachMenu();
+    const inputMap = {
+        file: '#file-input',
+        photo: '#photo-input',
+        camera: '#camera-input',
+        model: '#model-file-input'
+    };
 
-    let input = null;
+    $('#attach-menu')
+        ?.classList.add('hidden');
 
-    if (type === 'file') {
-        input = $('#file-input');
-    } else if (type === 'photo') {
-        input = $('#photo-input');
-    } else if (type === 'camera') {
-        input = $('#camera-input');
-    } else if (type === 'model') {
-        input = $('#model-file-input');
-    }
+    const input =
+        $(inputMap[type]);
 
-    if (input) {
-        input.click();
-    }
+    input?.click();
 }
 
 function handleFiles(fileList) {
@@ -1386,13 +1471,12 @@ function handleFiles(fileList) {
         return;
     }
 
-    Array.from(fileList).forEach(
-        file => {
-            attachedFiles.push(file);
-        }
+    attachedFiles.push(
+        ...Array.from(fileList)
     );
 
     renderAttachedFiles();
+    updateComposerState();
 }
 
 function renderAttachedFiles() {
@@ -1408,15 +1492,15 @@ function renderAttachedFiles() {
     attachedFiles.forEach(
         (file, index) => {
             const item =
-                document.createElement(
-                    'div'
-                );
+                document.createElement('div');
 
             item.className =
                 'attached-file';
 
             item.innerHTML = `
-                <span>${escapeHTML(file.name)}</span>
+                <span>
+                    ${escapeHTML(file.name)}
+                </span>
                 <button type="button">×</button>
             `;
 
@@ -1430,7 +1514,9 @@ function renderAttachedFiles() {
                         )
                 );
 
-            container.appendChild(item);
+            container.appendChild(
+                item
+            );
         }
     );
 }
@@ -1442,6 +1528,7 @@ function removeAttachedFile(index) {
     );
 
     renderAttachedFiles();
+    updateComposerState();
 }
 
 function clearAttachedFiles() {
@@ -1453,320 +1540,81 @@ function clearAttachedFiles() {
     if (container) {
         container.innerHTML = '';
     }
+
+    updateComposerState();
 }
 
 /* =========================================================
-   НАСТРОЙКА INPUT
-   ========================================================= */
-
-function setupInput() {
-    const input =
-        $('#user-input');
-
-    const send =
-        $('#send-button');
-
-    if (input) {
-        input.addEventListener(
-            'keydown',
-            event => {
-                if (
-                    event.key === 'Enter' &&
-                    !event.shiftKey
-                ) {
-                    event.preventDefault();
-                    sendMessage();
-                }
-            }
-        );
-
-        input.addEventListener(
-            'input',
-            () => {
-                input.style.height =
-                    'auto';
-
-                input.style.height =
-                    Math.min(
-                        input.scrollHeight,
-                        180
-                    ) + 'px';
-            }
-        );
-    }
-
-    if (send) {
-        send.addEventListener(
-            'click',
-            sendMessage
-        );
-    }
-}
-
-function setupAttachments() {
-    const inputs = [
-        '#file-input',
-        '#photo-input',
-        '#camera-input',
-        '#model-file-input'
-    ];
-
-    inputs.forEach(
-        selector => {
-            const input =
-                $(selector);
-
-            if (!input) {
-                return;
-            }
-
-            input.addEventListener(
-                'change',
-                event => {
-                    handleFiles(
-                        event.target.files
-                    );
-
-                    event.target.value =
-                        '';
-                }
-            );
-        }
-    );
-}
-
-function setupSearch() {
-    const input =
-        $('#chat-search');
-
-    if (!input) {
-        return;
-    }
-
-    input.addEventListener(
-        'input',
-        event =>
-            searchChats(
-                event.target.value
-            )
-    );
-}
-
-function setupKeyboardShortcuts() {
-    document.addEventListener(
-        'keydown',
-        event => {
-            if (
-                (event.ctrlKey ||
-                    event.metaKey) &&
-                event.key.toLowerCase() ===
-                    'k'
-            ) {
-                event.preventDefault();
-
-                $('#chat-search')?.focus();
-            }
-
-            if (
-                event.key === 'Escape' &&
-                isGenerating
-            ) {
-                stopGeneration();
-            }
-        }
-    );
-}
-
-/* =========================================================
-   НАВИГАЦИЯ
-   ========================================================= */
-
-function setupNavigation() {
-    $$('.nav-item').forEach(item => {
-        item.addEventListener(
-            'click',
-            () => {
-                const action =
-                    item.dataset.action ||
-                    item.dataset.page;
-
-                $$('.nav-item').forEach(
-                    element =>
-                        element.classList.remove(
-                            'active'
-                        )
-                );
-
-                item.classList.add(
-                    'active'
-                );
-
-                navigate(action);
-            }
-        );
-    });
-}
-
-function navigate(section) {
-    const sections = [
-        '#chat-section',
-        '#library-section',
-        '#projects-section',
-        '#plugins-section',
-        '#scheduled-section'
-    ];
-
-    sections.forEach(
-        selector => {
-            const element =
-                $(selector);
-
-            if (element) {
-                element.style.display =
-                    'none';
-            }
-        }
-    );
-
-    let target = null;
-
-    switch (section) {
-        case 'chat':
-        case 'home':
-            target =
-                $('#chat-section');
-            break;
-
-        case 'library':
-            target =
-                $('#library-section');
-            break;
-
-        case 'projects':
-            target =
-                $('#projects-section');
-            break;
-
-        case 'plugins':
-            target =
-                $('#plugins-section');
-            break;
-
-        case 'scheduled':
-            target =
-                $('#scheduled-section');
-            break;
-
-        default:
-            target =
-                $('#chat-section');
-    }
-
-    if (target) {
-        target.style.display = '';
-    }
-
-    if (
-        section === 'chat' ||
-        section === 'home'
-    ) {
-        renderMessages();
-    }
-}
-
-/* =========================================================
-   SIDEBAR
-   ========================================================= */
+   SIDEBAR / NAVIGATION
+========================================================= */
 
 function toggleSidebar() {
     const sidebar =
         $('#sidebar');
 
-    if (!sidebar) {
-        return;
-    }
+    const overlay =
+        $('#sidebar-overlay');
 
-    sidebar.classList.toggle(
+    sidebar?.classList.toggle(
         'open'
+    );
+
+    overlay?.classList.toggle(
+        'visible'
     );
 }
 
-/* =========================================================
-   SETTINGS
-   ========================================================= */
+function closeSidebarMobile() {
+    $('#sidebar')
+        ?.classList.remove('open');
 
-function openSettings() {
-    const modal =
-        $('#settings-modal');
-
-    if (modal) {
-        modal.style.display =
-            'flex';
-    }
-
-    loadSettings();
+    $('#sidebar-overlay')
+        ?.classList.remove('visible');
 }
 
-function closeSettings() {
-    const modal =
-        $('#settings-modal');
+function navigate(sectionName) {
+    const sections =
+        $$('.app-section');
 
-    if (modal) {
-        modal.style.display =
+    sections.forEach(section => {
+        section.classList.remove(
+            'active'
+        );
+
+        section.style.display =
             'none';
+    });
+
+    const section =
+        document.getElementById(
+            sectionName
+        );
+
+    if (section) {
+        section.classList.add(
+            'active'
+        );
+
+        section.style.display =
+            '';
     }
-}
 
-function openSupport() {
-    const modal =
-        $('#support-modal');
+    $$('.nav-item').forEach(item => {
+        item.classList.toggle(
+            'active',
+            item.dataset.section ===
+                sectionName
+        );
+    });
 
-    if (modal) {
-        modal.style.display =
-            'flex';
-    }
-}
-
-function closeSupport() {
-    const modal =
-        $('#support-modal');
-
-    if (modal) {
-        modal.style.display =
-            'none';
-    }
+    closeSidebarMobile();
 }
 
 /* =========================================================
-   БИБЛИОТЕКА
-   ========================================================= */
-
-function openLibrary() {
-    navigate('library');
-}
-
-function openProjects() {
-    navigate('projects');
-    renderProjects();
-}
-
-function openPlugins() {
-    navigate('plugins');
-}
-
-function openScheduled() {
-    navigate('scheduled');
-}
-
-/* =========================================================
-   ПРОЕКТЫ
-   ========================================================= */
+   PROJECTS
+========================================================= */
 
 function getProjects() {
-    if (!currentUser) {
-        return [];
-    }
-
     return parseJSON(
         localStorage.getItem(
             userKey('projects')
@@ -1776,27 +1624,41 @@ function getProjects() {
 }
 
 function saveProjects(projects) {
-    if (!currentUser) {
-        return;
-    }
-
     localStorage.setItem(
         userKey('projects'),
         JSON.stringify(projects)
     );
 }
 
+function openProjectModal() {
+    openModal('project');
+
+    $('#project-name')?.focus();
+}
+
+function closeProjectModal() {
+    closeModal('project');
+}
+
 function createProject() {
-    if (!currentUser) {
-        return;
-    }
+    openProjectModal();
+}
+
+function saveProjectFromForm(event) {
+    event.preventDefault();
 
     const name =
-        prompt(
-            'Название проекта:'
+        $('#project-name')?.value.trim();
+
+    const description =
+        $('#project-description')?.value.trim();
+
+    if (!name) {
+        notify(
+            'Введите название проекта.',
+            'error'
         );
 
-    if (!name?.trim()) {
         return;
     }
 
@@ -1805,11 +1667,17 @@ function createProject() {
 
     projects.unshift({
         id: createId('project'),
-        name: name.trim(),
+        name,
+        description,
         createdAt: Date.now()
     });
 
     saveProjects(projects);
+
+    $('#project-form')?.reset();
+
+    closeProjectModal();
+
     renderProjects();
 
     notify(
@@ -1826,43 +1694,55 @@ function deleteProject(id) {
         );
 
     saveProjects(projects);
+
     renderProjects();
 }
 
 function renderProjects() {
-    const container =
-        $('#projects-list');
+    const grid =
+        $('#projects-grid');
 
-    if (!container) {
+    const empty =
+        $('#projects-empty');
+
+    if (!grid) {
         return;
     }
 
     const projects =
         getProjects();
 
-    container.innerHTML = '';
+    grid.innerHTML = '';
 
     if (!projects.length) {
-        container.innerHTML =
-            '<div class="empty-state">Проектов пока нет.</div>';
+        if (empty) {
+            empty.style.display = '';
+        }
+
         return;
     }
 
+    if (empty) {
+        empty.style.display =
+            'none';
+    }
+
     projects.forEach(project => {
-        const item =
-            document.createElement(
-                'div'
-            );
+        const card =
+            document.createElement('article');
 
-        item.className =
-            'project-item';
+        card.className =
+            'project-card';
 
-        item.innerHTML = `
-            <span>${escapeHTML(project.name)}</span>
+        card.innerHTML = `
+            <div class="project-card-content">
+                <h3>${escapeHTML(project.name)}</h3>
+                <p>${escapeHTML(project.description || 'Без описания')}</p>
+            </div>
             <button type="button">Удалить</button>
         `;
 
-        item
+        card
             .querySelector('button')
             .addEventListener(
                 'click',
@@ -1872,19 +1752,15 @@ function renderProjects() {
                     )
             );
 
-        container.appendChild(item);
+        grid.appendChild(card);
     });
 }
 
 /* =========================================================
-   ЗАПЛАНИРОВАННЫЕ ЗАДАЧИ
-   ========================================================= */
+   SCHEDULED
+========================================================= */
 
 function getScheduledTasks() {
-    if (!currentUser) {
-        return [];
-    }
-
     return parseJSON(
         localStorage.getItem(
             userKey('scheduled')
@@ -1894,27 +1770,41 @@ function getScheduledTasks() {
 }
 
 function saveScheduledTasks(tasks) {
-    if (!currentUser) {
-        return;
-    }
-
     localStorage.setItem(
         userKey('scheduled'),
         JSON.stringify(tasks)
     );
 }
 
-function createScheduledTask() {
-    if (!currentUser) {
-        return;
-    }
+function openScheduledModal() {
+    openModal('scheduled');
+}
 
-    const text =
-        prompt(
-            'Что нужно запланировать?'
+function createScheduledTask() {
+    openScheduledModal();
+}
+
+function saveScheduledFromForm(event) {
+    event.preventDefault();
+
+    const title =
+        $('#scheduled-title')
+            ?.value.trim();
+
+    const date =
+        $('#scheduled-date')
+            ?.value;
+
+    const time =
+        $('#scheduled-time')
+            ?.value;
+
+    if (!title || !date || !time) {
+        notify(
+            'Заполните все поля.',
+            'error'
         );
 
-    if (!text?.trim()) {
         return;
     }
 
@@ -1923,15 +1813,22 @@ function createScheduledTask() {
 
     tasks.unshift({
         id: createId('task'),
-        text: text.trim(),
+        title,
+        date,
+        time,
         createdAt: Date.now()
     });
 
     saveScheduledTasks(tasks);
+
+    $('#scheduled-form')?.reset();
+
+    closeModal('scheduled');
+
     renderScheduledTasks();
 
     notify(
-        'Задача сохранена.',
+        'Задача создана.',
         'success'
     );
 }
@@ -1944,12 +1841,16 @@ function deleteScheduledTask(id) {
         );
 
     saveScheduledTasks(tasks);
+
     renderScheduledTasks();
 }
 
 function renderScheduledTasks() {
     const container =
         $('#scheduled-list');
+
+    const empty =
+        $('#scheduled-empty');
 
     if (!container) {
         return;
@@ -1961,22 +1862,30 @@ function renderScheduledTasks() {
     container.innerHTML = '';
 
     if (!tasks.length) {
-        container.innerHTML =
-            '<div class="empty-state">Запланированных задач нет.</div>';
+        if (empty) {
+            empty.style.display = '';
+        }
+
         return;
+    }
+
+    if (empty) {
+        empty.style.display =
+            'none';
     }
 
     tasks.forEach(task => {
         const item =
-            document.createElement(
-                'div'
-            );
+            document.createElement('div');
 
         item.className =
             'scheduled-item';
 
         item.innerHTML = `
-            <span>${escapeHTML(task.text)}</span>
+            <div>
+                <strong>${escapeHTML(task.title)}</strong>
+                <small>${escapeHTML(task.date)} ${escapeHTML(task.time)}</small>
+            </div>
             <button type="button">Удалить</button>
         `;
 
@@ -1995,31 +1904,68 @@ function renderScheduledTasks() {
 }
 
 /* =========================================================
-   CODE MODE
-   ========================================================= */
+   LIBRARY
+========================================================= */
+
+function openLibraryUpload() {
+    $('#file-input')?.click();
+}
+
+function renderLibrary() {
+    /*
+     * Файлы пока хранятся только как вложения
+     * текущего браузера. Для настоящего облачного
+     * хранилища потребуется R2/backend.
+     */
+}
+
+/* =========================================================
+   CODE STUDIO
+========================================================= */
 
 function openCodeMode() {
-    const modal =
-        $('#code-modal');
-
-    if (modal) {
-        modal.style.display =
-            'flex';
-    }
+    openModal('code');
 }
 
 function closeCodeMode() {
-    const modal =
-        $('#code-modal');
-
-    if (modal) {
-        modal.style.display =
-            'none';
-    }
+    closeModal('code');
 }
 
 function selectCodeFile() {
     $('#code-file-input')?.click();
+}
+
+function loadCodeFile(event) {
+    const file =
+        event.target.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    const reader =
+        new FileReader();
+
+    reader.onload = () => {
+        const editor =
+            $('#code-editor');
+
+        if (editor) {
+            editor.value =
+                String(
+                    reader.result || ''
+                );
+        }
+
+        notify(
+            'Файл открыт.',
+            'success'
+        );
+    };
+
+    reader.readAsText(file);
+
+    event.target.value = '';
 }
 
 function runCode() {
@@ -2030,9 +1976,6 @@ function runCode() {
         return;
     }
 
-    const code =
-        editor.value;
-
     const preview =
         window.open(
             '',
@@ -2041,15 +1984,45 @@ function runCode() {
 
     if (!preview) {
         notify(
-            'Браузер заблокировал окно предпросмотра.',
+            'Разрешите всплывающие окна для предпросмотра.',
             'error'
         );
+
         return;
     }
 
     preview.document.open();
-    preview.document.write(code);
+
+    preview.document.write(
+        editor.value
+    );
+
     preview.document.close();
+}
+
+function openSitePreview() {
+    const editor =
+        $('#code-editor');
+
+    const frame =
+        $('#site-preview-frame');
+
+    if (!editor || !frame) {
+        return;
+    }
+
+    frame.srcdoc =
+        editor.value;
+
+    openModal(
+        'site-preview'
+    );
+}
+
+function closeSitePreview() {
+    closeModal(
+        'site-preview'
+    );
 }
 
 async function askCodeAI() {
@@ -2060,39 +2033,47 @@ async function askCodeAI() {
         return;
     }
 
-    const code =
-        editor.value;
-
-    const input =
+    const request =
         prompt(
-            'Что изменить в коде?'
+            'Что нужно изменить в коде?'
         );
 
-    if (!input?.trim()) {
+    if (!request?.trim()) {
         return;
     }
 
-    const oldMessages =
+    const originalMessages =
         messages;
 
     messages = [
         {
             role: 'user',
             content:
-                `Измени этот код по запросу: ${input}\n\nКОД:\n${code}`
+                `Ты профессиональный разработчик.
+Измени код по запросу пользователя.
+
+Запрос:
+${request}
+
+Текущий код:
+\`\`\`
+${editor.value}
+\`\`\`
+
+Верни только готовый полный код без пояснений.`
         }
     ];
 
     try {
-        const result =
+        const answer =
             await callAI();
 
         editor.value =
-            result.content ||
-            code;
+            answer.content ||
+            editor.value;
 
         notify(
-            'Код обновлён.',
+            'AI обновил код.',
             'success'
         );
     } catch (error) {
@@ -2102,68 +2083,69 @@ async function askCodeAI() {
         );
     } finally {
         messages =
-            oldMessages;
+            originalMessages;
     }
 }
 
 /* =========================================================
-   ПРЕДПРОСМОТР САЙТА
-   ========================================================= */
+   VOICE
+========================================================= */
 
-function openSitePreview() {
-    const modal =
-        $('#site-preview-modal');
+function startVoiceInput() {
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
 
-    const frame =
-        $('#site-preview-frame');
+    if (!SpeechRecognition) {
+        notify(
+            'Голосовой ввод не поддерживается этим браузером.',
+            'error'
+        );
 
-    const editor =
-        $('#code-editor');
-
-    if (frame && editor) {
-        frame.srcdoc =
-            editor.value;
+        return;
     }
 
-    if (modal) {
-        modal.style.display =
-            'flex';
-    }
-}
+    const recognition =
+        new SpeechRecognition();
 
-function closeSitePreview() {
-    const modal =
-        $('#site-preview-modal');
+    recognition.lang = 'ru-RU';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
-    if (modal) {
-        modal.style.display =
-            'none';
-    }
-}
+    recognition.onresult =
+        event => {
+            const text =
+                event.results?.[0]?.[0]?.transcript;
 
-function startSiteBuilder() {
-    siteBuilderMode = true;
+            if (text) {
+                const input =
+                    $('#user-input');
 
-    newChat();
+                if (input) {
+                    input.value =
+                        `${
+                            input.value
+                        }${input.value ? ' ' : ''}${text}`;
 
-    const input =
-        $('#user-input');
+                    updateComposerState();
+                }
+            }
+        };
 
-    if (input) {
-        input.value =
-            'Создай сайт. Опиши структуру, дизайн и функции.';
-        input.focus();
-    }
+    recognition.onerror =
+        () => {
+            notify(
+                'Не удалось распознать речь.',
+                'error'
+            );
+        };
 
-    notify(
-        'Режим создания сайта включён.',
-        'success'
-    );
+    recognition.start();
 }
 
 /* =========================================================
-   КОПИРОВАНИЕ
-   ========================================================= */
+   COPY
+========================================================= */
 
 async function copyText(text) {
     try {
@@ -2184,33 +2166,428 @@ async function copyText(text) {
 }
 
 /* =========================================================
-   ИНИЦИАЛИЗАЦИЯ
-   ========================================================= */
+   EVENTS
+========================================================= */
 
-let initialized = false;
+function setupEvents() {
+    /*
+     * AUTH
+     */
+
+    $('#login-form')
+        ?.addEventListener(
+            'submit',
+            login
+        );
+
+    $('#register-form')
+        ?.addEventListener(
+            'submit',
+            register
+        );
+
+    $('#show-register-button')
+        ?.addEventListener(
+            'click',
+            showRegister
+        );
+
+    $('#show-login-button')
+        ?.addEventListener(
+            'click',
+            showLogin
+        );
+
+    /*
+     * CHAT
+     */
+
+    $('#new-chat-button')
+        ?.addEventListener(
+            'click',
+            newChat
+        );
+
+    $('#clear-chat-button')
+        ?.addEventListener(
+            'click',
+            clearChat
+        );
+
+    $('#send-button')
+        ?.addEventListener(
+            'click',
+            sendMessage
+        );
+
+    $('#user-input')
+        ?.addEventListener(
+            'keydown',
+            event => {
+                if (
+                    event.key === 'Enter' &&
+                    !event.shiftKey
+                ) {
+                    event.preventDefault();
+
+                    sendMessage();
+                }
+            }
+        );
+
+    $('#user-input')
+        ?.addEventListener(
+            'input',
+            updateComposerState
+        );
+
+    /*
+     * SEARCH
+     */
+
+    $('#chat-search')
+        ?.addEventListener(
+            'input',
+            event =>
+                searchChats(
+                    event.target.value
+                )
+        );
+
+    /*
+     * ATTACHMENTS
+     */
+
+    $('#attach-button')
+        ?.addEventListener(
+            'click',
+            toggleAttach
+        );
+
+    $$('[data-attach]')
+        .forEach(button => {
+            button.addEventListener(
+                'click',
+                () =>
+                    attachType(
+                        button.dataset.attach
+                    )
+            );
+        });
+
+    [
+        '#file-input',
+        '#photo-input',
+        '#camera-input',
+        '#model-file-input'
+    ].forEach(selector => {
+        $(selector)
+            ?.addEventListener(
+                'change',
+                event => {
+                    handleFiles(
+                        event.target.files
+                    );
+
+                    event.target.value = '';
+                }
+            );
+    });
+
+    /*
+     * SIDEBAR
+     */
+
+    $('#mobile-open-sidebar')
+        ?.addEventListener(
+            'click',
+            toggleSidebar
+        );
+
+    $('#mobile-close-sidebar')
+        ?.addEventListener(
+            'click',
+            closeSidebarMobile
+        );
+
+    $('#sidebar-overlay')
+        ?.addEventListener(
+            'click',
+            closeSidebarMobile
+        );
+
+    /*
+     * NAVIGATION
+     */
+
+    $$('.nav-item')
+        .forEach(item => {
+            item.addEventListener(
+                'click',
+                () =>
+                    navigate(
+                        item.dataset.section
+                    )
+            );
+        });
+
+    /*
+     * SETTINGS
+     */
+
+    $('#open-settings-button')
+        ?.addEventListener(
+            'click',
+            openSettings
+        );
+
+    $('#top-settings-button')
+        ?.addEventListener(
+            'click',
+            openSettings
+        );
+
+    $('#save-settings-button')
+        ?.addEventListener(
+            'click',
+            saveAllSettings
+        );
+
+    $('#cancel-settings-button')
+        ?.addEventListener(
+            'click',
+            closeSettings
+        );
+
+    /*
+     * SUPPORT
+     */
+
+    $('#open-support-button')
+        ?.addEventListener(
+            'click',
+            openSupport
+        );
+
+    $('#close-support-button')
+        ?.addEventListener(
+            'click',
+            closeSupport
+        );
+
+    /*
+     * LOGOUT
+     */
+
+    $('#logout-button')
+        ?.addEventListener(
+            'click',
+            logout
+        );
+
+    /*
+     * PROJECTS
+     */
+
+    $('#create-project-button')
+        ?.addEventListener(
+            'click',
+            createProject
+        );
+
+    $('#project-form')
+        ?.addEventListener(
+            'submit',
+            saveProjectFromForm
+        );
+
+    /*
+     * SCHEDULED
+     */
+
+    $('#create-scheduled-button')
+        ?.addEventListener(
+            'click',
+            createScheduledTask
+        );
+
+    $('#scheduled-form')
+        ?.addEventListener(
+            'submit',
+            saveScheduledFromForm
+        );
+
+    /*
+     * CODE
+     */
+
+    $('#open-code-button')
+        ?.addEventListener(
+            'click',
+            openCodeMode
+        );
+
+    $('#code-file-button')
+        ?.addEventListener(
+            'click',
+            selectCodeFile
+        );
+
+    $('#run-code-button')
+        ?.addEventListener(
+            'click',
+            runCode
+        );
+
+    $('#preview-site-button')
+        ?.addEventListener(
+            'click',
+            openSitePreview
+        );
+
+    $('#ask-code-ai-button')
+        ?.addEventListener(
+            'click',
+            askCodeAI
+        );
+
+    $('#code-file-input')
+        ?.addEventListener(
+            'change',
+            loadCodeFile
+        );
+
+    /*
+     * LIBRARY
+     */
+
+    $('#library-upload-button')
+        ?.addEventListener(
+            'click',
+            openLibraryUpload
+        );
+
+    /*
+     * VOICE
+     */
+
+    $('#voice-button')
+        ?.addEventListener(
+            'click',
+            startVoiceInput
+        );
+
+    /*
+     * MODALS
+     */
+
+    $$('[data-close-modal]')
+        .forEach(element => {
+            element.addEventListener(
+                'click',
+                () => {
+                    closeModal(
+                        element.dataset.closeModal
+                    );
+                }
+            );
+        });
+
+    /*
+     * PLUGINS
+     */
+
+    $$('.plugin-button')
+        .forEach(button => {
+            button.addEventListener(
+                'click',
+                () => {
+                    const plugin =
+                        button.dataset.plugin;
+
+                    if (
+                        plugin === 'code'
+                    ) {
+                        openCodeMode();
+                    } else if (
+                        plugin === 'web'
+                    ) {
+                        notify(
+                            'Веб-поиск будет подключён через серверный модуль.',
+                            'info'
+                        );
+                    } else if (
+                        plugin === '3d'
+                    ) {
+                        notify(
+                            '3D Studio готов к подключению.',
+                            'info'
+                        );
+                    } else {
+                        notify(
+                            'Creative Studio готов к подключению.',
+                            'info'
+                        );
+                    }
+                }
+            );
+        });
+
+    /*
+     * QUICK PROMPTS
+     */
+
+    $$('.quick-prompt')
+        .forEach(button => {
+            button.addEventListener(
+                'click',
+                () =>
+                    quickPrompt(
+                        button.dataset.prompt
+                    )
+            );
+        });
+
+    /*
+     * ESC
+     */
+
+    document.addEventListener(
+        'keydown',
+        event => {
+            if (
+                event.key === 'Escape'
+            ) {
+                if (isGenerating) {
+                    stopGeneration();
+                }
+
+                closeSidebarMobile();
+            }
+        }
+    );
+}
+
+/* =========================================================
+   INITIALIZATION
+========================================================= */
 
 function initializeApplication() {
     if (initialized) {
-        /*
-         * Не запускаем обработчики повторно.
-         * Это одна из причин появления дубликатов
-         * и повторных действий в старой версии.
-         */
+        updateUserProfile();
         loadSettings();
         renderChatHistory();
-        renderMessages();
+        renderProjects();
+        renderScheduledTasks();
         return;
     }
 
     initialized = true;
 
+    updateUserProfile();
     loadSettings();
 
-    setupNavigation();
-    setupInput();
-    setupAttachments();
-    setupSearch();
-    setupKeyboardShortcuts();
+    setupEvents();
 
     renderChatHistory();
     renderProjects();
@@ -2219,41 +2596,45 @@ function initializeApplication() {
     const chats =
         getChats();
 
-    if (chats.length) {
+    if (
+        chats.length &&
+        !currentChatId
+    ) {
         chats.sort(
             (a, b) =>
                 b.updatedAt -
                 a.updatedAt
         );
 
-        openChat(
+        selectChat(
             chats[0].id
         );
-    } else {
+    } else if (!currentChatId) {
         newChat();
     }
+
+    updateComposerState();
 }
 
 function initialize() {
     /*
-     * Всегда сначала проверяем сессию.
-     * Если пользователь уже вошёл,
-     * login-screen больше не показывается.
+     * Сначала восстанавливаем сессию.
+     * Только после этого открываем приложение.
      */
     restoreSession();
 }
 
 /* =========================================================
-   ГЛОБАЛЬНЫЕ ФУНКЦИИ
-   Нужны для onclick/onsubmit в index.html.
-   ========================================================= */
-
-window.showLogin = showLogin;
-window.showRegister = showRegister;
+   GLOBAL FUNCTIONS
+   Для совместимости с другими частями проекта.
+========================================================= */
 
 window.login = login;
 window.register = register;
 window.logout = logout;
+
+window.showLogin = showLogin;
+window.showRegister = showRegister;
 
 window.newChat = newChat;
 window.clearChat = clearChat;
@@ -2269,32 +2650,17 @@ window.attachType = attachType;
 window.removeAttachedFile =
     removeAttachedFile;
 
-window.toggleSidebar =
-    toggleSidebar;
-
-window.openSettings =
-    openSettings;
-
-window.closeSettings =
-    closeSettings;
-
-window.saveApiKey =
-    saveApiKey;
-
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
+window.saveApiKey = saveApiKey;
 window.saveAllSettings =
     saveAllSettings;
 
-window.openSupport =
-    openSupport;
+window.openSupport = openSupport;
+window.closeSupport = closeSupport;
 
-window.closeSupport =
-    closeSupport;
-
-window.createProject =
-    createProject;
-
-window.deleteProject =
-    deleteProject;
+window.createProject = createProject;
+window.deleteProject = deleteProject;
 
 window.createScheduledTask =
     createScheduledTask;
@@ -2302,43 +2668,36 @@ window.createScheduledTask =
 window.deleteScheduledTask =
     deleteScheduledTask;
 
-window.openCodeMode =
-    openCodeMode;
-
-window.closeCodeMode =
-    closeCodeMode;
-
+window.openCodeMode = openCodeMode;
+window.closeCodeMode = closeCodeMode;
 window.selectCodeFile =
     selectCodeFile;
 
-window.runCode =
-    runCode;
-
+window.runCode = runCode;
 window.openSitePreview =
     openSitePreview;
 
 window.closeSitePreview =
     closeSitePreview;
 
-window.askCodeAI =
-    askCodeAI;
+window.askCodeAI = askCodeAI;
 
-window.copyText =
-    copyText;
+window.copyText = copyText;
 
-window.navigate =
-    navigate;
-
-window.startSiteBuilder =
-    startSiteBuilder;
+window.navigate = navigate;
+window.toggleSidebar =
+    toggleSidebar;
 
 /* =========================================================
-   ЗАПУСК
-   ========================================================= */
+   START
+========================================================= */
 
 document.addEventListener(
     'DOMContentLoaded',
-    initialize
+    initialize,
+    {
+        once: true
+    }
 );
 
 window.addEventListener(
