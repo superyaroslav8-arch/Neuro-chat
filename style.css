@@ -1,0 +1,406 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background: #000;
+  color: #fff;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.screen {
+  height: 100vh;
+  width: 100%;
+}
+
+/* === LOGIN === */
+#login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.login-box {
+  text-align: center;
+  width: 90%;
+  max-width: 360px;
+}
+
+.logo {
+  width: 90px;
+  margin-bottom: 20px;
+}
+
+.login-box h1 {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  color: #888;
+  margin-bottom: 30px;
+}
+
+#login-screen input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: none;
+  background: #1c1c1e;
+  color: #fff;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+#login-screen button {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #0a84ff;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#login-screen button.secondary {
+  background: transparent;
+  color: #0a84ff;
+  margin-top: 8px;
+}
+
+/* === APP === */
+#app {
+  display: flex;
+}
+
+.sidebar {
+  width: 280px;
+  background: #111;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #222;
+  transition: transform 0.3s;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.sidebar-logo {
+  width: 28px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: #ddd;
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.nav-item:hover, .nav-item.active {
+  background: #1c1c1e;
+}
+
+.sidebar-section {
+  margin-top: 16px;
+  padding: 0 12px;
+}
+
+.section-title {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  padding-left: 4px;
+}
+
+.chat-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-item:hover {
+  background: #1c1c1e;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-footer button {
+  background: #1c1c1e;
+  border: none;
+  color: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sidebar-footer .logout {
+  color: #ff453a;
+}
+
+/* Main area */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #000;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #222;
+}
+
+.menu-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  margin-right: 12px;
+  display: none;
+}
+
+.chat-title {
+  flex: 1;
+  font-weight: 500;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.welcome {
+  text-align: center;
+  margin: auto;
+  max-width: 500px;
+}
+
+.welcome-logo {
+  width: 70px;
+  margin-bottom: 16px;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.suggestions button {
+  background: #1c1c1e;
+  border: 1px solid #333;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.message {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #0a84ff;
+}
+
+.message.bot {
+  align-self: flex-start;
+  background: #1c1c1e;
+}
+
+.input-area {
+  padding: 12px 16px 20px;
+  border-top: 1px solid #222;
+}
+
+.input-box {
+  display: flex;
+  align-items: flex-end;
+  background: #1c1c1e;
+  border-radius: 24px;
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+.input-box textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  resize: none;
+  font-size: 16px;
+  max-height: 120px;
+  outline: none;
+  padding: 6px 0;
+}
+
+.attach-btn, .send-btn {
+  background: none;
+  border: none;
+  color: #0a84ff;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.send-btn {
+  background: #0a84ff;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attach-menu {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.attach-menu button {
+  background: #1c1c1e;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.disclaimer {
+  text-align: center;
+  font-size: 11px;
+  color: #666;
+  margin-top: 8px;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: #1c1c1e;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #333;
+}
+
+.modal-header button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+}
+
+.modal-body {
+  padding: 16px;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.setting-item input, .setting-item select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #2c2c2e;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.setting-item button {
+  background: #0a84ff;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .menu-btn {
+    display: block;
+  }
+}
