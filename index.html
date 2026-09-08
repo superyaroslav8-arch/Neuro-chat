@@ -36,7 +36,7 @@
       </div>
 
       <nav>
-        <a href="#" class="nav-item active" onclick="showMainChat()"><span class="icon">💬</span> Чат</a>
+        <a href="#" class="nav-item active"><span class="icon">💬</span> Чат</a>
         <a href="#" class="nav-item"><span class="icon">📚</span> Библиотека</a>
         <a href="#" class="nav-item"><span class="icon">📁</span> Проекты</a>
         <a href="#" class="nav-item"><span class="icon">🔌</span> Плагины</a>
@@ -59,6 +59,7 @@
       </div>
 
       <div class="sidebar-footer">
+        <button onclick="openSupport()">📞 Поддержка</button>
         <button onclick="openSettings()">⚙️ Настройки</button>
         <button onclick="logout()" class="logout">Выйти</button>
       </div>
@@ -74,25 +75,4 @@
         </div>
       </div>
 
-      <div id="messages" class="messages">
-        <div class="welcome">
-          <div class="welcome-logo-text">Нейро-чат</div>
-          <p>Чем я могу помочь?</p>
-          <div class="suggestions">
-            <button onclick="quickPrompt('Создай современный сайт-портфолио')">Создать сайт</button>
-            <button onclick="quickPrompt('Напиши код на Python')">Написать код</button>
-            <button onclick="quickPrompt('Создай сценарий короткого видео')">Создать видео</button>
-            <button onclick="quickPrompt('Сочини песню')">Создать музыку</button>
-            <button onclick="quickPrompt('Сделай 3D-модель куба для печати')">3D-модель</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="input-area">
-        <div class="input-box">
-          <button class="attach-btn" onclick="toggleAttach()">＋</button>
-          <textarea id="user-input" placeholder="Спросить Нейро-чат" rows="1"></textarea>
-          <button class="send-btn" onclick="sendMessage()">➤</button>
-        </div>
-        <div class="attach-menu" id="attach-menu" style="display:none;">
-          <button
+      <div
