@@ -2924,3 +2924,1424 @@ document.addEventListener(
         }
     }
 );
+/* =========================================================
+   NEURO-CHAT — FINAL COMPATIBILITY / FIX LAYER
+   Исправляет конфликт script.js с inline JS из index.html.
+   API-ключ намеренно НЕ изменяется.
+   ========================================================= */
+
+(function NeuroChatFinalFix() {
+    'use strict';
+
+    /*
+     * Сохраняем настоящую логику из основного script.js
+     * ДО того, как inline-скрипт index.html сможет её
+     * переопределить.
+     */
+    const CORE = {
+        newChat: window.newChat,
+        clearChat: window.clearChat,
+        sendMessage: window.sendMessage,
+        stopGeneration: window.stopGeneration,
+
+        login: window.login,
+        logout: window.logout,
+
+        openSettings: window.openSettings,
+        closeSettings: window.closeSettings,
+        openSupport: window.openSupport,
+        closeSupport: window.closeSupport,
+
+        saveUserApiKey: window.saveUserApiKey,
+        toggleTemporaryChat: window.toggleTemporaryChat,
+
+        startSiteBuilder: window.startSiteBuilder,
+        previewGeneratedSite: window.previewGeneratedSite,
+
+        deleteChat: window.deleteChat,
+        openChat: window.openChat,
+        searchChats: window.searchChats,
+
+        addMessage: window.addMessage,
+        renderMessages: window.renderMessages,
+        renderChatHistory: window.renderChatHistory,
+
+        requestAssistantResponse: window.requestAssistantResponse,
+        initializeNeuroChat: window.initializeNeuroChat,
+
+        openFilePicker: window.openFilePicker,
+        renderAttachedFiles: window.renderAttachedFiles,
+        clearAttachedFiles: window.clearAttachedFiles,
+
+        updateApiKeyStatus: window.updateApiKeyStatus,
+        saveModel: window.saveModel,
+        changeTheme: window.changeTheme,
+
+        resizeInput: window.resizeInput
+    };
+
+
+    /* =====================================================
+       УТИЛИТЫ
+       ===================================================== */
+
+    function getElement(id) {
+        return document.getElementById(id);
+    }
+
+    function showAuthError(id, message) {
+        const element = getElement(id);
+
+        if (element) {
+            element.textContent = message || '';
+        }
+    }
+
+    function clearAuthErrors() {
+        showAuthError('login-error', '');
+        showAuthError('register-error', '');
+    }
+
+    function normalizeUsername(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase();
+    }
+
+    function getAccounts() {
+        try {
+            return JSON.parse(
+                localStorage.getItem('neuro_accounts') || '{}'
+            );
+        } catch {
+            return {};
+        }
+    }
+
+    function saveAccounts(accounts) {
+        localStorage.setItem(
+            'neuro_accounts',
+            JSON.stringify(accounts)
+        );
+    }
+
+
+    /* =====================================================
+       АВТОРИЗАЦИЯ
+       ===================================================== */
+
+    window.showLogin = function showLoginFixed() {
+        const loginForm = getElement('login-form');
+        const registerForm = getElement('register-form');
+
+        if (loginForm) {
+            loginForm.style.display = 'block';
+        }
+
+        if (registerForm) {
+            registerForm.style.display = 'none';
+        }
+
+        clearAuthErrors();
+
+        getElement('username')?.focus();
+    };
+
+
+    window.showRegister = function showRegisterFixed() {
+        const loginForm = getElement('login-form');
+        const registerForm = getElement('register-form');
+
+        if (loginForm) {
+            loginForm.style.display = 'none';
+        }
+
+        if (registerForm) {
+            registerForm.style.display = 'block';
+        }
+
+        clearAuthErrors();
+
+        getElement('register-username')?.focus();
+    };
+
+
+    /*
+     * Регистрация.
+     *
+     * Сохраняем совместимость с существующим
+     * localStorage форматом neuro_accounts.
+     */
+    window.register = async function registerFixed() {
+        const usernameInput =
+            getElement('register-username');
+
+        const passwordInput =
+            getElement('register-password');
+
+        const phoneInput =
+            getElement('register-phone');
+
+        const emailInput =
+            getElement('register-email');
+
+        if (!usernameInput || !passwordInput) {
+            return;
+        }
+
+        const username =
+            normalizeUsername(usernameInput.value);
+
+        const password =
+            passwordInput.value;
+
+        const phone =
+            String(phoneInput?.value || '').trim();
+
+        const email =
+            String(emailInput?.value || '').trim();
+
+        showAuthError('register-error', '');
+
+        if (!username) {
+            showAuthError(
+                'register-error',
+                'Введите имя пользователя.'
+            );
+            usernameInput.focus();
+            return;
+        }
+
+        if (
+            !/^[a-z0-9._-]+@neuro$/i.test(username)
+        ) {
+            showAuthError(
+                'register-error',
+                'Имя пользователя должно быть в формате username@neuro.'
+            );
+            usernameInput.focus();
+            return;
+        }
+
+        if (password.length < 8) {
+            showAuthError(
+                'register-error',
+                'Пароль должен содержать минимум 8 символов.'
+            );
+            passwordInput.focus();
+            return;
+        }
+
+        const accounts = getAccounts();
+
+        if (accounts[username]) {
+            showAuthError(
+                'register-error',
+                'Такой пользователь уже существует.'
+            );
+            return;
+        }
+
+        /*
+         * Сохраняем текущий формат аккаунта,
+         * чтобы старые аккаунты не сломались.
+         */
+        accounts[username] = {
+            username,
+            password,
+            phone,
+            email,
+            createdAt: Date.now()
+        };
+
+        saveAccounts(accounts);
+
+        /*
+         * Сохраняем обе версии ключа текущего пользователя:
+         *
+         * neuro_current_user
+         * neurochat_current_user
+         *
+         * Это нужно для совместимости старой и новой логики.
+         */
+        localStorage.setItem(
+            'neuro_current_user',
+            username
+        );
+
+        localStorage.setItem(
+            'neurochat_current_user',
+            username
+        );
+
+        /*
+         * Переносим данные в основную систему.
+         */
+        if (typeof setCurrentUser === 'function') {
+            setCurrentUser(username);
+        }
+
+        showAuthError('register-error', '');
+
+        const loginUsername =
+            getElement('username');
+
+        if (loginUsername) {
+            loginUsername.value = username;
+        }
+
+        const loginPassword =
+            getElement('password');
+
+        if (loginPassword) {
+            loginPassword.value = password;
+        }
+
+        window.showLogin();
+
+        showNotice(
+            'Аккаунт успешно создан.',
+            'success'
+        );
+
+        /*
+         * Открываем приложение через основную систему.
+         */
+        setTimeout(() => {
+            window.login();
+        }, 50);
+    };
+
+
+    /*
+     * Вход.
+     */
+    window.login = async function loginFixed() {
+        const usernameInput =
+            getElement('username');
+
+        const passwordInput =
+            getElement('password');
+
+        if (!usernameInput || !passwordInput) {
+            return;
+        }
+
+        const username =
+            normalizeUsername(usernameInput.value);
+
+        const password =
+            passwordInput.value;
+
+        showAuthError('login-error', '');
+
+        if (!username || !password) {
+            showAuthError(
+                'login-error',
+                'Введите имя пользователя и пароль.'
+            );
+            return;
+        }
+
+        const accounts = getAccounts();
+        const account = accounts[username];
+
+        if (!account) {
+            showAuthError(
+                'login-error',
+                'Пользователь не найден. Сначала зарегистрируйтесь.'
+            );
+            return;
+        }
+
+        /*
+         * Поддерживаем старые аккаунты,
+         * где пароль хранится в поле password.
+         */
+        if (
+            typeof account.password === 'string' &&
+            account.password !== password
+        ) {
+            showAuthError(
+                'login-error',
+                'Неверный пароль.'
+            );
+            return;
+        }
+
+        /*
+         * Сохраняем обе версии сессии.
+         */
+        localStorage.setItem(
+            'neuro_current_user',
+            username
+        );
+
+        localStorage.setItem(
+            'neurochat_current_user',
+            username
+        );
+
+        if (typeof setCurrentUser === 'function') {
+            setCurrentUser(username);
+        }
+
+        /*
+         * Передаём пользователя основной системе.
+         */
+        if (
+            typeof CORE.initializeNeuroChat ===
+            'function'
+        ) {
+            CORE.initializeNeuroChat();
+        }
+
+        const loginScreen =
+            getElement('login-screen');
+
+        const app =
+            getElement('app');
+
+        if (loginScreen) {
+            loginScreen.style.display = 'none';
+        }
+
+        if (app) {
+            app.style.display = 'flex';
+        }
+
+        showAuthError('login-error', '');
+
+        showNotice(
+            `Добро пожаловать, ${username}!`,
+            'success'
+        );
+    };
+
+
+    /*
+     * Выход.
+     */
+    window.logout = function logoutFixed() {
+        try {
+            if (
+                typeof saveCurrentChat ===
+                'function'
+            ) {
+                saveCurrentChat();
+            }
+        } catch {}
+
+        localStorage.removeItem(
+            'neuro_current_user'
+        );
+
+        localStorage.removeItem(
+            'neurochat_current_user'
+        );
+
+        const app =
+            getElement('app');
+
+        const loginScreen =
+            getElement('login-screen');
+
+        if (app) {
+            app.style.display = 'none';
+        }
+
+        if (loginScreen) {
+            loginScreen.style.display = 'flex';
+        }
+
+        const username =
+            getElement('username');
+
+        const password =
+            getElement('password');
+
+        if (username) {
+            username.value = '';
+        }
+
+        if (password) {
+            password.value = '';
+        }
+
+        window.showLogin();
+
+        showNotice(
+            'Вы вышли из аккаунта.',
+            'success'
+        );
+    };
+
+
+    /* =====================================================
+       SIDEBAR
+       ===================================================== */
+
+    window.toggleSidebar = function toggleSidebarFixed() {
+        const sidebar =
+            getElement('sidebar') ||
+            document.querySelector('.sidebar');
+
+        if (!sidebar) {
+            return;
+        }
+
+        sidebar.classList.toggle('open');
+    };
+
+
+    /* =====================================================
+       НАВИГАЦИЯ
+       ===================================================== */
+
+    function switchSectionFixed(sectionId) {
+        if (!sectionId) {
+            return;
+        }
+
+        const sections =
+            document.querySelectorAll(
+                '.app-section'
+            );
+
+        sections.forEach(section => {
+            section.classList.remove('active');
+
+            section.style.display = 'none';
+        });
+
+        const target =
+            getElement(sectionId);
+
+        if (target) {
+            target.classList.add('active');
+
+            /*
+             * Чат и code используют flex.
+             * Остальные страницы тоже нормально
+             * показываем через flex.
+             */
+            target.style.display = 'flex';
+        }
+
+        document
+            .querySelectorAll('.nav-item')
+            .forEach(item => {
+                item.classList.toggle(
+                    'active',
+                    item.dataset.section === sectionId
+                );
+            });
+
+        if (
+            window.innerWidth <= 800
+        ) {
+            const sidebar =
+                getElement('sidebar');
+
+            sidebar?.classList.remove('open');
+        }
+    }
+
+
+    window.switchSection =
+        switchSectionFixed;
+
+
+    function setupNavigationFixed() {
+        document
+            .querySelectorAll('.nav-item')
+            .forEach(item => {
+                if (item.dataset.neuroFixed) {
+                    return;
+                }
+
+                item.dataset.neuroFixed = '1';
+
+                item.addEventListener(
+                    'click',
+                    event => {
+                        event.preventDefault();
+
+                        const section =
+                            item.dataset.section;
+
+                        switchSectionFixed(
+                            section
+                        );
+                    }
+                );
+            });
+    }
+
+
+    /* =====================================================
+       ИСТОРИЯ ЧАТОВ
+       ===================================================== */
+
+    function renderHistoryFixed() {
+        /*
+         * Основной контейнер в текущем index.html:
+         * #recent-chats
+         */
+        const recent =
+            getElement('recent-chats');
+
+        const pinned =
+            getElement('pinned-chats');
+
+        if (
+            !recent &&
+            !pinned
+        ) {
+            return;
+        }
+
+        let chats = [];
+
+        try {
+            chats =
+                typeof getChats === 'function'
+                    ? getChats()
+                    : [];
+        } catch {
+            chats = [];
+        }
+
+        const query =
+            String(
+                getElement('chat-search')?.value ||
+                ''
+            )
+                .trim()
+                .toLowerCase();
+
+        if (query) {
+            chats = chats.filter(chat =>
+                String(chat.title || '')
+                    .toLowerCase()
+                    .includes(query)
+            );
+        }
+
+        chats.sort((a, b) => {
+            if (
+                Boolean(a.pinned) !==
+                Boolean(b.pinned)
+            ) {
+                return a.pinned ? -1 : 1;
+            }
+
+            return (
+                Number(b.updatedAt || 0) -
+                Number(a.updatedAt || 0)
+            );
+        });
+
+        const pinnedChats =
+            chats.filter(chat =>
+                Boolean(chat.pinned)
+            );
+
+        const recentChats =
+            chats.filter(chat =>
+                !chat.pinned
+            );
+
+        function render(container, list) {
+            if (!container) {
+                return;
+            }
+
+            container.innerHTML = '';
+
+            if (!list.length) {
+                const empty =
+                    document.createElement('div');
+
+                empty.className =
+                    'chat-history-empty';
+
+                empty.textContent =
+                    'Пока нет чатов';
+
+                container.appendChild(
+                    empty
+                );
+
+                return;
+            }
+
+            list.forEach(chat => {
+                const item =
+                    document.createElement('div');
+
+                item.className =
+                    'chat-item';
+
+                if (
+                    typeof currentChatId !==
+                    'undefined' &&
+                    chat.id === currentChatId
+                ) {
+                    item.classList.add(
+                        'active'
+                    );
+                }
+
+                item.textContent =
+                    chat.title ||
+                    'Новый чат';
+
+                item.title =
+                    chat.title ||
+                    'Новый чат';
+
+                item.addEventListener(
+                    'click',
+                    () => {
+                        if (
+                            typeof CORE.openChat ===
+                            'function'
+                        ) {
+                            CORE.openChat(
+                                chat.id
+                            );
+                        }
+                    }
+                );
+
+                container.appendChild(
+                    item
+                );
+            });
+        }
+
+        render(
+            pinned,
+            pinnedChats
+        );
+
+        render(
+            recent,
+            recentChats
+        );
+    }
+
+
+    window.renderChatHistory =
+        renderHistoryFixed;
+
+
+    /* =====================================================
+       ПОИСК
+       ===================================================== */
+
+    function setupSearchFixed() {
+        const input =
+            getElement('chat-search');
+
+        if (!input) {
+            return;
+        }
+
+        if (input.dataset.neuroSearchFixed) {
+            return;
+        }
+
+        input.dataset.neuroSearchFixed =
+            '1';
+
+        input.addEventListener(
+            'input',
+            () => {
+                renderHistoryFixed();
+            }
+        );
+    }
+
+
+    /* =====================================================
+       QUICK PROMPTS
+       ===================================================== */
+
+    window.quickPrompt =
+        function quickPromptFixed(text) {
+            const input =
+                getElement('user-input');
+
+            if (!input) {
+                return;
+            }
+
+            input.value =
+                String(text || '').trim();
+
+            if (
+                typeof CORE.resizeInput ===
+                'function'
+            ) {
+                CORE.resizeInput();
+            }
+
+            input.focus();
+
+            /*
+             * Быстрые кнопки действительно отправляют
+             * сообщение, а не просто меняют поле.
+             */
+            if (input.value) {
+                window.sendMessage();
+            }
+        };
+
+
+    /* =====================================================
+       ОТПРАВКА
+       ===================================================== */
+
+    /*
+     * Возвращаем настоящую AI-отправку из script.js.
+     */
+    if (
+        typeof CORE.sendMessage ===
+        'function'
+    ) {
+        window.sendMessage =
+            CORE.sendMessage;
+    }
+
+
+    /* =====================================================
+       НОВЫЙ ЧАТ
+       ===================================================== */
+
+    if (
+        typeof CORE.newChat ===
+        'function'
+    ) {
+        window.newChat =
+            CORE.newChat;
+    }
+
+
+    /* =====================================================
+       ОЧИСТКА
+       ===================================================== */
+
+    if (
+        typeof CORE.clearChat ===
+        'function'
+    ) {
+        window.clearChat =
+            CORE.clearChat;
+    }
+
+
+    /* =====================================================
+       ОСТАНОВКА ГЕНЕРАЦИИ
+       ===================================================== */
+
+    if (
+        typeof CORE.stopGeneration ===
+        'function'
+    ) {
+        window.stopGeneration =
+            CORE.stopGeneration;
+    }
+
+
+    /* =====================================================
+       ФАЙЛЫ
+       ===================================================== */
+
+    window.toggleAttach =
+        function toggleAttachFixed() {
+            const menu =
+                getElement('attach-menu');
+
+            if (!menu) {
+                return;
+            }
+
+            const hidden =
+                menu.style.display === 'none' ||
+                getComputedStyle(menu).display ===
+                    'none';
+
+            menu.style.display =
+                hidden
+                    ? 'block'
+                    : 'none';
+        };
+
+
+    window.attachType =
+        function attachTypeFixed(type) {
+            const menu =
+                getElement('attach-menu');
+
+            if (menu) {
+                menu.style.display =
+                    'none';
+            }
+
+            /*
+             * Используем существующий picker
+             * из основного script.js.
+             */
+            if (
+                typeof CORE.openFilePicker ===
+                'function'
+            ) {
+                CORE.openFilePicker(type);
+                return;
+            }
+
+            const ids = {
+                file: 'file-input',
+                photo: 'photo-input',
+                camera: 'camera-input'
+            };
+
+            const input =
+                getElement(ids[type]);
+
+            input?.click();
+        };
+
+
+    /* =====================================================
+       API KEY
+       ===================================================== */
+
+    window.saveApiKey =
+        function saveApiKeyFixed() {
+            const input =
+                getElement('api-key');
+
+            if (!input) {
+                return;
+            }
+
+            const key =
+                input.value.trim();
+
+            /*
+             * Используем тот же storage,
+             * который уже использует script.js.
+             */
+            if (
+                typeof getUserStorageKey ===
+                'function'
+            ) {
+                const storageKey =
+                    getUserStorageKey(
+                        'api_key'
+                    );
+
+                if (key) {
+                    localStorage.setItem(
+                        storageKey,
+                        key
+                    );
+                } else {
+                    localStorage.removeItem(
+                        storageKey
+                    );
+                }
+            }
+
+            /*
+             * Обновляем поле основного интерфейса,
+             * если оно существует.
+             */
+            const hiddenInput =
+                getElement('api-key-input');
+
+            if (hiddenInput) {
+                hiddenInput.value = key;
+            }
+
+            if (
+                typeof refreshActiveApiKey ===
+                'function'
+            ) {
+                refreshActiveApiKey();
+            }
+
+            if (
+                typeof updateApiKeyStatus ===
+                'function'
+            ) {
+                updateApiKeyStatus();
+            }
+
+            const status =
+                getElement('api-key-status');
+
+            if (status) {
+                status.textContent =
+                    key
+                        ? 'Ваш API-ключ сохранён.'
+                        : 'Используется основной API-ключ.';
+            }
+
+            showNotice(
+                key
+                    ? 'API-ключ сохранён.'
+                    : 'Пользовательский API-ключ удалён.',
+                'success'
+            );
+        };
+
+
+    /* =====================================================
+       МОДЕЛЬ
+       ===================================================== */
+
+    function setupModelSelect() {
+        const select =
+            getElement('model');
+
+        if (!select) {
+            return;
+        }
+
+        if (select.dataset.neuroModelFixed) {
+            return;
+        }
+
+        select.dataset.neuroModelFixed =
+            '1';
+
+        select.addEventListener(
+            'change',
+            () => {
+                if (
+                    typeof selectedModel !==
+                    'undefined'
+                ) {
+                    selectedModel =
+                        select.value;
+                }
+
+                if (
+                    typeof getSettings ===
+                    'function' &&
+                    typeof saveSettings ===
+                    'function'
+                ) {
+                    const settings =
+                        getSettings();
+
+                    settings.model =
+                        select.value;
+
+                    saveSettings(
+                        settings
+                    );
+                }
+            }
+        );
+    }
+
+
+    /* =====================================================
+       ТЕМА
+       ===================================================== */
+
+    window.changeTheme =
+        function changeThemeFixed(theme) {
+            const value =
+                typeof theme === 'string'
+                    ? theme
+                    : getElement(
+                        'theme-select'
+                    )?.value || 'dark';
+
+            if (
+                typeof applyTheme ===
+                'function'
+            ) {
+                applyTheme(value);
+            } else {
+                document.documentElement
+                    .dataset.theme =
+                    value;
+            }
+
+            if (
+                typeof getSettings ===
+                'function' &&
+                typeof saveSettings ===
+                'function'
+            ) {
+                const settings =
+                    getSettings();
+
+                settings.theme =
+                    value;
+
+                saveSettings(
+                    settings
+                );
+            }
+        };
+
+
+    /* =====================================================
+       КОДОВЫЙ РЕЖИМ
+       ===================================================== */
+
+    window.openCodeMode =
+        function openCodeModeFixed() {
+            switchSectionFixed(
+                'code-section'
+            );
+
+            if (
+                typeof loadCodeFile ===
+                'function'
+            ) {
+                loadCodeFile();
+            }
+        };
+
+
+    /* =====================================================
+       ПОДДЕРЖКА
+       ===================================================== */
+
+    if (
+        typeof CORE.openSupport ===
+        'function'
+    ) {
+        window.openSupport =
+            CORE.openSupport;
+    }
+
+    if (
+        typeof CORE.closeSupport ===
+        'function'
+    ) {
+        window.closeSupport =
+            CORE.closeSupport;
+    }
+
+
+    /* =====================================================
+       НАСТРОЙКИ
+       ===================================================== */
+
+    if (
+        typeof CORE.openSettings ===
+        'function'
+    ) {
+        window.openSettings =
+            CORE.openSettings;
+    }
+
+    if (
+        typeof CORE.closeSettings ===
+        'function'
+    ) {
+        window.closeSettings =
+            CORE.closeSettings;
+    }
+
+
+    /* =====================================================
+       ПОСЛЕ ПОЛНОЙ ЗАГРУЗКИ DOM
+       ===================================================== */
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        () => {
+            /*
+             * В этот момент inline JS из index.html
+             * уже выполнен.
+             *
+             * Теперь возвращаем основной API.
+             */
+
+            if (
+                typeof CORE.addMessage ===
+                'function'
+            ) {
+                window.addMessage =
+                    CORE.addMessage;
+            }
+
+            if (
+                typeof CORE.renderMessages ===
+                'function'
+            ) {
+                window.renderMessages =
+                    CORE.renderMessages;
+            }
+
+            if (
+                typeof CORE.requestAssistantResponse ===
+                'function'
+            ) {
+                window.requestAssistantResponse =
+                    CORE.requestAssistantResponse;
+            }
+
+            if (
+                typeof CORE.newChat ===
+                'function'
+            ) {
+                window.newChat =
+                    CORE.newChat;
+            }
+
+            if (
+                typeof CORE.clearChat ===
+                'function'
+            ) {
+                window.clearChat =
+                    CORE.clearChat;
+            }
+
+            if (
+                typeof CORE.sendMessage ===
+                'function'
+            ) {
+                window.sendMessage =
+                    CORE.sendMessage;
+            }
+
+            if (
+                typeof CORE.stopGeneration ===
+                'function'
+            ) {
+                window.stopGeneration =
+                    CORE.stopGeneration;
+            }
+
+            if (
+                typeof CORE.deleteChat ===
+                'function'
+            ) {
+                window.deleteChat =
+                    CORE.deleteChat;
+            }
+
+            if (
+                typeof CORE.openChat ===
+                'function'
+            ) {
+                window.openChat =
+                    CORE.openChat;
+            }
+
+            /*
+             * Авторизация всегда должна использовать
+             * текущие ID из index.html.
+             */
+            window.showLogin();
+            window.showRegister();
+
+            /*
+             * После этого показываем правильную
+             * форму входа.
+             */
+            const savedUser =
+                localStorage.getItem(
+                    'neurochat_current_user'
+                ) ||
+                localStorage.getItem(
+                    'neuro_current_user'
+                );
+
+            if (savedUser) {
+                const username =
+                    normalizeUsername(
+                        savedUser
+                    );
+
+                localStorage.setItem(
+                    'neurochat_current_user',
+                    username
+                );
+
+                localStorage.setItem(
+                    'neuro_current_user',
+                    username
+                );
+
+                if (
+                    typeof setCurrentUser ===
+                    'function'
+                ) {
+                    setCurrentUser(
+                        username
+                    );
+                }
+
+                const loginScreen =
+                    getElement(
+                        'login-screen'
+                    );
+
+                const app =
+                    getElement('app');
+
+                if (loginScreen) {
+                    loginScreen.style.display =
+                        'none';
+                }
+
+                if (app) {
+                    app.style.display =
+                        'flex';
+                }
+
+                /*
+                 * Загружаем историю и настройки
+                 * основной системой.
+                 */
+                if (
+                    typeof CORE.initializeNeuroChat ===
+                    'function'
+                ) {
+                    CORE.initializeNeuroChat();
+                }
+            } else {
+                const loginScreen =
+                    getElement(
+                        'login-screen'
+                    );
+
+                const app =
+                    getElement('app');
+
+                if (loginScreen) {
+                    loginScreen.style.display =
+                        'flex';
+                }
+
+                if (app) {
+                    app.style.display =
+                        'none';
+                }
+
+                window.showLogin();
+            }
+
+            /*
+             * Навигация.
+             */
+            setupNavigationFixed();
+
+            /*
+             * Поиск чатов.
+             */
+            setupSearchFixed();
+
+            /*
+             * Выбор модели.
+             */
+            setupModelSelect();
+
+            /*
+             * Исправляем отображение секций.
+             */
+            const active =
+                document.querySelector(
+                    '.nav-item.active'
+                );
+
+            switchSectionFixed(
+                active?.dataset.section ||
+                'chat-section'
+            );
+
+            /*
+             * Кнопка меню.
+             */
+            const menu =
+                document.querySelector(
+                    '.menu-btn'
+                );
+
+            if (menu &&
+                !menu.dataset.neuroMenuFixed) {
+
+                menu.dataset.neuroMenuFixed =
+                    '1';
+
+                menu.addEventListener(
+                    'click',
+                    event => {
+                        event.preventDefault();
+                        window.toggleSidebar();
+                    }
+                );
+            }
+
+            /*
+             * Resize input.
+             */
+            const input =
+                getElement('user-input');
+
+            if (input &&
+                typeof CORE.resizeInput ===
+                    'function') {
+
+                CORE.resizeInput();
+            }
+
+            /*
+             * Скрываем attach menu при
+             * клике вне него.
+             */
+            document.addEventListener(
+                'click',
+                event => {
+                    const menu =
+                        getElement(
+                            'attach-menu'
+                        );
+
+                    const button =
+                        document.querySelector(
+                            '.attach-btn'
+                        );
+
+                    if (
+                        !menu ||
+                        !button
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        !menu.contains(
+                            event.target
+                        ) &&
+                        !button.contains(
+                            event.target
+                        )
+                    ) {
+                        menu.style.display =
+                            'none';
+                    }
+                }
+            );
+
+            /*
+             * Показываем историю.
+             */
+            renderHistoryFixed();
+        }
+    );
+
+})();
