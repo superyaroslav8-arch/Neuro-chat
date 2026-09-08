@@ -411,3 +411,28 @@ body {
     display: block;
   }
 }
+/* Поддержка */
+.support-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.support-item {
+  background: #2c2c2e;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.support-label {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.support-link {
+  color: #0a84ff;
+  font-size: 17px;
+  text-decoration: none;
+  font-weight: 500;
+}
