@@ -1,5 +1,4 @@
 // ===================== НАСТРОЙКИ =====================
-// Ваши данные уже прописаны
 const DEFAULT_API_KEY = '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';
 const API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODEL = 'gpt-5';
@@ -9,9 +8,7 @@ let OPENAI_API_KEY = localStorage.getItem('neuro_api_key') || DEFAULT_API_KEY;
 
 let currentUser = null;
 let messages = [];
-let isTemporary = true;
 
-// ========== АВТОРИЗАЦИЯ ==========
 function nextStep() {
   const username = document.getElementById('username').value.trim();
   if (!username) return alert('Введите имя пользователя');
@@ -34,7 +31,7 @@ function login() {
   let users = JSON.parse(localStorage.getItem('neuro_users') || '{}');
 
   if (!users[username]) {
-    users[username] = { password: password, chats: [] };
+    users[username] = { password: password };
   } else if (users[username].password !== password) {
     return alert('Неверный пароль');
   }
@@ -53,7 +50,6 @@ function logout() {
   location.reload();
 }
 
-// Авто-вход
 window.onload = () => {
   const savedUser = localStorage.getItem('neuro_current_user');
   if (savedUser) {
@@ -63,34 +59,18 @@ window.onload = () => {
     newChat();
   }
 
-  // Восстанавливаем API-ключ (если пользователь менял)
   const savedKey = localStorage.getItem('neuro_api_key');
   if (savedKey) {
     OPENAI_API_KEY = savedKey;
   }
-  
-  // Заполняем поле в настройках
-  const apiKeyInput = document.getElementById('api-key');
-  if (apiKeyInput) {
-    apiKeyInput.value = OPENAI_API_KEY;
-  }
-
-  // Устанавливаем модель по умолчанию
-  const modelSelect = document.getElementById('model');
-  if (modelSelect) {
-    modelSelect.value = DEFAULT_MODEL;
-  }
 };
 
-// ========== ЧАТ ==========
 function newChat() {
   messages = [];
-  isTemporary = true;
   document.getElementById('chat-title').textContent = 'Временный чат';
   document.getElementById('messages').innerHTML = `
     <div class="welcome">
-      <img src="logo.svg" class="welcome-logo">
-      <h2>Нейро-чат</h2>
+      <div class="welcome-logo-text">Нейро-чат</div>
       <p>Чем я могу помочь?</p>
       <div class="suggestions">
         <button onclick="quickPrompt('Создай современный сайт-портфолио')">Создать сайт</button>
@@ -115,21 +95,20 @@ async function sendMessage() {
   input.value = '';
   addMessage('user', text);
 
-  // Системный промпт + специальные режимы
   let systemPrompt = `Ты — Нейро-чат, умный русскоязычный ассистент. Отвечай только на русском языке. Будь полезным, точным и дружелюбным.`;
 
   const lower = text.toLowerCase();
 
-  if (lower.includes('сайт') || lower.includes('webpage') || lower.includes('лендинг') || lower.includes('landing')) {
-    systemPrompt += `\nПользователь хочет создать сайт. Сгенерируй полный рабочий HTML + CSS + JS код в одном файле. Код должен быть современным, красивым и готовым к копированию.`;
-  } else if (lower.includes('код') || lower.includes('программ') || lower.includes('скрипт') || lower.includes('функци')) {
-    systemPrompt += `\nПользователь хочет код. Напиши чистый, рабочий код с комментариями на русском языке.`;
-  } else if (lower.includes('видео') || lower.includes('ролик') || lower.includes('клип')) {
-    systemPrompt += `\nПользователь хочет видео. Напиши подробный сценарий + готовый сильный промпт для генерации видео (Sora, Runway, Kling, Luma и т.д.).`;
-  } else if (lower.includes('музык') || lower.includes('песн') || lower.includes('трек') || lower.includes('саунд')) {
-    systemPrompt += `\nПользователь хочет музыку. Напиши текст песни + структуру (куплет/припев) + описание стиля + готовый промпт для Suno / Udio.`;
-  } else if (lower.includes('3d') || lower.includes('модель') || lower.includes('stl') || lower.includes('печат') || lower.includes('openscad')) {
-    systemPrompt += `\nПользователь хочет 3D-модель. Сгенерируй готовый код на OpenSCAD (который можно сразу скопировать) + краткую инструкцию, как экспортировать в STL.`;
+  if (lower.includes('сайт') || lower.includes('лендинг')) {
+    systemPrompt += `\nПользователь хочет создать сайт. Сгенерируй полный рабочий HTML + CSS + JS код в одном файле.`;
+  } else if (lower.includes('код') || lower.includes('программ') || lower.includes('скрипт')) {
+    systemPrompt += `\nПользователь хочет код. Напиши чистый рабочий код с комментариями на русском.`;
+  } else if (lower.includes('видео')) {
+    systemPrompt += `\nПользователь хочет видео. Напиши подробный сценарий + готовый промпт для генерации видео.`;
+  } else if (lower.includes('музык') || lower.includes('песн')) {
+    systemPrompt += `\nПользователь хочет музыку. Напиши текст песни + структуру + промпт для Suno/Udio.`;
+  } else if (lower.includes('3d') || lower.includes('модель') || lower.includes('печат')) {
+    systemPrompt += `\nПользователь хочет 3D-модель. Сгенерируй код на OpenSCAD + инструкцию.`;
   }
 
   addMessage('bot', 'Думаю...');
@@ -158,7 +137,7 @@ async function sendMessage() {
     const data = await response.json();
 
     if (data.error) {
-      updateLastBotMessage('Ошибка API: ' + (data.error.message || JSON.stringify(data.error)));
+      updateLastBotMessage('Ошибка API: ' + (data.error.message || 'Неизвестная ошибка'));
       return;
     }
 
@@ -167,18 +146,14 @@ async function sendMessage() {
     messages.push({ role: 'bot', text: reply });
 
   } catch (err) {
-    console.error(err);
-    updateLastBotMessage('Ошибка соединения с API. Проверьте интернет или API-ключ в настройках.');
+    updateLastBotMessage('Ошибка соединения. Проверьте интернет или API-ключ.');
   }
 }
 
 function addMessage(role, text) {
   messages.push({ role, text });
   const container = document.getElementById('messages');
-
-  if (container.querySelector('.welcome')) {
-    container.innerHTML = '';
-  }
+  if (container.querySelector('.welcome')) container.innerHTML = '';
 
   const div = document.createElement('div');
   div.className = `message ${role}`;
@@ -189,12 +164,9 @@ function addMessage(role, text) {
 
 function updateLastBotMessage(text) {
   const bots = document.querySelectorAll('.message.bot');
-  if (bots.length) {
-    bots[bots.length - 1].textContent = text;
-  }
+  if (bots.length) bots[bots.length - 1].textContent = text;
 }
 
-// ========== UI ==========
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
@@ -227,7 +199,6 @@ function saveApiKey() {
   }
 }
 
-// Отправка по Enter
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('user-input');
   if (input) {
