@@ -1,81 +1,73 @@
 'use strict';
 
-/* ============================================================
-   🔐 НЕЙРО-ЧАТ — ОСНОВНЫЕ НАСТРОЙКИ
-   ============================================================
+/* =========================================================
+   НЕЙРО-ЧАТ
+   Основной JavaScript
+   ========================================================= */
 
-   ⚠️ ВСТАВЬ СВОЙ API-КЛЮЧ В ЭТУ СТРОКУ.
-   На iPhone можешь использовать свою автозамену.
+/*
+   ВАЖНО:
+   Здесь оставь свой существующий основной ключ.
 
-   ============================================================ */
+   Если пользователь НЕ указал свой ключ в настройках,
+   используется DEFAULT_API_KEY.
 
+   Если пользователь указал свой ключ,
+   используется пользовательский ключ.
+*/
 const DEFAULT_API_KEY = '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';
 
-
-/* ============================================================
-   🤖 AI
-   ============================================================ */
-
 const API_BASE_URL = 'https://api.openai.com/v1';
-
 const DEFAULT_MODEL = 'gpt-5';
 
 const APP_NAME = 'Нейро-чат';
+const APP_VERSION = '2.0.0';
+
+const STORAGE_PREFIX = 'neurochat_';
 
 const MAX_HISTORY_CHATS = 100;
-
 const MAX_CONTEXT_MESSAGES = 40;
 
-
-/* ============================================================
-   📦 СОСТОЯНИЕ ПРИЛОЖЕНИЯ
-   ============================================================ */
-
-let OPENAI_API_KEY =
-    localStorage.getItem('neuro_api_key') ||
-    DEFAULT_API_KEY;
+let OPENAI_API_KEY = DEFAULT_API_KEY;
 
 let currentUser = null;
-
 let currentChatId = null;
 
 let messages = [];
-
 let attachedFiles = [];
 
 let isGenerating = false;
-
 let currentAbortController = null;
 
 let currentSearchQuery = '';
+let selectedModel = DEFAULT_MODEL;
 
-let selectedModel =
-    localStorage.getItem('neuro_model') ||
-    DEFAULT_MODEL;
+let temporaryChat = false;
+let siteBuilderMode = false;
 
 
-/* ============================================================
-   🧰 УТИЛИТЫ
-   ============================================================ */
+/* =========================================================
+   БАЗОВЫЕ УТИЛИТЫ
+   ========================================================= */
 
-function $(id) {
-    return document.getElementById(id);
+function $(selector) {
+    return document.querySelector(selector);
+}
+
+function $$(selector) {
+    return Array.from(document.querySelectorAll(selector));
 }
 
 function createId(prefix = 'id') {
-    return (
-        prefix +
-        '_' +
-        Date.now() +
-        '_' +
-        Math.random()
-            .toString(36)
-            .slice(2, 10)
-    );
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function escapeHTML(value) {
-    return String(value ?? '')
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -83,722 +75,1802 @@ function escapeHTML(value) {
         .replace(/'/g, '&#039;');
 }
 
-function getCurrentUser() {
-    return (
-        currentUser ||
-        localStorage.getItem('neuro_current_user') ||
-        'guest'
-    );
-}
-
-function getChatsStorageKey() {
-    return `neuro_chats_${getCurrentUser()}`;
-}
-
-function getChats() {
+function safeJSONParse(value, fallback = null) {
     try {
-        return JSON.parse(
-            localStorage.getItem(
-                getChatsStorageKey()
-            ) || '[]'
-        );
+        return JSON.parse(value);
     } catch {
-        return [];
+        return fallback;
     }
 }
 
-function saveChats(chats) {
-    localStorage.setItem(
-        getChatsStorageKey(),
-        JSON.stringify(chats)
-    );
+function getStorageKey(name) {
+    return `${STORAGE_PREFIX}${name}`;
 }
 
-function getCurrentTime() {
-    return new Date().toLocaleTimeString(
-        'ru-RU',
-        {
-            hour: '2-digit',
-            minute: '2-digit'
-        }
-    );
+function getUserStorageKey(name) {
+    if (!currentUser) {
+        return getStorageKey(name);
+    }
+
+    return `${getStorageKey(currentUser)}_${name}`;
 }
 
+function getCurrentUser() {
+    return localStorage.getItem(getStorageKey('current_user')) || '';
+}
 
-/* ============================================================
-   🔔 УВЕДОМЛЕНИЯ
-   ============================================================ */
+function setCurrentUser(username) {
+    if (username) {
+        localStorage.setItem(getStorageKey('current_user'), username);
+    } else {
+        localStorage.removeItem(getStorageKey('current_user'));
+    }
+}
 
-function showNotice(text, duration = 2500) {
-
-    let notice =
-        document.getElementById(
-            'neuro-notice'
-        );
+function showNotice(message, type = 'info') {
+    let notice = $('#neuro-notice');
 
     if (!notice) {
-
-        notice =
-            document.createElement('div');
-
+        notice = document.createElement('div');
         notice.id = 'neuro-notice';
 
-        Object.assign(
-            notice.style,
-            {
-                position: 'fixed',
-                left: '50%',
-                bottom: '90px',
-                transform:
-                    'translateX(-50%)',
-                zIndex: '999999',
-                padding: '12px 18px',
-                borderRadius: '14px',
-                background:
-                    'rgba(30,30,30,.95)',
-                color: '#fff',
-                fontSize: '14px',
-                maxWidth:
-                    'calc(100vw - 30px)',
-                textAlign: 'center',
-                boxShadow:
-                    '0 10px 35px rgba(0,0,0,.3)',
-                opacity: '0',
-                transition:
-                    'opacity .2s ease',
-                pointerEvents: 'none'
-            }
-        );
+        Object.assign(notice.style, {
+            position: 'fixed',
+            left: '50%',
+            bottom: '24px',
+            transform: 'translateX(-50%)',
+            zIndex: '99999',
+            padding: '12px 18px',
+            borderRadius: '12px',
+            background: 'rgba(25,25,25,.96)',
+            color: '#fff',
+            fontSize: '14px',
+            maxWidth: 'calc(100vw - 40px)',
+            boxShadow: '0 10px 40px rgba(0,0,0,.3)',
+            transition: 'opacity .2s ease'
+        });
 
-        document.body.appendChild(
-            notice
-        );
+        document.body.appendChild(notice);
     }
 
-    notice.textContent = text;
-
+    notice.textContent = message;
     notice.style.opacity = '1';
+
+    if (type === 'error') {
+        notice.style.background = 'rgba(160,35,35,.96)';
+    } else if (type === 'success') {
+        notice.style.background = 'rgba(25,125,70,.96)';
+    } else {
+        notice.style.background = 'rgba(25,25,25,.96)';
+    }
 
     clearTimeout(notice._timer);
 
-    notice._timer =
-        setTimeout(() => {
-            notice.style.opacity = '0';
-        }, duration);
+    notice._timer = setTimeout(() => {
+        notice.style.opacity = '0';
+    }, 2800);
 }
 
 
-/* ============================================================
-   🔐 АВТОРИЗАЦИЯ
-   ============================================================ */
+/* =========================================================
+   API-КЛЮЧИ
+   ========================================================= */
 
-function nextStep() {
+function getSavedUserApiKey() {
+    if (!currentUser) {
+        return '';
+    }
 
-    const username =
-        $('username');
+    return localStorage.getItem(
+        getUserStorageKey('api_key')
+    ) || '';
+}
 
-    if (!username) return;
+function getActiveApiKey() {
+    const userKey = getSavedUserApiKey().trim();
 
-    const value =
-        username.value.trim();
+    /*
+       Приоритет:
 
-    if (!value) {
+       1. Ключ пользователя
+       2. Основной ключ владельца
+    */
 
-        showNotice(
-            'Введите имя пользователя'
-        );
+    if (userKey) {
+        return userKey;
+    }
 
-        username.focus();
+    return DEFAULT_API_KEY.trim();
+}
 
+function refreshActiveApiKey() {
+    OPENAI_API_KEY = getActiveApiKey();
+    return OPENAI_API_KEY;
+}
+
+function saveUserApiKey() {
+    const input = $('#api-key-input');
+
+    if (!input || !currentUser) {
         return;
     }
 
-    $('step-username')?.style &&
-        ($('step-username').style.display =
-            'none');
+    const key = input.value.trim();
 
-    if ($('step-password')) {
-        $('step-password').style.display =
-            'block';
-    }
-
-    $('password')?.focus();
-}
-
-function backToUsername() {
-
-    if ($('step-password')) {
-        $('step-password').style.display =
-            'none';
-    }
-
-    if ($('step-username')) {
-        $('step-username').style.display =
-            'block';
-    }
-
-    $('username')?.focus();
-}
-
-function login() {
-
-    const username =
-        $('username')?.value.trim();
-
-    const password =
-        $('password')?.value || '';
-
-    if (!username) {
-
-        showNotice(
-            'Введите имя пользователя'
+    if (key) {
+        localStorage.setItem(
+            getUserStorageKey('api_key'),
+            key
         );
 
+        OPENAI_API_KEY = key;
+
+        showNotice(
+            'Ваш API-ключ сохранён и будет использоваться вместо основного.',
+            'success'
+        );
+    } else {
+        localStorage.removeItem(
+            getUserStorageKey('api_key')
+        );
+
+        OPENAI_API_KEY = DEFAULT_API_KEY;
+
+        showNotice(
+            'Пользовательский ключ удалён. Используется основной ключ.',
+            'success'
+        );
+    }
+
+    updateApiKeyStatus();
+}
+
+function updateApiKeyStatus() {
+    const input = $('#api-key-input');
+
+    if (input) {
+        input.value = getSavedUserApiKey();
+    }
+
+    const status =
+        $('#api-key-status') ||
+        $('#key-status');
+
+    if (!status) {
+        return;
+    }
+
+    if (getSavedUserApiKey()) {
+        status.textContent = 'Используется ваш API-ключ';
+    } else if (DEFAULT_API_KEY.trim()) {
+        status.textContent = 'Используется основной API-ключ';
+    } else {
+        status.textContent = 'API-ключ не задан';
+    }
+}
+
+
+/* =========================================================
+   АВТОРИЗАЦИЯ
+   ========================================================= */
+
+function nextStep() {
+    const usernameInput = $('#username-input');
+    const passwordInput = $('#password-input');
+
+    if (!usernameInput || !passwordInput) {
+        return;
+    }
+
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!username) {
+        showNotice('Введите имя пользователя.', 'error');
+        usernameInput.focus();
         return;
     }
 
     if (!password) {
-
-        showNotice(
-            'Введите пароль'
-        );
-
+        showNotice('Введите пароль.', 'error');
+        passwordInput.focus();
         return;
     }
 
-    let users = {};
-
-    try {
-
-        users =
-            JSON.parse(
-                localStorage.getItem(
-                    'neuro_users'
-                ) || '{}'
-            );
-
-    } catch {
-
-        users = {};
-    }
-
-    if (!users[username]) {
-
-        users[username] = {
-            password,
-            createdAt: Date.now()
-        };
-
-    } else {
-
-        if (
-            users[username].password !==
-            password
-        ) {
-
-            showNotice(
-                'Неверный пароль'
-            );
-
-            return;
-        }
-    }
-
     localStorage.setItem(
-        'neuro_users',
-        JSON.stringify(users)
+        getStorageKey(`password_${username}`),
+        password
     );
 
     currentUser = username;
 
-    localStorage.setItem(
-        'neuro_current_user',
-        username
-    );
+    setCurrentUser(username);
 
-    if ($('login-screen')) {
-        $('login-screen').style.display =
-            'none';
+    login();
+}
+
+function backToUsername() {
+    const usernameInput = $('#username-input');
+
+    if (usernameInput) {
+        usernameInput.focus();
+    }
+}
+
+function login() {
+    const usernameInput = $('#username-input');
+    const passwordInput = $('#password-input');
+
+    const username =
+        currentUser ||
+        (usernameInput ? usernameInput.value.trim() : '');
+
+    const password =
+        passwordInput ?
+        passwordInput.value :
+        '';
+
+    if (!username) {
+        showNotice('Введите имя пользователя.', 'error');
+        return;
     }
 
-    if ($('app')) {
-        $('app').style.display =
-            'flex';
+    const savedPassword = localStorage.getItem(
+        getStorageKey(`password_${username}`)
+    );
+
+    if (savedPassword && savedPassword !== password) {
+        showNotice('Неверный пароль.', 'error');
+        return;
     }
 
-    newChat();
+    if (!savedPassword) {
+        localStorage.setItem(
+            getStorageKey(`password_${username}`),
+            password
+        );
+    }
 
-    showNotice(
-        `Добро пожаловать, ${username}!`
-    );
+    currentUser = username;
+    setCurrentUser(username);
+
+    refreshActiveApiKey();
+
+    const loginScreen = $('#login-screen');
+    const app = $('#app');
+
+    if (loginScreen) {
+        loginScreen.style.display = 'none';
+    }
+
+    if (app) {
+        app.style.display = 'flex';
+    }
+
+    initializeNeuroChat();
 }
 
 function logout() {
-
-    if (
-        !confirm(
-            'Выйти из аккаунта?'
-        )
-    ) {
-        return;
-    }
-
-    localStorage.removeItem(
-        'neuro_current_user'
-    );
+    saveCurrentChat();
 
     currentUser = null;
+    currentChatId = null;
+    messages = [];
 
-    location.reload();
+    setCurrentUser('');
+
+    const app = $('#app');
+    const loginScreen = $('#login-screen');
+
+    if (app) {
+        app.style.display = 'none';
+    }
+
+    if (loginScreen) {
+        loginScreen.style.display = '';
+    }
+
+    const usernameInput = $('#username-input');
+    const passwordInput = $('#password-input');
+
+    if (usernameInput) {
+        usernameInput.value = '';
+    }
+
+    if (passwordInput) {
+        passwordInput.value = '';
+    }
 }
 
 
-/* ============================================================
-   💬 НОВЫЙ ЧАТ
-   ============================================================ */
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================= */
 
-function newChat() {
+function initializeNeuroChat() {
+    currentUser = getCurrentUser();
 
-    if (isGenerating) {
-
-        showNotice(
-            'Сначала дождитесь окончания ответа'
-        );
-
+    if (!currentUser) {
         return;
     }
 
-    currentChatId =
-        createId('chat');
+    refreshActiveApiKey();
 
+    loadSettings();
+    setupNavigation();
+    setupInput();
+    setupAttachments();
+    setupKeyboardShortcuts();
+    setupSearch();
+
+    renderChatHistory();
+    updateApiKeyStatus();
+
+    const chats = getChats();
+
+    if (chats.length) {
+        const lastChat = chats
+            .slice()
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
+        if (lastChat) {
+            openChat(lastChat.id);
+            return;
+        }
+    }
+
+    newChat();
+}
+
+
+/* =========================================================
+   НАСТРОЙКИ
+   ========================================================= */
+
+function getSettings() {
+    if (!currentUser) {
+        return {};
+    }
+
+    return safeJSONParse(
+        localStorage.getItem(
+            getUserStorageKey('settings')
+        ),
+        {}
+    );
+}
+
+function saveSettings(settings) {
+    if (!currentUser) {
+        return;
+    }
+
+    localStorage.setItem(
+        getUserStorageKey('settings'),
+        JSON.stringify(settings)
+    );
+}
+
+function loadSettings() {
+    const settings = getSettings();
+
+    selectedModel =
+        settings.model ||
+        DEFAULT_MODEL;
+
+    temporaryChat =
+        settings.temporaryChat === true;
+
+    siteBuilderMode =
+        settings.siteBuilderMode === true;
+
+    const modelSelect = $('#model-select');
+
+    if (modelSelect) {
+        modelSelect.value = selectedModel;
+    }
+
+    const themeSelect = $('#theme-select');
+
+    if (themeSelect) {
+        themeSelect.value =
+            settings.theme ||
+            'dark';
+    }
+
+    applyTheme(
+        settings.theme ||
+        'dark'
+    );
+
+    const temporaryToggle =
+        $('#temporary-chat-toggle');
+
+    if (temporaryToggle) {
+        temporaryToggle.checked = temporaryChat;
+    }
+
+    const siteToggle =
+        $('#site-builder-toggle');
+
+    if (siteToggle) {
+        siteToggle.checked = siteBuilderMode;
+    }
+
+    updateApiKeyStatus();
+}
+
+function saveModel() {
+    const modelSelect = $('#model-select');
+
+    if (!modelSelect) {
+        return;
+    }
+
+    selectedModel = modelSelect.value;
+
+    const settings = getSettings();
+
+    settings.model = selectedModel;
+
+    saveSettings(settings);
+
+    showNotice(
+        `Модель изменена: ${selectedModel}`,
+        'success'
+    );
+}
+
+function changeTheme() {
+    const themeSelect = $('#theme-select');
+
+    if (!themeSelect) {
+        return;
+    }
+
+    const theme = themeSelect.value;
+
+    applyTheme(theme);
+
+    const settings = getSettings();
+
+    settings.theme = theme;
+
+    saveSettings(settings);
+}
+
+function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+
+    if (theme === 'light') {
+        document.body.classList.add('light-theme');
+    } else {
+        document.body.classList.remove('light-theme');
+    }
+}
+
+
+/* =========================================================
+   ВРЕМЕННЫЕ ЧАТЫ
+   ========================================================= */
+
+function setTemporaryChat(enabled) {
+    temporaryChat = Boolean(enabled);
+
+    const settings = getSettings();
+
+    settings.temporaryChat = temporaryChat;
+
+    saveSettings(settings);
+
+    if (temporaryChat) {
+        showNotice(
+            'Временный чат включён. Этот чат не будет сохраняться в истории.',
+            'success'
+        );
+    } else {
+        showNotice(
+            'Временный чат выключен. Новые чаты будут сохраняться.',
+            'success'
+        );
+    }
+}
+
+function toggleTemporaryChat() {
+    setTemporaryChat(!temporaryChat);
+
+    const toggle = $('#temporary-chat-toggle');
+
+    if (toggle) {
+        toggle.checked = temporaryChat;
+    }
+}
+
+
+/* =========================================================
+   ХРАНИЛИЩЕ ЧАТОВ
+   ========================================================= */
+
+function getChats() {
+    if (!currentUser) {
+        return [];
+    }
+
+    return safeJSONParse(
+        localStorage.getItem(
+            getUserStorageKey('chats')
+        ),
+        []
+    );
+}
+
+function saveChats(chats) {
+    if (!currentUser) {
+        return;
+    }
+
+    localStorage.setItem(
+        getUserStorageKey('chats'),
+        JSON.stringify(chats)
+    );
+}
+
+function getChatById(id) {
+    return getChats().find(
+        chat => chat.id === id
+    );
+}
+
+function saveCurrentChat() {
+    if (!currentUser || !currentChatId) {
+        return;
+    }
+
+    if (temporaryChat) {
+        return;
+    }
+
+    if (!messages.length) {
+        return;
+    }
+
+    const chats = getChats();
+
+    const index = chats.findIndex(
+        chat => chat.id === currentChatId
+    );
+
+    const firstUserMessage =
+        messages.find(
+            message => message.role === 'user'
+        );
+
+    const title =
+        firstUserMessage ?
+        createChatTitle(firstUserMessage.content) :
+        'Новый чат';
+
+    const chatData = {
+        id: currentChatId,
+        title,
+        messages,
+        createdAt:
+            index >= 0 ?
+            chats[index].createdAt :
+            Date.now(),
+        updatedAt: Date.now(),
+        pinned:
+            index >= 0 ?
+            Boolean(chats[index].pinned) :
+            false
+    };
+
+    if (index >= 0) {
+        chats[index] = chatData;
+    } else {
+        chats.unshift(chatData);
+    }
+
+    chats.sort(
+        (a, b) => b.updatedAt - a.updatedAt
+    );
+
+    saveChats(
+        chats.slice(0, MAX_HISTORY_CHATS)
+    );
+
+    renderChatHistory();
+}
+
+function createChatTitle(text) {
+    const clean = String(text || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!clean) {
+        return 'Новый чат';
+    }
+
+    if (clean.length <= 42) {
+        return clean;
+    }
+
+    return `${clean.slice(0, 42)}…`;
+}
+
+function newChat(options = {}) {
+    saveCurrentChat();
+
+    currentChatId = createId('chat');
+
+    messages = [];
+    attachedFiles = [];
+
+    temporaryChat =
+        options.temporary !== undefined ?
+        options.temporary :
+        temporaryChat;
+
+    siteBuilderMode =
+        options.siteBuilder !== undefined ?
+        options.siteBuilder :
+        false;
+
+    clearAttachedFiles();
+
+    renderMessages();
+    renderChatHistory();
+
+    updateChatTitle('Новый чат');
+
+    showWelcomeScreen();
+
+    const input = $('#user-input');
+
+    if (input) {
+        input.focus();
+    }
+}
+
+function clearChat() {
     messages = [];
 
     attachedFiles = [];
 
-    if ($('chat-title')) {
-        $('chat-title').textContent =
-            'Новый чат';
-    }
+    clearAttachedFiles();
 
-    const container =
-        $('messages');
+    renderMessages();
 
-    if (!container) return;
+    showWelcomeScreen();
 
-    container.innerHTML = `
-        <div class="welcome">
-
-            <div class="welcome-logo-text">
-                Нейро-чат
-            </div>
-
-            <p>
-                Чем я могу помочь?
-            </p>
-
-            <div class="suggestions">
-
-                <button
-                    type="button"
-                    onclick="quickPrompt('Создай современный сайт')"
-                >
-                    Создать сайт
-                </button>
-
-                <button
-                    type="button"
-                    onclick="quickPrompt('Напиши программу')"
-                >
-                    Написать код
-                </button>
-
-                <button
-                    type="button"
-                    onclick="quickPrompt('Придумай идею для видео')"
-                >
-                    Создать видео
-                </button>
-
-                <button
-                    type="button"
-                    onclick="quickPrompt('Сочини песню')"
-                >
-                    Создать музыку
-                </button>
-
-                <button
-                    type="button"
-                    onclick="quickPrompt('Создай концепцию 3D-модели')"
-                >
-                    3D-модель
-                </button>
-
-            </div>
-
-        </div>
-    `;
-
-    renderChatHistory();
-
-    updateChatTitle();
+    saveCurrentChat();
 }
 
-
-/* ============================================================
-   🧹 ОЧИСТКА
-   ============================================================ */
-
-function clearChat() {
-
-    if (!messages.length) {
-        newChat();
-        return;
-    }
-
-    if (
-        !confirm(
-            'Очистить текущий чат?'
-        )
-    ) {
-        return;
-    }
-
-    messages = [];
-
-    newChat();
-
-    showNotice(
-        'Чат очищен'
-    );
-}
-
-
-/* ============================================================
-   💾 СОХРАНЕНИЕ ЧАТА
-   ============================================================ */
-
-function saveCurrentChat() {
-
-    if (
-        !currentUser ||
-        !messages.length
-    ) {
-        return;
-    }
-
-    const chats =
-        getChats();
-
-    const firstUser =
-        messages.find(
-            item =>
-                item.role === 'user'
-        );
-
-    const title =
-        firstUser?.text
-            ?.replace(/\s+/g, ' ')
-            ?.trim()
-            ?.slice(0, 60) ||
-        'Новый чат';
-
-    const chat = {
-
-        id:
-            currentChatId ||
-            createId('chat'),
-
-        title,
-
-        messages,
-
-        updatedAt:
-            Date.now()
-    };
-
-    const index =
-        chats.findIndex(
-            item =>
-                item.id === chat.id
-        );
-
-    if (index >= 0) {
-        chats[index] = chat;
-    } else {
-        chats.unshift(chat);
-    }
-
-    chats.sort(
-        (a, b) =>
-            b.updatedAt -
-            a.updatedAt
-    );
-
-    saveChats(
-        chats.slice(
-            0,
-            MAX_HISTORY_CHATS
-        )
-    );
-
-    renderChatHistory();
-
-    updateChatTitle();
-}
-
-
-/* ============================================================
-   📂 ИСТОРИЯ
-   ============================================================ */
-
-function renderChatHistory() {
-
-    const container =
-        $('chat-history') ||
-        $('history') ||
-        $('chat-list');
-
-    if (!container) {
-        return;
-    }
-
-    const chats =
-        getChats();
-
-    container.innerHTML = '';
-
-    if (!chats.length) {
-
-        container.innerHTML = `
-            <div class="chat-item">
-                История чатов пуста
-            </div>
-        `;
-
-        return;
-    }
-
-    chats.forEach(chat => {
-
-        if (
-            currentSearchQuery &&
-            !chat.title
-                .toLowerCase()
-                .includes(
-                    currentSearchQuery
-                        .toLowerCase()
-                )
-        ) {
-            return;
-        }
-
-        const item =
-            document.createElement(
-                'div'
-            );
-
-        item.className =
-            'chat-item';
-
-        item.dataset.chatId =
-            chat.id;
-
-        item.innerHTML = `
-            <span>
-                ${escapeHTML(
-                    chat.title
-                )}
-            </span>
-
-            <button
-                type="button"
-                class="chat-delete"
-                title="Удалить чат"
-            >
-                ×
-            </button>
-        `;
-
-        item.addEventListener(
-            'click',
-            event => {
-
-                if (
-                    event.target.closest(
-                        '.chat-delete'
-                    )
-                ) {
-                    return;
-                }
-
-                openChat(
-                    chat.id
-                );
-            }
-        );
-
-        item
-            .querySelector(
-                '.chat-delete'
-            )
-            ?.addEventListener(
-                'click',
-                event => {
-
-                    event.stopPropagation();
-
-                    deleteChat(
-                        chat.id
-                    );
-                }
-            );
-
-        container.appendChild(
-            item
-        );
-    });
-}
-
-function openChat(chatId) {
-
-    const chat =
-        getChats().find(
-            item =>
-                item.id === chatId
-        );
+function openChat(id) {
+    const chat = getChatById(id);
 
     if (!chat) {
         return;
     }
 
-    currentChatId =
-        chat.id;
+    currentChatId = chat.id;
+    messages = Array.isArray(chat.messages)
+        ? chat.messages
+        : [];
 
-    messages =
-        Array.isArray(
-            chat.messages
-        )
-            ? chat.messages
-            : [];
-
-    if ($('chat-title')) {
-        $('chat-title').textContent =
-            chat.title ||
-            'Чат';
-    }
+    temporaryChat = false;
+    siteBuilderMode = false;
 
     renderMessages();
+    updateChatTitle(chat.title || 'Чат');
+    renderChatHistory();
 
-    closeSidebarOnMobile();
+    hideWelcomeScreen();
 }
 
-function deleteChat(chatId) {
-
-    if (
-        !confirm(
-            'Удалить этот чат?'
-        )
-    ) {
-        return;
+function deleteChat(id, event) {
+    if (event) {
+        event.stopPropagation();
     }
 
-    const chats =
-        getChats().filter(
-            chat =>
-                chat.id !==
-                chatId
-        );
+    const chats = getChats().filter(
+        chat => chat.id !== id
+    );
 
     saveChats(chats);
 
-    if (
-        chatId ===
-        currentChatId
-    ) {
+    if (currentChatId === id) {
         newChat();
     } else {
         renderChatHistory();
     }
-
-    showNotice(
-        'Чат удалён'
-    );
 }
 
-function searchChats(query) {
+function togglePinChat(id, event) {
+    if (event) {
+        event.stopPropagation();
+    }
 
-    currentSearchQuery =
-        String(query || '');
+    const chats = getChats();
+
+    const chat = chats.find(
+        item => item.id === id
+    );
+
+    if (!chat) {
+        return;
+    }
+
+    chat.pinned = !chat.pinned;
+
+    saveChats(chats);
 
     renderChatHistory();
 }
 
 
-/* ============================================================
-   📝 НАЗВАНИЕ ЧАТА
-   ============================================================ */
+/* =========================================================
+   ИСТОРИЯ ЧАТОВ
+   ========================================================= */
 
-function updateChatTitle() {
+function renderChatHistory() {
+    const container =
+        $('#chat-history') ||
+        $('.chat-history');
 
-    const first =
-        messages.find(
-            item =>
-                item.role === 'user'
-        );
-
-    if (
-        !first ||
-        !$('chat-title')
-    ) {
+    if (!container) {
         return;
     }
 
-    $('chat-title').textContent =
-        first.text
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 45);
+    let chats = getChats();
+
+    if (currentSearchQuery) {
+        const query =
+            currentSearchQuery.toLowerCase();
+
+        chats = chats.filter(chat =>
+            String(chat.title || '')
+                .toLowerCase()
+                .includes(query)
+        );
+    }
+
+    chats.sort((a, b) => {
+        if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+            return a.pinned ? -1 : 1;
+        }
+
+        return b.updatedAt - a.updatedAt;
+    });
+
+    container.innerHTML = '';
+
+    if (!chats.length) {
+        const empty = document.createElement('div');
+
+        empty.className = 'chat-history-empty';
+        empty.textContent =
+            currentSearchQuery ?
+            'Ничего не найдено' :
+            'История чатов пуста';
+
+        container.appendChild(empty);
+
+        return;
+    }
+
+    chats.forEach(chat => {
+        const item = document.createElement('div');
+
+        item.className =
+            `chat-item ${
+                chat.id === currentChatId
+                    ? 'active'
+                    : ''
+            }`;
+
+        item.dataset.chatId = chat.id;
+
+        const title = document.createElement('span');
+
+        title.className = 'chat-item-title';
+
+        title.textContent =
+            chat.pinned ?
+            `📌 ${chat.title || 'Новый чат'}` :
+            (chat.title || 'Новый чат');
+
+        const actions =
+            document.createElement('div');
+
+        actions.className = 'chat-item-actions';
+
+        const pinButton =
+            document.createElement('button');
+
+        pinButton.className = 'chat-pin';
+        pinButton.type = 'button';
+        pinButton.title =
+            chat.pinned ?
+            'Открепить' :
+            'Закрепить';
+
+        pinButton.textContent =
+            chat.pinned ?
+            '📌' :
+            '○';
+
+        pinButton.addEventListener(
+            'click',
+            event => togglePinChat(
+                chat.id,
+                event
+            )
+        );
+
+        const deleteButton =
+            document.createElement('button');
+
+        deleteButton.className = 'chat-delete';
+        deleteButton.type = 'button';
+        deleteButton.title = 'Удалить';
+        deleteButton.textContent = '×';
+
+        deleteButton.addEventListener(
+            'click',
+            event => deleteChat(
+                chat.id,
+                event
+            )
+        );
+
+        actions.appendChild(pinButton);
+        actions.appendChild(deleteButton);
+
+        item.appendChild(title);
+        item.appendChild(actions);
+
+        item.addEventListener(
+            'click',
+            () => openChat(chat.id)
+        );
+
+        container.appendChild(item);
+    });
+}
+
+function searchChats(value) {
+    currentSearchQuery =
+        String(value || '').trim();
+
+    renderChatHistory();
 }
 
 
-/* ============================================================
-   ⚡ БЫСТРЫЕ ЗАПРОСЫ
-   ============================================================ */
+/* =========================================================
+   НАВИГАЦИЯ
+   ========================================================= */
 
-function quickPrompt(text) {
+function setupNavigation() {
+    $$('.nav-item').forEach(item => {
+        item.addEventListener(
+            'click',
+            () => {
+                const action =
+                    item.dataset.action ||
+                    item.dataset.page ||
+                    '';
 
-    const input =
-        $('user-input');
+                $$('.nav-item').forEach(
+                    nav =>
+                        nav.classList.remove('active')
+                );
 
-    if (!input) return;
+                item.classList.add('active');
 
-    input.value = text;
+                handleNavigation(action);
+            }
+        );
+    });
+}
 
-    autoResizeInput();
+function handleNavigation(action) {
+    switch (action) {
+        case 'chat':
+        case 'home':
+            hideWelcomeScreen();
+            return;
+
+        case 'library':
+            openLibrary();
+            return;
+
+        case 'projects':
+            openProjects();
+            return;
+
+        case 'plugins':
+            openPlugins();
+            return;
+
+        case 'scheduled':
+            openScheduled();
+            return;
+
+        case 'more':
+            openMore();
+            return;
+
+        case 'site':
+        case 'create-site':
+            startSiteBuilder();
+            return;
+
+        default:
+            return;
+    }
+}
+
+
+/* =========================================================
+   ВСПОМОГАТЕЛЬНЫЕ ПАНЕЛИ
+   ========================================================= */
+
+function openFeaturePanel(title, contentHTML) {
+    let panel = $('#neuro-feature-panel');
+
+    if (!panel) {
+        panel = document.createElement('div');
+
+        panel.id = 'neuro-feature-panel';
+
+        Object.assign(panel.style, {
+            position: 'fixed',
+            inset: '0',
+            zIndex: '9000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,.55)',
+            padding: '20px'
+        });
+
+        panel.innerHTML = `
+            <div class="neuro-feature-window"
+                 style="
+                    width:min(720px,100%);
+                    max-height:90vh;
+                    overflow:auto;
+                    background:var(--panel-bg,#171717);
+                    color:var(--text-color,#fff);
+                    border-radius:18px;
+                    padding:22px;
+                 ">
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    gap:12px;
+                    margin-bottom:18px;
+                ">
+                    <h2 id="neuro-feature-title"
+                        style="margin:0"></h2>
+
+                    <button
+                        type="button"
+                        id="neuro-feature-close"
+                        style="
+                            border:0;
+                            background:transparent;
+                            color:inherit;
+                            font-size:28px;
+                            cursor:pointer;
+                        "
+                    >×</button>
+                </div>
+
+                <div id="neuro-feature-body"></div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+
+        $('#neuro-feature-close')
+            .addEventListener(
+                'click',
+                () => panel.remove()
+            );
+
+        panel.addEventListener(
+            'click',
+            event => {
+                if (event.target === panel) {
+                    panel.remove();
+                }
+            }
+        );
+    }
+
+    $('#neuro-feature-title').textContent = title;
+    $('#neuro-feature-body').innerHTML = contentHTML;
+}
+
+function openLibrary() {
+    const chats = getChats();
+
+    openFeaturePanel(
+        '📚 Библиотека',
+        `
+            <p>Здесь находятся сохранённые материалы Нейро-чата.</p>
+
+            <div style="display:grid;gap:10px">
+                <button class="library-action"
+                        data-library-action="chats">
+                    💬 История чатов (${chats.length})
+                </button>
+
+                <button class="library-action"
+                        data-library-action="files">
+                    📎 Прикреплённые файлы
+                </button>
+
+                <button class="library-action"
+                        data-library-action="sites">
+                    🌐 Созданные сайты
+                </button>
+            </div>
+        `
+    );
+
+    $$('.library-action').forEach(button => {
+        button.addEventListener('click', () => {
+            const action =
+                button.dataset.libraryAction;
+
+            if (action === 'chats') {
+                $('#neuro-feature-panel')?.remove();
+                newChat();
+            }
+
+            if (action === 'sites') {
+                $('#neuro-feature-panel')?.remove();
+                startSiteBuilder();
+            }
+
+            if (action === 'files') {
+                showNotice(
+                    'Файлы доступны внутри соответствующих чатов.'
+                );
+            }
+        });
+    });
+}
+
+function openProjects() {
+    openFeaturePanel(
+        '🧩 Проекты',
+        `
+            <p>
+                Создавай отдельные проекты и используй
+                Нейро-чат как рабочее пространство.
+            </p>
+
+            <button
+                type="button"
+                id="create-project-button"
+                style="padding:12px 16px;border-radius:10px;border:0;cursor:pointer"
+            >
+                ＋ Создать проект
+            </button>
+        `
+    );
+
+    $('#create-project-button')
+        ?.addEventListener(
+            'click',
+            () => {
+                $('#neuro-feature-panel')?.remove();
+
+                newChat({
+                    temporary: false
+                });
+
+                showNotice(
+                    'Новый проект можно начать с описания задачи.',
+                    'success'
+                );
+            }
+        );
+}
+
+function openPlugins() {
+    openFeaturePanel(
+        '🔌 Плагины',
+        `
+            <p>
+                Здесь можно подключать дополнительные возможности
+                Нейро-чата.
+            </p>
+
+            <div style="display:grid;gap:10px">
+                <button type="button"
+                        class="plugin-action"
+                        data-plugin="web">
+                    🌐 Веб-поиск
+                </button>
+
+                <button type="button"
+                        class="plugin-action"
+                        data-plugin="files">
+                    📎 Работа с файлами
+                </button>
+
+                <button type="button"
+                        class="plugin-action"
+                        data-plugin="site">
+                    🧑‍💻 Создание сайтов
+                </button>
+            </div>
+        `
+    );
+
+    $$('.plugin-action').forEach(button => {
+        button.addEventListener(
+            'click',
+            () => {
+                const plugin =
+                    button.dataset.plugin;
+
+                if (plugin === 'site') {
+                    $('#neuro-feature-panel')?.remove();
+                    startSiteBuilder();
+                } else {
+                    showNotice(
+                        `Возможность «${button.textContent.trim()}» выбрана.`
+                    );
+                }
+            }
+        );
+    });
+}
+
+function openScheduled() {
+    openFeaturePanel(
+        '⏰ Запланированные задачи',
+        `
+            <p>
+                Создай локальную задачу с напоминанием.
+            </p>
+
+            <input
+                id="schedule-text"
+                type="text"
+                placeholder="Например: проверить заказ"
+                style="width:100%;padding:12px;border-radius:10px;border:1px solid #444;background:transparent;color:inherit;margin-bottom:10px"
+            >
+
+            <input
+                id="schedule-time"
+                type="datetime-local"
+                style="width:100%;padding:12px;border-radius:10px;border:1px solid #444;background:transparent;color:inherit;margin-bottom:10px"
+            >
+
+            <button
+                type="button"
+                id="schedule-create"
+                style="padding:12px 16px;border:0;border-radius:10px;cursor:pointer"
+            >
+                Создать напоминание
+            </button>
+        `
+    );
+
+    $('#schedule-create')
+        ?.addEventListener(
+            'click',
+            createScheduledTask
+        );
+}
+
+function createScheduledTask() {
+    const text = $('#schedule-text')?.value.trim();
+    const time = $('#schedule-time')?.value;
+
+    if (!text || !time) {
+        showNotice(
+            'Укажи текст и время.',
+            'error'
+        );
+        return;
+    }
+
+    const tasks = safeJSONParse(
+        localStorage.getItem(
+            getUserStorageKey('scheduled')
+        ),
+        []
+    );
+
+    tasks.push({
+        id: createId('task'),
+        text,
+        time,
+        createdAt: Date.now()
+    });
+
+    localStorage.setItem(
+        getUserStorageKey('scheduled'),
+        JSON.stringify(tasks)
+    );
+
+    $('#neuro-feature-panel')?.remove();
+
+    showNotice(
+        'Напоминание сохранено.',
+        'success'
+    );
+}
+
+function openMore() {
+    openFeaturePanel(
+        '⋯ Дополнительно',
+        `
+            <div style="display:grid;gap:10px">
+                <button type="button" id="more-temp">
+                    🕶️ Временный чат
+                </button>
+
+                <button type="button" id="more-site">
+                    🌐 Создать сайт
+                </button>
+
+                <button type="button" id="more-clear">
+                    🗑️ Очистить текущий чат
+                </button>
+            </div>
+        `
+    );
+
+    $('#more-temp')?.addEventListener(
+        'click',
+        () => {
+            toggleTemporaryChat();
+            $('#neuro-feature-panel')?.remove();
+        }
+    );
+
+    $('#more-site')?.addEventListener(
+        'click',
+        () => {
+            $('#neuro-feature-panel')?.remove();
+            startSiteBuilder();
+        }
+    );
+
+    $('#more-clear')?.addEventListener(
+        'click',
+        () => {
+            $('#neuro-feature-panel')?.remove();
+            clearChat();
+        }
+    );
+}
+
+
+/* =========================================================
+   СОЗДАНИЕ САЙТОВ
+   ========================================================= */
+
+function startSiteBuilder() {
+    siteBuilderMode = true;
+
+    const settings = getSettings();
+
+    settings.siteBuilderMode = true;
+
+    saveSettings(settings);
+
+    newChat({
+        temporary: false,
+        siteBuilder: true
+    });
+
+    updateChatTitle('Создание сайта');
+
+    const input = $('#user-input');
+
+    if (input) {
+        input.value =
+            'Создай сайт: ';
+        input.focus();
+
+        input.setSelectionRange(
+            input.value.length,
+            input.value.length
+        );
+    }
+
+    showNotice(
+        'Режим создания сайтов включён.',
+        'success'
+    );
+}
+
+function buildSitePrompt(userRequest) {
+    return `
+Ты работаешь в режиме создания сайтов.
+
+Пользователь хочет:
+${userRequest}
+
+Создай полноценный одностраничный сайт.
+
+Верни результат строго в следующем формате:
+
+TITLE:
+Название сайта
+
+HTML:
+полный HTML-документ
+
+END_HTML
+
+Требования:
+- HTML должен быть полноценным.
+- CSS должен находиться внутри <style>.
+- JavaScript должен находиться внутри <script>.
+- Не используй внешние зависимости без необходимости.
+- Интерфейс должен быть современным.
+- Страница должна работать сразу после открытия HTML-файла.
+- Все кнопки должны иметь реальные действия.
+- Не пиши «в разработке».
+- Не пиши пояснения внутри блока HTML.
+- После END_HTML можешь кратко объяснить, что создано.
+`;
+}
+
+function extractGeneratedHTML(text) {
+    if (!text) {
+        return '';
+    }
+
+    const match =
+        text.match(
+            /HTML:\s*([\s\S]*?)\s*END_HTML/i
+        );
+
+    if (match) {
+        return match[1].trim();
+    }
+
+    const codeMatch =
+        text.match(
+            /```html\s*([\s\S]*?)```/i
+        );
+
+    if (codeMatch) {
+        return codeMatch[1].trim();
+    }
+
+    if (
+        text.includes('<!DOCTYPE html>') ||
+        text.includes('<html')
+    ) {
+        const start =
+            text.indexOf('<!DOCTYPE html>') >= 0
+                ? text.indexOf('<!DOCTYPE html>')
+                : text.indexOf('<html');
+
+        return text.slice(start).trim();
+    }
+
+    return '';
+}
+
+function previewGeneratedSite(html) {
+    if (!html) {
+        showNotice(
+            'В ответе не найден HTML-код сайта.',
+            'error'
+        );
+        return;
+    }
+
+    const blob =
+        new Blob(
+            [html],
+            { type: 'text/html;charset=utf-8' }
+        );
+
+    const url =
+        URL.createObjectURL(blob);
+
+    openFeaturePanel(
+        '🌐 Предпросмотр сайта',
+        `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+                <button
+                    type="button"
+                    id="site-open-new"
+                >
+                    ↗ Открыть
+                </button>
+
+                <button
+                    type="button"
+                    id="site-download"
+                >
+                    ⬇ Скачать HTML
+                </button>
+            </div>
+
+            <iframe
+                id="site-preview-frame"
+                sandbox="allow-scripts allow-forms allow-modals"
+                style="
+                    width:100%;
+                    height:500px;
+                    border:1px solid #444;
+                    border-radius:12px;
+                    background:#fff;
+                "
+            ></iframe>
+        `
+    );
+
+    const iframe =
+        $('#site-preview-frame');
+
+    if (iframe) {
+        iframe.src = url;
+    }
+
+    $('#site-open-new')
+        ?.addEventListener(
+            'click',
+            () => {
+                window.open(
+                    url,
+                    '_blank',
+                    'noopener,noreferrer'
+                );
+            }
+        );
+
+    $('#site-download')
+        ?.addEventListener(
+            'click',
+            () => {
+                downloadTextFile(
+                    html,
+                    'neuro-chat-site.html',
+                    'text/html;charset=utf-8'
+                );
+            }
+        );
+
+    const panel =
+        $('#neuro-feature-panel');
+
+    if (panel) {
+        panel.addEventListener(
+            'remove',
+            () => URL.revokeObjectURL(url)
+        );
+    }
+}
+
+
+/* =========================================================
+   СООБЩЕНИЯ
+   ========================================================= */
+
+function addMessage(
+    role,
+    content,
+    extra = {}
+) {
+    const message = {
+        id: createId('message'),
+        role,
+        content: String(content || ''),
+        createdAt: Date.now(),
+        ...extra
+    };
+
+    messages.push(message);
+
+    renderMessages();
+
+    return message;
+}
+
+function renderMessages() {
+    const container = $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    messages.forEach(message => {
+        const element =
+            document.createElement('div');
+
+        element.className =
+            `message message-${message.role}`;
+
+        element.dataset.messageId =
+            message.id;
+
+        const content =
+            document.createElement('div');
+
+        content.className =
+            'message-content';
+
+        content.innerHTML =
+            formatText(message.content);
+
+        element.appendChild(content);
+
+        if (message.role === 'assistant') {
+            const actions =
+                document.createElement('div');
+
+            actions.className =
+                'message-actions';
+
+            actions.innerHTML = `
+                <button
+                    type="button"
+                    data-action="copy"
+                    title="Копировать"
+                >📋</button>
+
+                <button
+                    type="button"
+                    data-action="regenerate"
+                    title="Повторить"
+                >🔄</button>
+            `;
+
+            actions
+                .querySelector('[data-action="copy"]')
+                ?.addEventListener(
+                    'click',
+                    () => copyText(
+                        message.content
+                    )
+                );
+
+            actions
+                .querySelector('[data-action="regenerate"]')
+                ?.addEventListener(
+                    'click',
+                    () => regenerateMessage(
+                        message.id
+                    )
+                );
+
+            element.appendChild(actions);
+        }
+
+        if (message.role === 'user') {
+            const actions =
+                document.createElement('div');
+
+            actions.className =
+                'message-actions';
+
+            actions.innerHTML = `
+                <button
+                    type="button"
+                    data-action="copy"
+                >📋</button>
+
+                <button
+                    type="button"
+                    data-action="edit"
+                >✏️</button>
+            `;
+
+            actions
+                .querySelector('[data-action="copy"]')
+                ?.addEventListener(
+                    'click',
+                    () => copyText(
+                        message.content
+                    )
+                );
+
+            actions
+                .querySelector('[data-action="edit"]')
+                ?.addEventListener(
+                    'click',
+                    () => editMessage(
+                        message.id
+                    )
+                );
+
+            element.appendChild(actions);
+        }
+
+        container.appendChild(element);
+    });
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+function hideWelcomeScreen() {
+    const welcome = $('.welcome');
+
+    if (welcome) {
+        welcome.style.display = 'none';
+    }
+}
+
+function showWelcomeScreen() {
+    const welcome = $('.welcome');
+
+    if (welcome) {
+        welcome.style.display = '';
+    }
+}
+
+function updateChatTitle(title) {
+    const titleElement =
+        $('#chat-title') ||
+        $('.chat-title');
+
+    if (titleElement) {
+        titleElement.textContent =
+            title || 'Новый чат';
+    }
+}
+
+
+/* =========================================================
+   ФОРМАТИРОВАНИЕ
+   ========================================================= */
+
+function formatText(text) {
+    let value =
+        escapeHTML(
+            String(text || '')
+        );
+
+    value = value.replace(
+        /```([\s\S]*?)```/g,
+        '<pre><code>$1</code></pre>'
+    );
+
+    value = value.replace(
+        /`([^`]+)`/g,
+        '<code>$1</code>'
+    );
+
+    value = value.replace(
+        /\*\*([^*]+)\*\*/g,
+        '<strong>$1</strong>'
+    );
+
+    value = value.replace(
+        /\*([^*]+)\*/g,
+        '<em>$1</em>'
+    );
+
+    value = value.replace(
+        /^### (.+)$/gm,
+        '<h3>$1</h3>'
+    );
+
+    value = value.replace(
+        /^## (.+)$/gm,
+        '<h2>$1</h2>'
+    );
+
+    value = value.replace(
+        /^# (.+)$/gm,
+        '<h1>$1</h1>'
+    );
+
+    value = value.replace(
+        /\n/g,
+        '<br>'
+    );
+
+    return value;
+}
+
+
+/* =========================================================
+   РЕДАКТИРОВАНИЕ / ПОВТОР
+   ========================================================= */
+
+function editMessage(id) {
+    const message =
+        messages.find(
+            item => item.id === id
+        );
+
+    if (!message) {
+        return;
+    }
+
+    const input = $('#user-input');
+
+    if (!input) {
+        return;
+    }
+
+    input.value =
+        message.content;
 
     input.focus();
 
-    sendMessage();
-}
-
-
-/* ============================================================
-   🚀 ОТПРАВКА
-   ============================================================ */
-
-async function sendMessage() {
-
-    if (isGenerating) {
-
-        showNotice(
-            'Ответ уже генерируется'
+    messages =
+        messages.filter(
+            item =>
+                item.createdAt <
+                message.createdAt
         );
 
+    renderMessages();
+}
+
+async function regenerateMessage(id) {
+    const index =
+        messages.findIndex(
+            item => item.id === id
+        );
+
+    if (index < 0) {
         return;
     }
 
-    const input =
-        $('user-input');
+    if (messages[index].role !== 'assistant') {
+        return;
+    }
+
+    messages.splice(index, 1);
+
+    renderMessages();
+
+    await requestAssistantResponse();
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(
+            text
+        );
+
+        showNotice(
+            'Скопировано.',
+            'success'
+        );
+    } catch {
+        showNotice(
+            'Не удалось скопировать текст.',
+            'error'
+        );
+    }
+}
+
+
+/* =========================================================
+   ОТПРАВКА СООБЩЕНИЯ
+   ========================================================= */
+
+async function sendMessage() {
+    if (isGenerating) {
+        return;
+    }
+
+    const input = $('#user-input');
 
     if (!input) {
         return;
@@ -807,58 +1879,103 @@ async function sendMessage() {
     const text =
         input.value.trim();
 
-    if (!text) {
+    if (!text && !attachedFiles.length) {
         return;
     }
 
-    if (!OPENAI_API_KEY) {
+    hideWelcomeScreen();
 
-        showNotice(
-            'API-ключ не указан'
-        );
-
-        openSettings();
-
-        return;
-    }
-
-    input.value = '';
-
-    input.style.height =
-        'auto';
-
-    removeWelcome();
+    const userContent =
+        text ||
+        'Проанализируй прикреплённые файлы.';
 
     addMessage(
         'user',
-        text
+        userContent,
+        {
+            attachments:
+                attachedFiles.map(
+                    file => ({
+                        name: file.name,
+                        type: file.type,
+                        size: file.size
+                    })
+                )
+        }
     );
+
+    input.value = '';
+
+    resizeInput();
+
+    clearAttachedFiles();
+
+    await requestAssistantResponse();
+}
+
+async function requestAssistantResponse() {
+    if (isGenerating) {
+        return;
+    }
+
+    refreshActiveApiKey();
+
+    if (!OPENAI_API_KEY) {
+        addMessage(
+            'assistant',
+            'API-ключ не задан. Добавьте пользовательский ключ в настройках или укажите основной ключ в `DEFAULT_API_KEY`.'
+        );
+
+        return;
+    }
 
     isGenerating = true;
-
-    updateSendButton(
-        true
-    );
-
-    showTyping();
 
     currentAbortController =
         new AbortController();
 
-    try {
+    showTypingIndicator();
 
-        const apiMessages =
-            buildApiMessages();
+    try {
+        let apiMessages =
+            buildAPIMessages();
+
+        if (siteBuilderMode) {
+            const lastUser =
+                [...messages]
+                    .reverse()
+                    .find(
+                        message =>
+                            message.role === 'user'
+                    );
+
+            if (lastUser) {
+                apiMessages = [
+                    {
+                        role: 'system',
+                        content:
+                            buildSitePrompt(
+                                lastUser.content
+                            )
+                    },
+                    ...messages
+                        .slice(
+                            -MAX_CONTEXT_MESSAGES
+                        )
+                        .map(message => ({
+                            role: message.role,
+                            content:
+                                message.content
+                        }))
+                ];
+            }
+        }
 
         const response =
             await fetch(
                 `${API_BASE_URL}/chat/completions`,
                 {
                     method: 'POST',
-
-                    signal:
-                        currentAbortController
-                            .signal,
 
                     headers: {
                         'Content-Type':
@@ -868,837 +1985,281 @@ async function sendMessage() {
                             `Bearer ${OPENAI_API_KEY}`
                     },
 
-                    body:
-                        JSON.stringify({
-                            model:
-                                selectedModel,
+                    signal:
+                        currentAbortController.signal,
 
-                            messages:
-                                apiMessages,
-
-                            temperature:
-                                0.7
-                        })
+                    body: JSON.stringify({
+                        model: selectedModel,
+                        messages: apiMessages,
+                        temperature: 0.7
+                    })
                 }
             );
 
-        let data;
-
-        try {
-
-            data =
-                await response.json();
-
-        } catch {
+        if (!response.ok) {
+            const errorText =
+                await response.text();
 
             throw new Error(
-                `Сервер вернул некорректный ответ: ${response.status}`
-            );
-        }
-
-        removeTyping();
-
-        if (
-            !response.ok ||
-            data?.error
-        ) {
-
-            throw new Error(
-                data?.error?.message ||
-                `Ошибка API: ${response.status}`
-            );
-        }
-
-        const reply =
-            data?.choices?.[0]
-                ?.message
-                ?.content;
-
-        if (!reply) {
-
-            throw new Error(
-                'AI не вернул текст ответа'
-            );
-        }
-
-        addMessage(
-            'bot',
-            reply
-        );
-
-        saveCurrentChat();
-
-    } catch (error) {
-
-        removeTyping();
-
-        if (
-            error.name ===
-            'AbortError'
-        ) {
-
-            addMessage(
-                'bot',
-                'Генерация остановлена.'
-            );
-
-        } else {
-
-            console.error(
-                'Neuro-chat:',
-                error
-            );
-
-            addMessage(
-                'bot',
-                formatError(
-                    error
+                formatAPIError(
+                    response.status,
+                    errorText
                 )
             );
         }
 
-    } finally {
+        const data =
+            await response.json();
 
-        isGenerating =
-            false;
+        const answer =
+            data?.choices?.[0]?.message?.content ||
+            'Модель не вернула текстовый ответ.';
 
-        currentAbortController =
-            null;
+        hideTypingIndicator();
 
-        updateSendButton(
-            false
+        addMessage(
+            'assistant',
+            answer
         );
 
-        input.focus();
+        if (siteBuilderMode) {
+            const html =
+                extractGeneratedHTML(answer);
+
+            if (html) {
+                showSiteActions(html);
+            }
+        }
+
+        if (!temporaryChat) {
+            saveCurrentChat();
+        }
+
+    } catch (error) {
+        hideTypingIndicator();
+
+        if (error.name === 'AbortError') {
+            addMessage(
+                'assistant',
+                'Генерация остановлена.'
+            );
+        } else {
+            addMessage(
+                'assistant',
+                `Не удалось получить ответ.\n\n${error.message}`
+            );
+        }
+    } finally {
+        isGenerating = false;
+        currentAbortController = null;
+
+        if (!temporaryChat) {
+            saveCurrentChat();
+        }
     }
 }
 
+function buildAPIMessages() {
+    const systemPrompt = `
+Ты — Нейро-чат, интеллектуальный AI-помощник.
 
-/* ============================================================
-   🧠 КОНТЕКСТ
-   ============================================================ */
+Отвечай на русском языке, если пользователь не попросил другой язык.
 
-function buildApiMessages() {
+Правила:
+- Отвечай конкретно.
+- Не придумывай результаты действий, которых ты не выполнял.
+- Если пользователь просит код — давай рабочий код.
+- Если пользователь просит сайт — создавай полноценный HTML/CSS/JS.
+- Не используй фразы «функция в разработке», если можно выполнить задачу другим способом.
+- Используй Markdown там, где это улучшает читаемость.
+`;
 
-    const system =
-        buildSystemPrompt();
-
-    const recent =
+    const context =
         messages
-            .filter(
-                item =>
-                    item.role ===
-                        'user' ||
-                    item.role ===
-                        'bot'
-            )
-            .slice(
-                -MAX_CONTEXT_MESSAGES
-            )
-            .map(
-                item => ({
-                    role:
-                        item.role ===
-                        'user'
-                            ? 'user'
-                            : 'assistant',
-
-                    content:
-                        item.text
-                })
-            );
+            .slice(-MAX_CONTEXT_MESSAGES)
+            .map(message => ({
+                role: message.role,
+                content: message.content
+            }));
 
     return [
         {
             role: 'system',
-            content: system
+            content: systemPrompt
         },
-
-        ...recent
+        ...context
     ];
 }
 
-function buildSystemPrompt() {
 
-    return `
-Ты — Нейро-чат, современный AI-ассистент.
+/* =========================================================
+   САЙТ: ДЕЙСТВИЯ ПОСЛЕ ГЕНЕРАЦИИ
+   ========================================================= */
 
-Название продукта: ${APP_NAME}.
+function showSiteActions(html) {
+    const lastMessage =
+        $('#messages')?.lastElementChild;
 
-Отвечай на русском языке,
-если пользователь не попросил
-использовать другой язык.
-
-Твои основные задачи:
-
-1. Отвечать на вопросы.
-2. Помогать с программированием.
-3. Помогать создавать сайты.
-4. Помогать с текстами.
-5. Помогать с изображениями
-   через доступные инструменты.
-6. Помогать с видео-концепциями.
-7. Помогать с музыкой.
-8. Помогать с 3D-моделированием.
-9. Анализировать предоставленную
-   пользователем информацию.
-10. Помогать с проектами.
-
-Правила:
-
-— Не выдумывай результаты инструментов.
-— Не утверждай, что файл создан,
-  если файл реально не был создан.
-— Для кода используй Markdown.
-— Сложные ответы структурируй.
-— Не повторяй вопрос пользователя.
-— Не добавляй фразы вроде
-  «функция находится в разработке»,
-  если пользователь просто просит
-  обычный ответ.
-— Отвечай конкретно.
-`;
-}
-
-
-/* ============================================================
-   💬 СООБЩЕНИЯ
-   ============================================================ */
-
-function addMessage(
-    role,
-    text
-) {
-
-    messages.push({
-
-        id:
-            createId('message'),
-
-        role,
-
-        text:
-
-            String(text ?? ''),
-
-        createdAt:
-            Date.now(),
-
-        time:
-            getCurrentTime()
-    });
-
-    renderMessages();
-
-    if (
-        role === 'user'
-    ) {
-        saveCurrentChat();
-    }
-}
-
-function renderMessages() {
-
-    const container =
-        $('messages');
-
-    if (!container) {
+    if (!lastMessage) {
         return;
     }
 
-    if (!messages.length) {
-        newChat();
-        return;
-    }
-
-    container.innerHTML = '';
-
-    messages.forEach(
-        (message, index) => {
-
-            const wrapper =
-                document.createElement(
-                    'div'
-                );
-
-            wrapper.className =
-                `message ${message.role}`;
-
-            const content =
-                document.createElement(
-                    'div'
-                );
-
-            content.className =
-                'message-content';
-
-            content.innerHTML =
-                formatText(
-                    message.text
-                );
-
-            wrapper.appendChild(
-                content
-            );
-
-            const actions =
-                document.createElement(
-                    'div'
-                );
-
-            actions.className =
-                'message-actions';
-
-            const copy =
-                document.createElement(
-                    'button'
-                );
-
-            copy.type = 'button';
-
-            copy.textContent =
-                'Копировать';
-
-            copy.onclick =
-                () =>
-                    copyText(
-                        message.text
-                    );
-
-            actions.appendChild(
-                copy
-            );
-
-            if (
-                message.role ===
-                'user'
-            ) {
-
-                const edit =
-                    document.createElement(
-                        'button'
-                    );
-
-                edit.type =
-                    'button';
-
-                edit.textContent =
-                    'Изменить';
-
-                edit.onclick =
-                    () =>
-                        editMessage(
-                            index
-                        );
-
-                actions.appendChild(
-                    edit
-                );
-            }
-
-            if (
-                message.role ===
-                'bot'
-            ) {
-
-                const retry =
-                    document.createElement(
-                        'button'
-                    );
-
-                retry.type =
-                    'button';
-
-                retry.textContent =
-                    'Повторить';
-
-                retry.onclick =
-                    () =>
-                        regenerateMessage(
-                            index
-                        );
-
-                actions.appendChild(
-                    retry
-                );
-            }
-
-            wrapper.appendChild(
-                actions
-            );
-
-            container.appendChild(
-                wrapper
-            );
-        }
-    );
-
-    container.scrollTop =
-        container.scrollHeight;
-}
-
-
-/* ============================================================
-   🖊️ РЕДАКТИРОВАНИЕ
-   ============================================================ */
-
-function editMessage(index) {
-
-    const message =
-        messages[index];
-
-    if (
-        !message ||
-        message.role !==
-            'user'
-    ) {
-        return;
-    }
-
-    const input =
-        $('user-input');
-
-    if (!input) {
-        return;
-    }
-
-    input.value =
-        message.text;
-
-    messages =
-        messages.slice(
-            0,
-            index
-        );
-
-    renderMessages();
-
-    autoResizeInput();
-
-    input.focus();
-}
-
-
-/* ============================================================
-   🔄 ПОВТОР ГЕНЕРАЦИИ
-   ============================================================ */
-
-function regenerateMessage(
-    botIndex
-) {
-
-    const botMessage =
-        messages[botIndex];
-
-    if (
-        !botMessage ||
-        botMessage.role !==
-            'bot'
-    ) {
-        return;
-    }
-
-    let userMessage =
-        null;
-
-    for (
-        let i =
-            botIndex - 1;
-        i >= 0;
-        i--
-    ) {
-
-        if (
-            messages[i].role ===
-            'user'
-        ) {
-
-            userMessage =
-                messages[i];
-
-            break;
-        }
-    }
-
-    if (!userMessage) {
-        return;
-    }
-
-    messages =
-        messages.slice(
-            0,
-            botIndex
-        );
-
-    renderMessages();
-
-    const input =
-        $('user-input');
-
-    if (!input) {
-        return;
-    }
-
-    input.value =
-        userMessage.text;
-
-    sendMessage();
-}
-
-
-/* ============================================================
-   📋 КОПИРОВАНИЕ
-   ============================================================ */
-
-async function copyText(text) {
-
-    try {
-
-        await navigator.clipboard
-            .writeText(text);
-
-        showNotice(
-            'Скопировано'
-        );
-
-    } catch {
-
-        const textarea =
-            document.createElement(
-                'textarea'
-            );
-
-        textarea.value =
-            text;
-
-        document.body.appendChild(
-            textarea
-        );
-
-        textarea.select();
-
-        document.execCommand(
-            'copy'
-        );
-
-        textarea.remove();
-
-        showNotice(
-            'Скопировано'
-        );
-    }
-}
-
-
-/* ============================================================
-   🧾 MARKDOWN
-   ============================================================ */
-
-function formatText(text) {
-
-    let value =
-        escapeHTML(text);
-
-    value =
-        value.replace(
-            /```([\s\S]*?)```/g,
-            '<pre><code>$1</code></pre>'
-        );
-
-    value =
-        value.replace(
-            /`([^`]+)`/g,
-            '<code>$1</code>'
-        );
-
-    value =
-        value.replace(
-            /\*\*(.*?)\*\*/g,
-            '<strong>$1</strong>'
-        );
-
-    value =
-        value.replace(
-            /\*(.*?)\*/g,
-            '<em>$1</em>'
-        );
-
-    value =
-        value.replace(
-            /^### (.*)$/gm,
-            '<h3>$1</h3>'
-        );
-
-    value =
-        value.replace(
-            /^## (.*)$/gm,
-            '<h2>$1</h2>'
-        );
-
-    value =
-        value.replace(
-            /^# (.*)$/gm,
-            '<h1>$1</h1>'
-        );
-
-    value =
-        value.replace(
-            /\n/g,
-            '<br>'
-        );
-
-    return value;
-}
-
-
-/* ============================================================
-   ⏳ ИНДИКАТОР
-   ============================================================ */
-
-function showTyping() {
-
-    removeTyping();
-
-    const container =
-        $('messages');
-
-    if (!container) {
-        return;
-    }
-
-    const typing =
-        document.createElement(
-            'div'
-        );
-
-    typing.id =
-        'typing-indicator';
-
-    typing.className =
-        'typing';
-
-    typing.innerHTML = `
-        <span></span>
-        <span></span>
-        <span></span>
+    const actions =
+        document.createElement('div');
+
+    actions.className =
+        'site-actions';
+
+    actions.innerHTML = `
+        <button
+            type="button"
+            data-site-action="preview"
+        >
+            👁️ Предпросмотр
+        </button>
+
+        <button
+            type="button"
+            data-site-action="download"
+        >
+            ⬇ Скачать HTML
+        </button>
     `;
 
-    container.appendChild(
-        typing
+    actions
+        .querySelector(
+            '[data-site-action="preview"]'
+        )
+        ?.addEventListener(
+            'click',
+            () => previewGeneratedSite(html)
+        );
+
+    actions
+        .querySelector(
+            '[data-site-action="download"]'
+        )
+        ?.addEventListener(
+            'click',
+            () => downloadTextFile(
+                html,
+                'neuro-chat-site.html',
+                'text/html;charset=utf-8'
+            )
+        );
+
+    lastMessage.appendChild(actions);
+}
+
+
+/* =========================================================
+   ФАЙЛЫ
+   ========================================================= */
+
+function setupAttachments() {
+    const attachButton =
+        $('#attach-button') ||
+        $('.attach-btn');
+
+    const attachMenu =
+        $('#attach-menu') ||
+        $('.attach-menu');
+
+    if (attachButton && attachMenu) {
+        attachButton.addEventListener(
+            'click',
+            event => {
+                event.stopPropagation();
+
+                attachMenu.classList.toggle(
+                    'open'
+                );
+            }
+        );
+
+        document.addEventListener(
+            'click',
+            () => {
+                attachMenu.classList.remove(
+                    'open'
+                );
+            }
+        );
+    }
+
+    document.addEventListener(
+        'click',
+        event => {
+            const target =
+                event.target.closest(
+                    '[data-attach]'
+                );
+
+            if (!target) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            openFilePicker(
+                target.dataset.attach
+            );
+        }
     );
-
-    container.scrollTop =
-        container.scrollHeight;
 }
 
-function removeTyping() {
-
-    $(
-        'typing-indicator'
-    )?.remove();
-}
-
-function updateSendButton(
-    generating
-) {
-
-    const button =
-        document.querySelector(
-            '.send-btn'
-        );
-
-    if (!button) {
-        return;
-    }
-
-    button.disabled =
-        false;
-
-    if (generating) {
-
-        button.textContent =
-            '■';
-
-        button.title =
-            'Остановить генерацию';
-
-        button.onclick =
-            stopGeneration;
-
-    } else {
-
-        button.textContent =
-            '➤';
-
-        button.title =
-            'Отправить';
-
-        button.onclick =
-            sendMessage;
-    }
-}
-
-function stopGeneration() {
-
-    if (
-        currentAbortController
-    ) {
-
-        currentAbortController.abort();
-
-        currentAbortController =
-            null;
-    }
-}
-
-
-/* ============================================================
-   📎 ВЛОЖЕНИЯ
-   ============================================================ */
-
-function toggleAttach() {
-
-    const menu =
-        $('attach-menu');
-
-    if (!menu) {
-        return;
-    }
-
-    const opened =
-        menu.style.display ===
-        'flex';
-
-    menu.style.display =
-        opened
-            ? 'none'
-            : 'flex';
-}
-
-function closeAttachMenu() {
-
-    if ($('attach-menu')) {
-
-        $('attach-menu').style.display =
-            'none';
-    }
-}
-
-function attachType(type) {
-
-    closeAttachMenu();
-
-    switch (type) {
-
-        case 'camera':
-
-            openFilePicker(
-                'image/*',
-                true
-            );
-
-            break;
-
-        case 'photo':
-
-            openFilePicker(
-                'image/*',
-                false
-            );
-
-            break;
-
-        case 'file':
-
-            openFilePicker(
-                '.txt,.pdf,.doc,.docx,.xls,.xlsx,.csv,.json,.js,.css,.html,.py,.stl,.obj,.step,.stp',
-                false
-            );
-
-            break;
-
-        case 'image':
-
-            openFilePicker(
-                'image/*',
-                false
-            );
-
-            break;
-
-        case 'video':
-
-            openFilePicker(
-                'video/*',
-                false
-            );
-
-            break;
-
-        case '3d':
-
-            openFilePicker(
-                '.stl,.obj,.step,.stp,.3mf,.gltf,.glb',
-                false
-            );
-
-            break;
-
-        default:
-
-            showNotice(
-                'Выберите тип вложения'
-            );
-    }
-}
-
-function openFilePicker(
-    accept,
-    capture = false
-) {
-
+function openFilePicker(type) {
     const input =
-        document.createElement(
-            'input'
-        );
+        document.createElement('input');
 
-    input.type =
-        'file';
+    input.type = 'file';
 
-    input.accept =
-        accept;
+    if (type === 'camera') {
+        input.accept =
+            'image/*';
 
-    input.multiple =
-        true;
-
-    if (capture) {
         input.capture =
             'environment';
     }
 
+    if (type === 'photo') {
+        input.accept =
+            'image/*';
+    }
+
+    if (type === 'video') {
+        input.accept =
+            'video/*';
+    }
+
+    if (type === '3d') {
+        input.accept =
+            '.stl,.obj,.step,.stp,.3mf,.gltf,.glb';
+    }
+
+    if (type === 'image') {
+        input.accept =
+            'image/*';
+    }
+
+    if (type === 'file') {
+        input.accept = '*/*';
+    }
+
+    input.multiple = true;
+
     input.addEventListener(
         'change',
         event => {
-
             const files =
                 Array.from(
-                    event.target
-                        .files || []
+                    event.target.files || []
                 );
 
-            if (!files.length) {
-                return;
-            }
-
-            attachedFiles.push(
-                ...files
-            );
+            attachedFiles.push(...files);
 
             renderAttachedFiles();
-
-            showNotice(
-                `Добавлено файлов: ${files.length}`
-            );
         }
     );
 
@@ -1706,36 +2267,9 @@ function openFilePicker(
 }
 
 function renderAttachedFiles() {
-
-    let container =
-        $('attached-files');
-
-    if (
-        !container &&
-        document.querySelector(
-            '.input-area'
-        )
-    ) {
-
-        container =
-            document.createElement(
-                'div'
-            );
-
-        container.id =
-            'attached-files';
-
-        container.className =
-            'file-preview-list';
-
-        document
-            .querySelector(
-                '.input-area'
-            )
-            .prepend(
-                container
-            );
-    }
+    const container =
+        $('#attached-files') ||
+        $('.file-preview-list');
 
     if (!container) {
         return;
@@ -1745,263 +2279,63 @@ function renderAttachedFiles() {
 
     attachedFiles.forEach(
         (file, index) => {
-
             const item =
-                document.createElement(
-                    'div'
-                );
+                document.createElement('div');
 
             item.className =
                 'file-preview';
 
             item.innerHTML = `
                 <span class="file-preview-name">
-                    ${escapeHTML(
-                        file.name
-                    )}
+                    ${escapeHTML(file.name)}
                 </span>
 
                 <button
                     type="button"
-                    title="Удалить"
+                    data-file-index="${index}"
                 >
                     ×
                 </button>
             `;
 
             item
-                .querySelector(
-                    'button'
-                )
-                .onclick = () => {
+                .querySelector('button')
+                ?.addEventListener(
+                    'click',
+                    () => {
+                        attachedFiles.splice(
+                            index,
+                            1
+                        );
 
-                    attachedFiles.splice(
-                        index,
-                        1
-                    );
+                        renderAttachedFiles();
+                    }
+                );
 
-                    renderAttachedFiles();
-                };
-
-            container.appendChild(
-                item
-            );
+            container.appendChild(item);
         }
     );
+}
 
-    if (!attachedFiles.length) {
-        container.remove();
+function clearAttachedFiles() {
+    attachedFiles = [];
+
+    const container =
+        $('#attached-files') ||
+        $('.file-preview-list');
+
+    if (container) {
+        container.innerHTML = '';
     }
 }
 
 
-/* ============================================================
-   ⚙️ НАСТРОЙКИ
-   ============================================================ */
-
-function openSettings() {
-
-    const modal =
-        $('settings-modal');
-
-    if (!modal) {
-        return;
-    }
-
-    modal.style.display =
-        'flex';
-
-    if ($('api-key')) {
-
-        $('api-key').value =
-            OPENAI_API_KEY;
-    }
-
-    if ($('model')) {
-
-        $('model').value =
-            selectedModel;
-    }
-
-    if ($('theme-select')) {
-
-        $('theme-select').value =
-            localStorage.getItem(
-                'neuro_theme'
-            ) || 'dark';
-    }
-}
-
-function closeSettings() {
-
-    if ($('settings-modal')) {
-
-        $('settings-modal').style.display =
-            'none';
-    }
-}
-
-function saveApiKey() {
-
-    const input =
-        $('api-key');
-
-    if (!input) {
-        return;
-    }
-
-    const key =
-        input.value.trim();
-
-    if (!key) {
-
-        showNotice(
-            'Введите API-ключ'
-        );
-
-        return;
-    }
-
-    OPENAI_API_KEY =
-        key;
-
-    localStorage.setItem(
-        'neuro_api_key',
-        key
-    );
-
-    showNotice(
-        'API-ключ сохранён'
-    );
-}
-
-function changeModel(model) {
-
-    if (!model) {
-        return;
-    }
-
-    selectedModel =
-        model;
-
-    localStorage.setItem(
-        'neuro_model',
-        model
-    );
-
-    showNotice(
-        `Выбрана модель: ${model}`
-    );
-}
-
-
-/* ============================================================
-   🌓 ТЕМА
-   ============================================================ */
-
-function changeTheme(
-    theme,
-    notify = true
-) {
-
-    const light =
-        theme === 'light';
-
-    document.body.classList.toggle(
-        'light',
-        light
-    );
-
-    localStorage.setItem(
-        'neuro_theme',
-        light
-            ? 'light'
-            : 'dark'
-    );
-
-    if ($('theme-select')) {
-
-        $('theme-select').value =
-            light
-                ? 'light'
-                : 'dark';
-    }
-
-    if (notify) {
-
-        showNotice(
-            light
-                ? 'Светлая тема включена'
-                : 'Тёмная тема включена'
-        );
-    }
-}
-
-
-/* ============================================================
-   🆘 ПОДДЕРЖКА
-   ============================================================ */
-
-function openSupport() {
-
-    const modal =
-        $('support-modal');
-
-    if (modal) {
-
-        modal.style.display =
-            'flex';
-    }
-}
-
-function closeSupport() {
-
-    const modal =
-        $('support-modal');
-
-    if (modal) {
-
-        modal.style.display =
-            'none';
-    }
-}
-
-
-/* ============================================================
-   📱 SIDEBAR
-   ============================================================ */
-
-function toggleSidebar() {
-
-    $('sidebar')
-        ?.classList.toggle(
-            'open'
-        );
-}
-
-function closeSidebarOnMobile() {
-
-    if (
-        window.innerWidth <=
-        800
-    ) {
-
-        $('sidebar')
-            ?.classList.remove(
-                'open'
-            );
-    }
-}
-
-
-/* ============================================================
-   ⌨️ ВВОД
-   ============================================================ */
+/* =========================================================
+   ВВОД
+   ========================================================= */
 
 function setupInput() {
-
-    const input =
-        $('user-input');
+    const input = $('#user-input');
 
     if (!input) {
         return;
@@ -2009,55 +2343,97 @@ function setupInput() {
 
     input.addEventListener(
         'input',
-        autoResizeInput
+        resizeInput
     );
 
     input.addEventListener(
         'keydown',
         event => {
-
             if (
-                event.key ===
-                'Enter' &&
+                event.key === 'Enter' &&
                 !event.shiftKey
             ) {
-
                 event.preventDefault();
 
                 sendMessage();
             }
         }
     );
+
+    resizeInput();
 }
 
-function autoResizeInput() {
-
-    const input =
-        $('user-input');
+function resizeInput() {
+    const input = $('#user-input');
 
     if (!input) {
         return;
     }
 
-    input.style.height =
-        'auto';
+    input.style.height = 'auto';
 
     input.style.height =
-        Math.min(
+        `${Math.min(
             input.scrollHeight,
-            180
-        ) + 'px';
+            220
+        )}px`;
+}
+
+function setupKeyboardShortcuts() {
+    document.addEventListener(
+        'keydown',
+        event => {
+            if (
+                event.key === '/' &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey
+            ) {
+                const active =
+                    document.activeElement;
+
+                if (
+                    active &&
+                    (
+                        active.tagName === 'INPUT' ||
+                        active.tagName === 'TEXTAREA'
+                    )
+                ) {
+                    return;
+                }
+
+                $('#user-input')?.focus();
+            }
+
+            if (
+                (event.ctrlKey ||
+                    event.metaKey) &&
+                event.key.toLowerCase() === 'k'
+            ) {
+                event.preventDefault();
+
+                newChat();
+            }
+
+            if (
+                event.key === 'Escape' &&
+                isGenerating
+            ) {
+                stopGeneration();
+            }
+        }
+    );
 }
 
 
-/* ============================================================
-   🔍 ПОИСК
-   ============================================================ */
+/* =========================================================
+   ПОИСК
+   ========================================================= */
 
 function setupSearch() {
-
     const search =
-        $('chat-search');
+        $('#chat-search') ||
+        $('.sidebar-search input');
 
     if (!search) {
         return;
@@ -2066,7 +2442,6 @@ function setupSearch() {
     search.addEventListener(
         'input',
         event => {
-
             searchChats(
                 event.target.value
             );
@@ -2075,406 +2450,477 @@ function setupSearch() {
 }
 
 
-/* ============================================================
-   🧭 НАВИГАЦИЯ
-   ============================================================ */
+/* =========================================================
+   QUICK PROMPTS
+   ========================================================= */
 
-function setupNavigation() {
+function setupSuggestionButtons() {
+    $$('.suggestion').forEach(
+        button => {
+            button.addEventListener(
+                'click',
+                () => {
+                    const text =
+                        button.dataset.prompt ||
+                        button.textContent.trim();
 
-    document
-        .querySelectorAll(
-            '.nav-item'
-        )
-        .forEach(
-            item => {
+                    const input =
+                        $('#user-input');
 
-                item.addEventListener(
-                    'click',
-                    event => {
-
-                        event.preventDefault();
-
-                        document
-                            .querySelectorAll(
-                                '.nav-item'
-                            )
-                            .forEach(
-                                nav =>
-                                    nav.classList
-                                        .remove(
-                                            'active'
-                                        )
-                            );
-
-                        item.classList.add(
-                            'active'
-                        );
-
-                        const action =
-                            item.dataset
-                                .action;
-
-                        if (
-                            action ===
-                            'new-chat'
-                        ) {
-
-                            newChat();
-
-                            return;
-                        }
-
-                        closeSidebarOnMobile();
+                    if (!input) {
+                        return;
                     }
-                );
-            }
-        );
+
+                    input.value = text;
+
+                    resizeInput();
+
+                    input.focus();
+                }
+            );
+        }
+    );
 }
 
 
-/* ============================================================
-   🪟 МОДАЛЬНЫЕ ОКНА
-   ============================================================ */
+/* =========================================================
+   ИНДИКАТОР ГЕНЕРАЦИИ
+   ========================================================= */
+
+function showTypingIndicator() {
+    hideTypingIndicator();
+
+    const container =
+        $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    const typing =
+        document.createElement('div');
+
+    typing.id =
+        'typing-indicator';
+
+    typing.className =
+        'message message-assistant typing';
+
+    typing.innerHTML = `
+        <div class="message-content">
+            <span>●</span>
+            <span>●</span>
+            <span>●</span>
+        </div>
+    `;
+
+    container.appendChild(typing);
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+    $('#typing-indicator')?.remove();
+}
+
+function stopGeneration() {
+    if (
+        currentAbortController
+    ) {
+        currentAbortController.abort();
+
+        currentAbortController = null;
+    }
+
+    isGenerating = false;
+
+    hideTypingIndicator();
+
+    showNotice(
+        'Генерация остановлена.'
+    );
+}
+
+
+/* =========================================================
+   ОШИБКИ API
+   ========================================================= */
+
+function formatAPIError(
+    status,
+    errorText
+) {
+    const parsed =
+        safeJSONParse(
+            errorText,
+            null
+        );
+
+    const apiMessage =
+        parsed?.error?.message ||
+        parsed?.message ||
+        '';
+
+    if (status === 401) {
+        return (
+            'API-ключ недействителен или был отклонён. ' +
+            'Проверь пользовательский ключ в настройках.'
+        );
+    }
+
+    if (status === 429) {
+        return (
+            'Превышен лимит API-запросов или недостаточно доступного лимита.'
+        );
+    }
+
+    if (status === 403) {
+        return (
+            'API запрещён для этого ключа или проекта.'
+        );
+    }
+
+    if (status >= 500) {
+        return (
+            'Сервер API временно недоступен. Попробуй ещё раз.'
+        );
+    }
+
+    return (
+        apiMessage ||
+        `Ошибка API (${status}).`
+    );
+}
+
+
+/* =========================================================
+   НАСТРОЙКИ / МОДАЛЬНЫЕ ОКНА
+   ========================================================= */
+
+function openSettings() {
+    const modal =
+        $('#settings-modal');
+
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+
+    updateApiKeyStatus();
+}
+
+function closeSettings() {
+    const modal =
+        $('#settings-modal');
+
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function openSupport() {
+    const modal =
+        $('#support-modal');
+
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeSupport() {
+    const modal =
+        $('#support-modal');
+
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
 
 function setupModals() {
+    document.addEventListener(
+        'click',
+        event => {
+            const target =
+                event.target.closest(
+                    '[data-modal-action]'
+                );
+
+            if (!target) {
+                return;
+            }
+
+            const action =
+                target.dataset.modalAction;
+
+            if (action === 'settings') {
+                openSettings();
+            }
+
+            if (action === 'close-settings') {
+                closeSettings();
+            }
+
+            if (action === 'support') {
+                openSupport();
+            }
+
+            if (action === 'close-support') {
+                closeSupport();
+            }
+        }
+    );
+
+    $('#save-api-key')
+        ?.addEventListener(
+            'click',
+            saveUserApiKey
+        );
+
+    $('#model-select')
+        ?.addEventListener(
+            'change',
+            saveModel
+        );
+
+    $('#theme-select')
+        ?.addEventListener(
+            'change',
+            changeTheme
+        );
+
+    $('#temporary-chat-toggle')
+        ?.addEventListener(
+            'change',
+            event =>
+                setTemporaryChat(
+                    event.target.checked
+                )
+        );
+
+    $('#site-builder-toggle')
+        ?.addEventListener(
+            'change',
+            event => {
+                siteBuilderMode =
+                    event.target.checked;
+
+                const settings =
+                    getSettings();
+
+                settings.siteBuilderMode =
+                    siteBuilderMode;
+
+                saveSettings(settings);
+            }
+        );
 
     document.addEventListener(
         'click',
         event => {
-
             if (
-                event.target ===
-                $('settings-modal')
+                event.target.classList.contains(
+                    'modal'
+                )
             ) {
-
-                closeSettings();
-            }
-
-            if (
-                event.target ===
-                $('support-modal')
-            ) {
-
-                closeSupport();
+                event.target.style.display =
+                    'none';
             }
         }
     );
 }
 
 
-/* ============================================================
-   ⌨️ ГОРЯЧИЕ КЛАВИШИ
-   ============================================================ */
+/* =========================================================
+   СКАЧИВАНИЕ ФАЙЛОВ
+   ========================================================= */
 
-function setupKeyboardShortcuts() {
-
-    document.addEventListener(
-        'keydown',
-        event => {
-
-            if (
-                event.key ===
-                'Escape'
-            ) {
-
-                closeSettings();
-
-                closeSupport();
-
-                closeAttachMenu();
-            }
-
-            if (
-                (event.metaKey ||
-                    event.ctrlKey) &&
-                event.key.toLowerCase() ===
-                    'k'
-            ) {
-
-                event.preventDefault();
-
-                $('user-input')
-                    ?.focus();
-            }
-
-            if (
-                (event.metaKey ||
-                    event.ctrlKey) &&
-                event.key.toLowerCase() ===
-                    'n'
-            ) {
-
-                event.preventDefault();
-
-                newChat();
-            }
-        }
-    );
-}
-
-
-/* ============================================================
-   ❌ ОШИБКИ
-   ============================================================ */
-
-function formatError(error) {
-
-    const message =
-        error?.message ||
-        '';
-
-    const lower =
-        message.toLowerCase();
-
-    if (
-        message.includes('401') ||
-        lower.includes(
-            'invalid api key'
-        ) ||
-        lower.includes(
-            'incorrect api key'
-        )
-    ) {
-
-        return `
-Ошибка авторизации API.
-
-Проверь API-ключ в настройках.
-`;
-    }
-
-    if (
-        message.includes('403') ||
-        lower.includes(
-            'forbidden'
-        )
-    ) {
-
-        return `
-API отклонил запрос.
-
-Проверь доступ аккаунта
-и выбранную модель.
-`;
-    }
-
-    if (
-        message.includes('429') ||
-        lower.includes(
-            'rate limit'
-        )
-    ) {
-
-        return `
-Превышен лимит запросов.
-
-Попробуй повторить запрос
-через некоторое время.
-`;
-    }
-
-    if (
-        message.includes('404')
-    ) {
-
-        return `
-Запрошенная модель или endpoint
-не найдены.
-`;
-    }
-
-    if (
-        lower.includes(
-            'failed to fetch'
-        )
-    ) {
-
-        return `
-Не удалось подключиться к API.
-
-Проверь интернет-соединение.
-`;
-    }
-
-    return `
-Произошла ошибка:
-
-${message || 'Неизвестная ошибка'}
-`;
-}
-
-
-/* ============================================================
-   🚀 ЗАПУСК
-   ============================================================ */
-
-function initializeNeuroChat() {
-
-    const savedUser =
-        localStorage.getItem(
-            'neuro_current_user'
-        );
-
-    if (savedUser) {
-
-        currentUser =
-            savedUser;
-
-        if ($('login-screen')) {
-
-            $('login-screen').style.display =
-                'none';
-        }
-
-        if ($('app')) {
-
-            $('app').style.display =
-                'flex';
-        }
-    }
-
-    const savedTheme =
-        localStorage.getItem(
-            'neuro_theme'
-        ) || 'dark';
-
-    changeTheme(
-        savedTheme,
-        false
-    );
-
-    setupInput();
-
-    setupSearch();
-
-    setupNavigation();
-
-    setupModals();
-
-    setupKeyboardShortcuts();
-
-    if ($('model')) {
-
-        $('model').value =
-            selectedModel;
-
-        $('model').addEventListener(
-            'change',
-            event => {
-
-                changeModel(
-                    event.target.value
-                );
-            }
-        );
-    }
-
-    if (
-        currentUser &&
-        !$('messages')
-            ?.querySelector(
-                '.message'
-            )
-    ) {
-
-        newChat();
-    }
-
-    updateSendButton(
-        false
-    );
-}
-
-
-/* ============================================================
-   🌐 ЗАПУСК ПОСЛЕ ЗАГРУЗКИ
-   ============================================================ */
-
-if (
-    document.readyState ===
-    'loading'
+function downloadTextFile(
+    content,
+    filename,
+    mimeType = 'text/plain;charset=utf-8'
 ) {
+    const blob =
+        new Blob(
+            [content],
+            { type: mimeType }
+        );
 
-    document.addEventListener(
-        'DOMContentLoaded',
-        initializeNeuroChat
+    const url =
+        URL.createObjectURL(blob);
+
+    const link =
+        document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    setTimeout(
+        () => URL.revokeObjectURL(url),
+        1000
     );
-
-} else {
-
-    initializeNeuroChat();
 }
 
 
-/* ============================================================
-   🧩 ГЛОБАЛЬНЫЕ ФУНКЦИИ
-   ============================================================ */
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
 
-window.nextStep =
-    nextStep;
+function setupSidebar() {
+    const menuButton =
+        $('#menu-button') ||
+        $('.menu-btn');
 
-window.backToUsername =
-    backToUsername;
+    const sidebar =
+        $('.sidebar');
 
-window.login =
-    login;
+    if (
+        !menuButton ||
+        !sidebar
+    ) {
+        return;
+    }
 
-window.logout =
-    logout;
+    menuButton.addEventListener(
+        'click',
+        () => {
+            sidebar.classList.toggle(
+                'open'
+            );
+        }
+    );
+}
 
-window.newChat =
-    newChat;
 
-window.clearChat =
-    clearChat;
+/* =========================================================
+   НОВЫЙ ЧАТ
+   ========================================================= */
 
-window.sendMessage =
-    sendMessage;
+function setupNewChatButton() {
+    $(
+        '#new-chat-button, .new-chat-button'
+    )?.addEventListener(
+        'click',
+        () => newChat()
+    );
+}
 
-window.quickPrompt =
-    quickPrompt;
 
-window.toggleAttach =
-    toggleAttach;
+/* =========================================================
+   CLEAR CHAT
+   ========================================================= */
 
-window.attachType =
-    attachType;
+function setupClearButton() {
+    $(
+        '#clear-chat, [data-action="clear-chat"]'
+    )?.addEventListener(
+        'click',
+        clearChat
+    );
+}
 
-window.openSettings =
-    openSettings;
 
-window.closeSettings =
-    closeSettings;
+/* =========================================================
+   SEND BUTTON
+   ========================================================= */
 
-window.saveApiKey =
-    saveApiKey;
+function setupSendButton() {
+    $(
+        '#send-button, .send-btn'
+    )?.addEventListener(
+        'click',
+        sendMessage
+    );
+}
 
-window.changeTheme =
-    changeTheme;
 
-window.openSupport =
-    openSupport;
+/* =========================================================
+   СОХРАНЕНИЕ ПРИ ВЫХОДЕ
+   ========================================================= */
 
-window.closeSupport =
-    closeSupport;
+window.addEventListener(
+    'beforeunload',
+    () => {
+        if (!temporaryChat) {
+            saveCurrentChat();
+        }
+    }
+);
 
-window.toggleSidebar =
-    toggleSidebar;
 
-window.copyText =
-    copyText;
+/* =========================================================
+   ГЛОБАЛЬНЫЕ ФУНКЦИИ
+   ========================================================= */
 
-window.stopGeneration =
-    stopGeneration;
+window.newChat = newChat;
+window.clearChat = clearChat;
+window.sendMessage = sendMessage;
+window.stopGeneration = stopGeneration;
 
-window.openChat =
-    openChat;
+window.login = login;
+window.logout = logout;
+window.nextStep = nextStep;
+window.backToUsername = backToUsername;
 
-window.deleteChat =
-    deleteChat;
+window.openSettings = openSettings;
+window.closeSettings = closeSettings;
 
-window.editMessage =
-    editMessage;
+window.openSupport = openSupport;
+window.closeSupport = closeSupport;
 
-window.regenerateMessage =
-    regenerateMessage;
+window.saveUserApiKey = saveUserApiKey;
+window.toggleTemporaryChat = toggleTemporaryChat;
+
+window.startSiteBuilder = startSiteBuilder;
+window.previewGeneratedSite = previewGeneratedSite;
+
+window.deleteChat = deleteChat;
+window.openChat = openChat;
+window.searchChats = searchChats;
+
+
+/* =========================================================
+   СТАРТ
+   ========================================================= */
+
+document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+        setupSuggestionButtons();
+        setupModals();
+        setupSidebar();
+        setupNewChatButton();
+        setupClearButton();
+        setupSendButton();
+
+        const savedUser =
+            getCurrentUser();
+
+        if (savedUser) {
+            currentUser = savedUser;
+
+            const loginScreen =
+                $('#login-screen');
+
+            const app =
+                $('#app');
+
+            if (loginScreen) {
+                loginScreen.style.display =
+                    'none';
+            }
+
+            if (app) {
+                app.style.display =
+                    'flex';
+            }
+
+            initializeNeuroChat();
+        }
+    }
+);
