@@ -1,2003 +1,2349 @@
-/* =========================================================
-NEURO-CHAT
-Premium Frontend Controller
-========================================================= */
+'use strict';
 
-(() => {
-“use strict”;
+/*
+ * NEURO-CHAT
+ * Основной клиентский JavaScript
+ *
+ * ВАЖНО:
+ * API-ключ НЕ хранится в браузере.
+ * AI-запрос отправляется на /api/chat.
+ */
 
-/* =======================================================
-CONSTANTS
-======================================================= */
+const APP_NAME = 'Нейро-чат';
+const STORAGE_PREFIX = 'neurochat_';
 
-const STORAGE = {
-USERS: “neuro_users”,
-SESSION: “neuro_session”,
-CHATS: “neuro_chats”,
-PROJECTS: “neuro_projects”,
-SCHEDULED: “neuro_scheduled”,
-LIBRARY: “neuro_library”,
-SETTINGS: “neuro_settings”
-};
+const DEFAULT_MODEL = 'gpt-4o-mini';
+const MAX_CHATS = 100;
+const MAX_CONTEXT_MESSAGES = 40;
 
-const DEFAULT_SETTINGS = {
-model: “default”,
-theme: “dark”,
-temporaryChat: false,
-siteBuilderMode: false
-};
-
+let currentUser = null;
 let currentChatId = null;
+let messages = [];
 let attachedFiles = [];
+
+let selectedModel = DEFAULT_MODEL;
+let temporaryChat = false;
+let siteBuilderMode = false;
+
 let isGenerating = false;
-let recognition = null;
+let abortController = null;
 
-/* =======================================================
-DOM HELPERS
-======================================================= */
+let currentSearchQuery = '';
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => […document.querySelectorAll(selector)];
+/* =========================================================
+   УТИЛИТЫ
+   ========================================================= */
 
-function get(id) {
-return document.getElementById(id);
+function $(selector) {
+    return document.querySelector(selector);
 }
 
-function show(element) {
-if (element) element.classList.remove(“hidden”);
+function $$(selector) {
+    return Array.from(document.querySelectorAll(selector));
 }
 
-function hide(element) {
-if (element) element.classList.add(“hidden”);
+function createId(prefix = 'id') {
+    return `${prefix}_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
 }
 
 function escapeHTML(value) {
-return String(value ?? “”)
-.replace(/&/g, “&”)
-.replace(/</g, “<”)
-.replace(/>/g, “>”)
-.replace(/”/g, “"”)
-.replace(/’/g, “'”);
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
-function uid(prefix = “id”) {
-return ${prefix}_${Date.now()}_${Math.random() .toString(36) .slice(2, 8)};
+function parseJSON(value, fallback) {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return fallback;
+    }
 }
 
-function readStorage(key, fallback) {
-try {
-const value = localStorage.getItem(key);
-return value ? JSON.parse(value) : fallback;
-} catch {
-return fallback;
-}
+function storageKey(name) {
+    return `${STORAGE_PREFIX}${name}`;
 }
 
-function writeStorage(key, value) {
-localStorage.setItem(key, JSON.stringify(value));
+function userKey(name) {
+    if (!currentUser) {
+        return storageKey(name);
+    }
+
+    return `${storageKey(currentUser)}_${name}`;
 }
 
-/* =======================================================
-TOAST
-======================================================= */
+function notify(text, type = 'info') {
+    let toast = $('#neuro-toast');
 
-function toast(message, type = “info”) {
-const container = get(“toast-container”);
-if (!container) return;
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'neuro-toast';
 
-const item = document.createElement("div");
-item.className = `toast toast-${type}`;
-const icons = {
-  success: "✓",
-  error: "!",
-  warning: "⚠",
-  info: "i"
-};
-item.innerHTML = `
-  <span class="toast-icon">${icons[type] || "i"}</span>
-  <span class="toast-message">${escapeHTML(message)}</span>
-`;
-container.appendChild(item);
-requestAnimationFrame(() => {
-  item.classList.add("visible");
-});
-setTimeout(() => {
-  item.classList.remove("visible");
-  setTimeout(() => {
-    item.remove();
-  }, 300);
-}, 3000);
+        Object.assign(toast.style, {
+            position: 'fixed',
+            left: '50%',
+            bottom: '24px',
+            transform: 'translateX(-50%)',
+            zIndex: '999999',
+            maxWidth: 'calc(100vw - 32px)',
+            padding: '12px 18px',
+            borderRadius: '14px',
+            background: '#202020',
+            color: '#fff',
+            fontSize: '14px',
+            boxShadow: '0 12px 40px rgba(0,0,0,.35)',
+            opacity: '0',
+            pointerEvents: 'none',
+            transition: 'opacity .2s ease'
+        });
 
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = text;
+
+    if (type === 'error') {
+        toast.style.background = '#a52a2a';
+    } else if (type === 'success') {
+        toast.style.background = '#197a4b';
+    } else {
+        toast.style.background = '#202020';
+    }
+
+    toast.style.opacity = '1';
+
+    clearTimeout(toast._timer);
+
+    toast._timer = setTimeout(() => {
+        toast.style.opacity = '0';
+    }, 2800);
 }
 
-/* =======================================================
-AUTH
-======================================================= */
+/* =========================================================
+   АВТОРИЗАЦИЯ
+   ========================================================= */
+
+function getCurrentUser() {
+    return localStorage.getItem(storageKey('current_user')) || '';
+}
+
+function setCurrentUser(username) {
+    if (username) {
+        localStorage.setItem(
+            storageKey('current_user'),
+            username
+        );
+    } else {
+        localStorage.removeItem(
+            storageKey('current_user')
+        );
+    }
+}
 
 function getUsers() {
-return readStorage(STORAGE.USERS, []);
+    return parseJSON(
+        localStorage.getItem(storageKey('users')),
+        {}
+    );
 }
 
 function saveUsers(users) {
-writeStorage(STORAGE.USERS, users);
+    localStorage.setItem(
+        storageKey('users'),
+        JSON.stringify(users)
+    );
 }
 
-function getSession() {
-return readStorage(STORAGE.SESSION, null);
-}
-
-function setSession(user) {
-writeStorage(STORAGE.SESSION, user);
-}
-
-function clearSession() {
-localStorage.removeItem(STORAGE.SESSION);
-}
-
-function switchAuthMode(mode) {
-const loginForm = get(“login-form”);
-const registerForm = get(“register-form”);
-const message = get(“auth-message”);
-
-if (mode === "register") {
-  hide(loginForm);
-  show(registerForm);
-} else {
-  hide(registerForm);
-  show(loginForm);
-}
-if (message) {
-  message.textContent = "";
-  message.className = "auth-message";
-}
-
-}
-
-function authMessage(text, type = “error”) {
-const message = get(“auth-message”);
-if (!message) return;
-
-message.textContent = text;
-message.className = `auth-message ${type}`;
-
-}
-
-function login(event) {
-event.preventDefault();
-
-const username = get("username")?.value.trim();
-const password = get("password")?.value;
-if (!username || !password) {
-  authMessage("Введите имя пользователя и пароль.");
-  return;
-}
-const users = getUsers();
-const user = users.find(
-  item =>
-    item.username.toLowerCase() === username.toLowerCase() &&
-    item.password === password
-);
-if (!user) {
-  authMessage("Неверное имя пользователя или пароль.");
-  return;
-}
-setSession({
-  username: user.username,
-  id: user.id
-});
-authMessage("Вход выполнен.", "success");
-setTimeout(() => {
-  enterApplication();
-}, 250);
-
+function normalizeUsername(value) {
+    return String(value || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .slice(0, 40);
 }
 
 function register(event) {
-event.preventDefault();
+    if (event) {
+        event.preventDefault();
+    }
 
-const username = get("register-username")?.value.trim();
-const password = get("register-password")?.value;
-const confirm = get("register-password-confirm")?.value;
-if (!username || !password || !confirm) {
-  authMessage("Заполните все поля.");
-  return;
-}
-if (username.length < 3) {
-  authMessage("Имя пользователя должно содержать минимум 3 символа.");
-  return;
-}
-if (password.length < 4) {
-  authMessage("Пароль должен содержать минимум 4 символа.");
-  return;
-}
-if (password !== confirm) {
-  authMessage("Пароли не совпадают.");
-  return;
-}
-const users = getUsers();
-if (
-  users.some(
-    item => item.username.toLowerCase() === username.toLowerCase()
-  )
-) {
-  authMessage("Такой пользователь уже существует.");
-  return;
-}
-const user = {
-  id: uid("user"),
-  username,
-  password,
-  createdAt: new Date().toISOString()
-};
-users.push(user);
-saveUsers(users);
-setSession({
-  username: user.username,
-  id: user.id
-});
-authMessage("Аккаунт создан.", "success");
-setTimeout(() => {
-  enterApplication();
-}, 300);
+    const username = normalizeUsername(
+        $('#username')?.value
+    );
 
+    const password = String(
+        $('#password')?.value || ''
+    );
+
+    if (!username) {
+        notify('Введите имя пользователя.', 'error');
+        $('#username')?.focus();
+        return false;
+    }
+
+    if (username.length < 3) {
+        notify(
+            'Имя пользователя должно содержать минимум 3 символа.',
+            'error'
+        );
+        return false;
+    }
+
+    if (password.length < 4) {
+        notify(
+            'Пароль должен содержать минимум 4 символа.',
+            'error'
+        );
+        return false;
+    }
+
+    const users = getUsers();
+
+    if (users[username]) {
+        notify(
+            'Такой пользователь уже существует.',
+            'error'
+        );
+        return false;
+    }
+
+    users[username] = {
+        password,
+        createdAt: Date.now()
+    };
+
+    saveUsers(users);
+
+    currentUser = username;
+    setCurrentUser(username);
+
+    openApplication();
+
+    notify(
+        'Аккаунт успешно создан.',
+        'success'
+    );
+
+    return false;
+}
+
+function login(event) {
+    if (event) {
+        event.preventDefault();
+    }
+
+    const username = normalizeUsername(
+        $('#username')?.value
+    );
+
+    const password = String(
+        $('#password')?.value || ''
+    );
+
+    if (!username) {
+        notify(
+            'Введите имя пользователя.',
+            'error'
+        );
+        $('#username')?.focus();
+        return false;
+    }
+
+    if (!password) {
+        notify(
+            'Введите пароль.',
+            'error'
+        );
+        $('#password')?.focus();
+        return false;
+    }
+
+    const users = getUsers();
+
+    /*
+     * Если старый пользователь был создан
+     * предыдущей версией Neuro-chat,
+     * поддерживаем его старый формат.
+     */
+    const oldPassword = localStorage.getItem(
+        storageKey(`password_${username}`)
+    );
+
+    if (users[username]) {
+        if (users[username].password !== password) {
+            notify(
+                'Неверный пароль.',
+                'error'
+            );
+            return false;
+        }
+    } else if (oldPassword !== null) {
+        if (oldPassword !== password) {
+            notify(
+                'Неверный пароль.',
+                'error'
+            );
+            return false;
+        }
+
+        users[username] = {
+            password,
+            createdAt: Date.now()
+        };
+
+        saveUsers(users);
+    } else {
+        /*
+         * Для обратной совместимости:
+         * если аккаунта ещё нет, создаём его.
+         */
+        users[username] = {
+            password,
+            createdAt: Date.now()
+        };
+
+        saveUsers(users);
+    }
+
+    currentUser = username;
+    setCurrentUser(username);
+
+    openApplication();
+
+    notify(
+        'Вход выполнен.',
+        'success'
+    );
+
+    return false;
 }
 
 function logout() {
-clearSession();
+    saveCurrentChat();
 
-currentChatId = null;
-attachedFiles = [];
-hide(get("main-app"));
-show(get("login-screen"));
-switchAuthMode("login");
-if (get("login-form")) {
-  get("login-form").reset();
-}
-toast("Вы вышли из аккаунта.", "success");
+    currentUser = null;
+    currentChatId = null;
+    messages = [];
+    attachedFiles = [];
 
-}
+    setCurrentUser('');
 
-function enterApplication() {
-hide(get(“login-screen”));
-show(get(“main-app”));
+    const app = $('#app');
+    const loginScreen = $('#login-screen');
 
-const session = getSession();
-if (session) {
-  const username = session.username || "Пользователь";
-  const sidebarUsername = get("sidebar-username");
-  const avatar = get("user-avatar");
-  if (sidebarUsername) {
-    sidebarUsername.textContent = username;
-  }
-  if (avatar) {
-    avatar.textContent = username.charAt(0).toUpperCase();
-  }
-}
-applySettings();
-loadChats();
-if (!currentChatId) {
-  createChat(false);
-}
-renderProjects();
-renderScheduled();
-renderLibrary();
-navigate("chat-section");
-
-}
-
-/* =======================================================
-CHATS
-======================================================= */
-
-function getChats() {
-const session = getSession();
-
-if (!session) return [];
-const allChats = readStorage(STORAGE.CHATS, {});
-return Array.isArray(allChats[session.id])
-  ? allChats[session.id]
-  : [];
-
-}
-
-function saveChats(chats) {
-const session = getSession();
-
-if (!session) return;
-const allChats = readStorage(STORAGE.CHATS, {});
-allChats[session.id] = chats;
-writeStorage(STORAGE.CHATS, allChats);
-
-}
-
-function createChat(save = true) {
-const chat = {
-id: uid(“chat”),
-title: “Новый чат”,
-createdAt: new Date().toISOString(),
-updatedAt: new Date().toISOString(),
-messages: []
-};
-
-const chats = getChats();
-chats.unshift(chat);
-if (save) {
-  saveChats(chats);
-}
-currentChatId = chat.id;
-renderChatHistory();
-renderCurrentChat();
-return chat;
-
-}
-
-function newChat() {
-closeSidebarMobile();
-
-createChat(true);
-toast("Новый чат создан.", "success");
-
-}
-
-function selectChat(id) {
-const chats = getChats();
-
-const chat = chats.find(item => item.id === id);
-if (!chat) return;
-currentChatId = id;
-renderChatHistory();
-renderCurrentChat();
-navigate("chat-section");
-closeSidebarMobile();
-
-}
-
-function deleteChat(id) {
-const chats = getChats();
-
-const filtered = chats.filter(item => item.id !== id);
-saveChats(filtered);
-if (currentChatId === id) {
-  currentChatId = filtered[0]?.id || null;
-  if (!currentChatId) {
-    createChat(true);
-  }
-}
-renderChatHistory();
-renderCurrentChat();
-toast("Чат удалён.", "success");
-
-}
-
-function clearCurrentChat() {
-if (!currentChatId) return;
-
-const chats = getChats();
-const chat = chats.find(item => item.id === currentChatId);
-if (!chat) return;
-chat.messages = [];
-chat.title = "Новый чат";
-chat.updatedAt = new Date().toISOString();
-saveChats(chats);
-renderChatHistory();
-renderCurrentChat();
-toast("Чат очищен.", "success");
-
-}
-
-function renameChatIfNeeded(chat, firstMessage) {
-if (chat.title !== “Новый чат”) return;
-
-const text = firstMessage.trim();
-if (!text) return;
-chat.title =
-  text.length > 32
-    ? `${text.slice(0, 32)}…`
-    : text;
-
-}
-
-function loadChats() {
-renderChatHistory();
-
-const chats = getChats();
-if (chats.length === 0) {
-  createChat(true);
-  return;
-}
-if (!currentChatId || !chats.some(c => c.id === currentChatId)) {
-  currentChatId = chats[0].id;
-}
-renderCurrentChat();
-
-}
-
-function renderChatHistory() {
-const container = get(“chat-history”);
-const count = get(“chat-count”);
-
-if (!container) return;
-const chats = getChats();
-if (count) {
-  count.textContent = chats.length;
-}
-container.innerHTML = "";
-if (chats.length === 0) {
-  container.innerHTML = `
-    <div class="history-empty">
-      <span>💬</span>
-      <p>Здесь появятся ваши чаты</p>
-    </div>
-  `;
-  return;
-}
-chats.forEach(chat => {
-  const item = document.createElement("div");
-  item.className =
-    "chat-history-item" +
-    (chat.id === currentChatId ? " active" : "");
-  item.dataset.chatId = chat.id;
-  item.innerHTML = `
-    <button class="chat-select">
-      <span class="chat-history-icon">💬</span>
-      <span class="chat-history-name">
-        ${escapeHTML(chat.title)}
-      </span>
-    </button>
-    <button
-      class="chat-delete"
-      title="Удалить чат"
-      aria-label="Удалить чат"
-    >
-      ×
-    </button>
-  `;
-  item.querySelector(".chat-select").addEventListener(
-    "click",
-    () => selectChat(chat.id)
-  );
-  item.querySelector(".chat-delete").addEventListener(
-    "click",
-    event => {
-      event.stopPropagation();
-      deleteChat(chat.id);
+    if (app) {
+        app.style.display = 'none';
     }
-  );
-  container.appendChild(item);
-});
 
-}
-
-function renderCurrentChat() {
-const messagesContainer = get(“messages”);
-const welcome = get(“welcome-screen”);
-const title = get(“current-chat-title”);
-
-if (!messagesContainer) return;
-const chats = getChats();
-const chat = chats.find(item => item.id === currentChatId);
-if (!chat) {
-  if (title) title.textContent = "Новый чат";
-  messagesContainer.innerHTML = "";
-  show(welcome);
-  return;
-}
-if (title) {
-  title.textContent = chat.title || "Новый чат";
-}
-messagesContainer.innerHTML = "";
-if (!chat.messages.length) {
-  show(welcome);
-  return;
-}
-hide(welcome);
-chat.messages.forEach(message => {
-  renderMessage(message);
-});
-scrollMessagesToBottom();
-
-}
-
-function renderMessage(message) {
-const container = get(“messages”);
-
-if (!container) return;
-const wrapper = document.createElement("div");
-wrapper.className =
-  `message-row ${message.role === "user" ? "user-row" : "ai-row"}`;
-const avatar =
-  message.role === "user"
-    ? "U"
-    : "N";
-wrapper.innerHTML = `
-  <div class="message-avatar ${
-    message.role === "user"
-      ? "user-message-avatar"
-      : "ai-avatar"
-  }">
-    ${avatar}
-  </div>
-  <div class="message-content">
-    <div class="message-author">
-      ${message.role === "user" ? "Вы" : "Neuro-chat"}
-    </div>
-    <div class="message-text">
-      ${formatMessage(message.content)}
-    </div>
-    ${
-      message.files?.length
-        ? `
-          <div class="message-files">
-            ${message.files
-              .map(
-                file => `
-                  <span class="message-file">
-                    📎 ${escapeHTML(file.name)}
-                  </span>
-                `
-              )
-              .join("")}
-          </div>
-        `
-        : ""
+    if (loginScreen) {
+        loginScreen.style.display = '';
     }
-    ${
-      message.role === "assistant"
-        ? `
-          <div class="message-actions">
-            <button
-              class="message-action copy-message"
-              data-copy="${escapeHTML(message.content)}"
-            >
-              Копировать
-            </button>
-          </div>
-        `
-        : ""
+
+    const username = $('#username');
+    const password = $('#password');
+
+    if (username) {
+        username.value = '';
     }
-  </div>
-`;
-const copyButton = wrapper.querySelector(".copy-message");
-if (copyButton) {
-  copyButton.addEventListener("click", () => {
-    copyText(message.content);
-  });
-}
-container.appendChild(wrapper);
 
-}
-
-function formatMessage(text) {
-let safe = escapeHTML(text);
-
-safe = safe.replace(
-  /```([\s\S]*?)```/g,
-  (_, code) => `
-    <pre class="code-block"><code>${code.trim()}</code></pre>
-  `
-);
-safe = safe.replace(
-  /\*\*(.*?)\*\*/g,
-  "<strong>$1</strong>"
-);
-safe = safe.replace(
-  /\n/g,
-  "<br>"
-);
-return safe;
-
-}
-
-function scrollMessagesToBottom() {
-const container = get(“messages-container”);
-
-if (!container) return;
-requestAnimationFrame(() => {
-  container.scrollTop = container.scrollHeight;
-});
-
-}
-
-/* =======================================================
-MESSAGES / AI
-======================================================= */
-
-async function sendMessage() {
-if (isGenerating) return;
-
-const input = get("user-input");
-if (!input) return;
-const text = input.value.trim();
-if (!text && attachedFiles.length === 0) {
-  return;
-}
-if (!currentChatId) {
-  createChat(true);
-}
-const chats = getChats();
-const chat = chats.find(item => item.id === currentChatId);
-if (!chat) return;
-const messageText =
-  text ||
-  "Проанализируй прикреплённые файлы.";
-const userMessage = {
-  id: uid("message"),
-  role: "user",
-  content: messageText,
-  files: attachedFiles.map(file => ({
-    name: file.name,
-    type: file.type,
-    size: file.size
-  })),
-  createdAt: new Date().toISOString()
-};
-chat.messages.push(userMessage);
-renameChatIfNeeded(chat, messageText);
-chat.updatedAt = new Date().toISOString();
-saveChats(chats);
-input.value = "";
-updateComposerState();
-clearAttachments();
-hide(get("welcome-screen"));
-renderCurrentChat();
-renderChatHistory();
-showTyping(true);
-isGenerating = true;
-updateConnectionStatus("Генерирую…");
-try {
-  const response = await requestAI(chat.messages);
-  const assistantMessage = {
-    id: uid("message"),
-    role: "assistant",
-    content: response,
-    createdAt: new Date().toISOString()
-  };
-  chat.messages.push(assistantMessage);
-  chat.updatedAt = new Date().toISOString();
-  saveChats(chats);
-  renderCurrentChat();
-  renderChatHistory();
-} catch (error) {
-  console.error(error);
-  const errorMessage = {
-    id: uid("message"),
-    role: "assistant",
-    content:
-      "Не удалось получить ответ от AI. Проверьте подключение API и настройки сервера.",
-    createdAt: new Date().toISOString()
-  };
-  chat.messages.push(errorMessage);
-  saveChats(chats);
-  renderCurrentChat();
-  toast("Ошибка подключения к AI.", "error");
-} finally {
-  isGenerating = false;
-  showTyping(false);
-  updateConnectionStatus("● Готов");
-  updateComposerState();
-}
-
-}
-
-async function requestAI(messages) {
-/*
-Основной путь:
-Cloudflare Pages Function / Worker → /api/chat
-
-  API-ключ НЕ хранится в frontend.
-*/
-const settings = getSettings();
-const payload = {
-  model: settings.model,
-  messages: messages.map(message => ({
-    role: message.role,
-    content: message.content
-  }))
-};
-const response = await fetch("/api/chat", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify(payload)
-});
-if (!response.ok) {
-  let details = "";
-  try {
-    const data = await response.json();
-    details = data.error || "";
-  } catch {
-    // ignore
-  }
-  throw new Error(
-    details || `HTTP ${response.status}`
-  );
-}
-const data = await response.json();
-if (typeof data.answer === "string") {
-  return data.answer;
-}
-if (typeof data.output_text === "string") {
-  return data.output_text;
-}
-if (typeof data.content === "string") {
-  return data.content;
-}
-if (data.choices?.[0]?.message?.content) {
-  return data.choices[0].message.content;
-}
-throw new Error("Сервер вернул неизвестный формат ответа.");
-
-}
-
-function quickPrompt(prompt) {
-const input = get(“user-input”);
-
-if (!input) return;
-input.value = prompt;
-input.focus();
-updateComposerState();
-autoResizeTextarea();
-
-}
-
-function showTyping(active) {
-const indicator = get(“typing-indicator”);
-
-if (!indicator) return;
-if (active) {
-  show(indicator);
-  scrollMessagesToBottom();
-} else {
-  hide(indicator);
-}
-
-}
-
-function updateConnectionStatus(text) {
-const status = get(“connection-status”);
-
-if (status) {
-  status.textContent = text;
-}
-
-}
-
-/* =======================================================
-COMPOSER
-======================================================= */
-
-function updateComposerState() {
-const input = get(“user-input”);
-const send = get(“send-button”);
-const counter = get(“char-counter”);
-
-if (!input) return;
-const hasText = input.value.trim().length > 0;
-const hasFiles = attachedFiles.length > 0;
-if (send) {
-  send.disabled =
-    (!hasText && !hasFiles) ||
-    isGenerating;
-}
-if (counter) {
-  counter.textContent =
-    `${input.value.length} / ${input.maxLength || 20000}`;
-}
-
-}
-
-function autoResizeTextarea() {
-const input = get(“user-input”);
-
-if (!input) return;
-input.style.height = "auto";
-input.style.height =
-  `${Math.min(input.scrollHeight, 220)}px`;
-
-}
-
-function toggleAttachMenu() {
-const menu = get(“attach-menu”);
-
-if (!menu) return;
-menu.classList.toggle("hidden");
-
-}
-
-function closeAttachMenu() {
-hide(get(“attach-menu”));
-}
-
-function openFilePicker(type) {
-closeAttachMenu();
-
-const inputs = {
-  file: "file-input",
-  photo: "photo-input",
-  camera: "camera-input",
-  model: "model-file-input"
-};
-const input = get(inputs[type]);
-if (input) {
-  input.value = "";
-  input.click();
-}
-
-}
-
-function processFiles(files) {
-if (!files?.length) return;
-
-[...files].forEach(file => {
-  attachedFiles.push(file);
-});
-renderAttachments();
-updateComposerState();
-
-}
-
-function renderAttachments() {
-const container = get(“attached-files”);
-
-if (!container) return;
-container.innerHTML = "";
-attachedFiles.forEach((file, index) => {
-  const item = document.createElement("div");
-  item.className = "attached-file";
-  item.innerHTML = `
-    <span class="attached-file-icon">📎</span>
-    <span class="attached-file-name">
-      ${escapeHTML(file.name)}
-    </span>
-    <button
-      type="button"
-      class="attached-file-remove"
-      data-index="${index}"
-      aria-label="Удалить файл"
-    >
-      ×
-    </button>
-  `;
-  item
-    .querySelector(".attached-file-remove")
-    .addEventListener("click", () => {
-      attachedFiles.splice(index, 1);
-      renderAttachments();
-      updateComposerState();
-    });
-  container.appendChild(item);
-});
-
-}
-
-function clearAttachments() {
-attachedFiles = [];
-renderAttachments();
-}
-
-/* =======================================================
-VOICE INPUT
-======================================================= */
-
-function startVoiceInput() {
-const SpeechRecognition =
-window.SpeechRecognition ||
-window.webkitSpeechRecognition;
-
-if (!SpeechRecognition) {
-  toast(
-    "Голосовой ввод не поддерживается этим браузером.",
-    "warning"
-  );
-  return;
-}
-if (recognition) {
-  recognition.stop();
-  recognition = null;
-  return;
-}
-recognition = new SpeechRecognition();
-recognition.lang = "ru-RU";
-recognition.continuous = false;
-recognition.interimResults = true;
-const input = get("user-input");
-const button = get("voice-button");
-let finalText = "";
-recognition.onstart = () => {
-  button?.classList.add("recording");
-  toast("Слушаю…", "info");
-};
-recognition.onresult = event => {
-  let interim = "";
-  for (
-    let i = event.resultIndex;
-    i < event.results.length;
-    i++
-  ) {
-    const transcript =
-      event.results[i][0].transcript;
-    if (event.results[i].isFinal) {
-      finalText += transcript;
-    } else {
-      interim += transcript;
+    if (password) {
+        password.value = '';
     }
-  }
-  if (input) {
-    input.value =
-      `${finalText}${interim}`.trim();
-    updateComposerState();
-    autoResizeTextarea();
-  }
-};
-recognition.onerror = event => {
-  console.error(event.error);
-  toast(
-    "Не удалось распознать голос.",
-    "error"
-  );
-};
-recognition.onend = () => {
-  button?.classList.remove("recording");
-  recognition = null;
-};
-recognition.start();
 
+    clearAttachedFiles();
 }
 
-/* =======================================================
-NAVIGATION
-======================================================= */
+function showLogin() {
+    const loginForm = $('#login-form');
+    const registerForm = $('#register-form');
 
-function navigate(sectionId) {
-const sections = $$(”.app-section”);
-const navItems = $$(”.nav-item”);
+    if (loginForm) {
+        loginForm.style.display = '';
+    }
 
-sections.forEach(section => {
-  section.classList.toggle(
-    "active",
-    section.id === sectionId
-  );
-});
-navItems.forEach(item => {
-  item.classList.toggle(
-    "active",
-    item.dataset.section === sectionId
-  );
-});
-closeSidebarMobile();
-
+    if (registerForm) {
+        registerForm.style.display = 'none';
+    }
 }
 
-/* =======================================================
-SIDEBAR
-======================================================= */
+function showRegister() {
+    const loginForm = $('#login-form');
+    const registerForm = $('#register-form');
 
-function openSidebarMobile() {
-const sidebar = get(“sidebar”);
-const overlay = get(“sidebar-overlay”);
+    if (loginForm) {
+        loginForm.style.display = 'none';
+    }
 
-sidebar?.classList.add("mobile-open");
-overlay?.classList.add("visible");
-
+    if (registerForm) {
+        registerForm.style.display = '';
+    }
 }
 
-function closeSidebarMobile() {
-const sidebar = get(“sidebar”);
-const overlay = get(“sidebar-overlay”);
+function openApplication() {
+    const loginScreen = $('#login-screen');
+    const app = $('#app');
 
-sidebar?.classList.remove("mobile-open");
-overlay?.classList.remove("visible");
+    if (loginScreen) {
+        loginScreen.style.display = 'none';
+    }
 
+    if (app) {
+        app.style.display = 'flex';
+    }
+
+    initializeApplication();
 }
 
-function toggleSidebarMobile() {
-const sidebar = get(“sidebar”);
+function restoreSession() {
+    const savedUser = getCurrentUser();
 
-if (sidebar?.classList.contains("mobile-open")) {
-  closeSidebarMobile();
-} else {
-  openSidebarMobile();
+    if (!savedUser) {
+        const app = $('#app');
+        const loginScreen = $('#login-screen');
+
+        if (app) {
+            app.style.display = 'none';
+        }
+
+        if (loginScreen) {
+            loginScreen.style.display = '';
+        }
+
+        return false;
+    }
+
+    currentUser = savedUser;
+
+    openApplication();
+
+    return true;
 }
 
-}
-
-/* =======================================================
-MODALS
-======================================================= */
-
-const MODALS = [
-“settings-modal”,
-“support-modal”,
-“project-modal”,
-“scheduled-modal”,
-“code-modal”,
-“site-preview-modal”
-];
-
-function openModal(id) {
-const modal = get(id);
-
-if (!modal) return;
-MODALS.forEach(modalId => {
-  if (modalId !== id) {
-    hide(get(modalId));
-  }
-});
-show(modal);
-document.body.classList.add("modal-open");
-
-}
-
-function closeModal(id) {
-const modal = get(id);
-
-if (!modal) return;
-hide(modal);
-if (!MODALS.some(id => !get(id)?.classList.contains("hidden"))) {
-  document.body.classList.remove("modal-open");
-}
-
-}
-
-function closeAllModals() {
-MODALS.forEach(id => {
-hide(get(id));
-});
-
-document.body.classList.remove("modal-open");
-
-}
-
-function openSettings() {
-loadSettingsIntoForm();
-openModal(“settings-modal”);
-}
-
-function openSupport() {
-openModal(“support-modal”);
-}
-
-/* =======================================================
-SETTINGS
-======================================================= */
+/* =========================================================
+   НАСТРОЙКИ
+   ========================================================= */
 
 function getSettings() {
-return {
-…DEFAULT_SETTINGS,
-…readStorage(STORAGE.SETTINGS, {})
-};
+    if (!currentUser) {
+        return {};
+    }
+
+    return parseJSON(
+        localStorage.getItem(
+            userKey('settings')
+        ),
+        {}
+    );
 }
 
 function saveSettings(settings) {
-writeStorage(STORAGE.SETTINGS, settings);
+    if (!currentUser) {
+        return;
+    }
+
+    localStorage.setItem(
+        userKey('settings'),
+        JSON.stringify(settings)
+    );
 }
 
-function loadSettingsIntoForm() {
-const settings = getSettings();
+function loadSettings() {
+    const settings = getSettings();
 
-const model = get("model");
-const theme = get("theme");
-const temporary = get("temporary-chat");
-const builder = get("site-builder-mode");
-if (model) model.value = settings.model;
-if (theme) theme.value = settings.theme;
-if (temporary) temporary.checked = settings.temporaryChat;
-if (builder) builder.checked = settings.siteBuilderMode;
-const savedApiKey = localStorage.getItem("neuro_api_key");
-const apiKey = get("api-key");
-if (apiKey && savedApiKey) {
-  apiKey.value = savedApiKey;
-}
+    selectedModel =
+        settings.model ||
+        DEFAULT_MODEL;
 
+    temporaryChat =
+        settings.temporaryChat === true;
+
+    siteBuilderMode =
+        settings.siteBuilderMode === true;
+
+    const model =
+        $('#model') ||
+        $('#model-select');
+
+    if (model) {
+        model.value = selectedModel;
+    }
+
+    const theme =
+        $('#theme') ||
+        $('#theme-select');
+
+    if (theme) {
+        theme.value =
+            settings.theme ||
+            'dark';
+    }
+
+    applyTheme(
+        settings.theme ||
+        'dark'
+    );
+
+    const temporary =
+        $('#temporary-chat') ||
+        $('#temporary-chat-toggle');
+
+    if (temporary) {
+        temporary.checked =
+            temporaryChat;
+    }
+
+    const siteBuilder =
+        $('#site-builder-mode') ||
+        $('#site-builder-toggle');
+
+    if (siteBuilder) {
+        siteBuilder.checked =
+            siteBuilderMode;
+    }
 }
 
 function saveAllSettings() {
-const settings = {
-model: get(“model”)?.value || “default”,
-theme: get(“theme”)?.value || “dark”,
-temporaryChat: Boolean(get(“temporary-chat”)?.checked),
-siteBuilderMode: Boolean(get(“site-builder-mode”)?.checked)
-};
+    const model =
+        $('#model') ||
+        $('#model-select');
 
-saveSettings(settings);
-const apiKey = get("api-key")?.value.trim();
-if (apiKey) {
-  /*
-    Совместимость со старой схемой проекта.
-    Секрет не выводится в коде и не логируется.
-  */
-  localStorage.setItem(
-    "neuro_api_key",
-    apiKey
-  );
+    const theme =
+        $('#theme') ||
+        $('#theme-select');
+
+    const temporary =
+        $('#temporary-chat') ||
+        $('#temporary-chat-toggle');
+
+    const siteBuilder =
+        $('#site-builder-mode') ||
+        $('#site-builder-toggle');
+
+    if (model) {
+        selectedModel = model.value;
+    }
+
+    if (temporary) {
+        temporaryChat = Boolean(
+            temporary.checked
+        );
+    }
+
+    if (siteBuilder) {
+        siteBuilderMode = Boolean(
+            siteBuilder.checked
+        );
+    }
+
+    const settings = getSettings();
+
+    settings.model = selectedModel;
+
+    settings.theme =
+        theme?.value ||
+        settings.theme ||
+        'dark';
+
+    settings.temporaryChat =
+        temporaryChat;
+
+    settings.siteBuilderMode =
+        siteBuilderMode;
+
+    saveSettings(settings);
+
+    applyTheme(settings.theme);
+
+    closeSettings();
+
+    notify(
+        'Настройки сохранены.',
+        'success'
+    );
 }
-applySettings();
-closeModal("settings-modal");
-toast("Настройки сохранены.", "success");
 
+function saveApiKey() {
+    /*
+     * API-ключ теперь не сохраняем в браузере.
+     * AI работает через /api/chat.
+     */
+    notify(
+        'API-ключ на сайте больше не хранится. Используется серверный AI.',
+        'success'
+    );
 }
 
-function applySettings() {
-const settings = getSettings();
+function applyTheme(theme) {
+    document.documentElement.dataset.theme =
+        theme;
 
-document.documentElement.dataset.theme =
-  settings.theme;
-document.body.dataset.theme =
-  settings.theme;
-if (settings.theme === "light") {
-  document.documentElement.classList.add("light-theme");
-} else if (settings.theme === "dark") {
-  document.documentElement.classList.remove("light-theme");
-} else {
-  const prefersLight =
-    window.matchMedia &&
-    window.matchMedia(
-      "(prefers-color-scheme: light)"
-    ).matches;
-  document.documentElement.classList.toggle(
-    "light-theme",
-    prefersLight
-  );
+    if (theme === 'light') {
+        document.body.classList.add(
+            'light-theme'
+        );
+    } else {
+        document.body.classList.remove(
+            'light-theme'
+        );
+    }
 }
 
+/* =========================================================
+   ЧАТЫ
+   ========================================================= */
+
+function getChats() {
+    if (!currentUser) {
+        return [];
+    }
+
+    return parseJSON(
+        localStorage.getItem(
+            userKey('chats')
+        ),
+        []
+    );
 }
 
-/* =======================================================
-PROJECTS
-======================================================= */
+function saveChats(chats) {
+    if (!currentUser) {
+        return;
+    }
+
+    localStorage.setItem(
+        userKey('chats'),
+        JSON.stringify(
+            chats.slice(0, MAX_CHATS)
+        )
+    );
+}
+
+function createChatTitle(text) {
+    const clean = String(text || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!clean) {
+        return 'Новый чат';
+    }
+
+    return clean.length > 42
+        ? `${clean.slice(0, 42)}…`
+        : clean;
+}
+
+function saveCurrentChat() {
+    if (
+        !currentUser ||
+        !currentChatId ||
+        temporaryChat
+    ) {
+        return;
+    }
+
+    if (!messages.length) {
+        return;
+    }
+
+    const chats = getChats();
+
+    const index = chats.findIndex(
+        chat =>
+            chat.id === currentChatId
+    );
+
+    const firstUserMessage =
+        messages.find(
+            message =>
+                message.role === 'user'
+        );
+
+    const chat = {
+        id: currentChatId,
+        title: createChatTitle(
+            firstUserMessage?.content ||
+            'Новый чат'
+        ),
+        messages: messages.slice(),
+        createdAt:
+            index >= 0
+                ? chats[index].createdAt
+                : Date.now(),
+        updatedAt: Date.now(),
+        pinned:
+            index >= 0
+                ? Boolean(chats[index].pinned)
+                : false
+    };
+
+    if (index >= 0) {
+        chats[index] = chat;
+    } else {
+        chats.unshift(chat);
+    }
+
+    chats.sort(
+        (a, b) =>
+            b.updatedAt -
+            a.updatedAt
+    );
+
+    saveChats(chats);
+
+    renderChatHistory();
+}
+
+function newChat() {
+    saveCurrentChat();
+
+    currentChatId =
+        createId('chat');
+
+    messages = [];
+    attachedFiles = [];
+
+    clearAttachedFiles();
+    renderMessages();
+    renderChatHistory();
+    showWelcomeScreen();
+
+    const input = $('#user-input');
+
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+}
+
+function clearChat() {
+    messages = [];
+    attachedFiles = [];
+
+    clearAttachedFiles();
+    renderMessages();
+    showWelcomeScreen();
+
+    saveCurrentChat();
+}
+
+function selectChat(id) {
+    openChat(id);
+}
+
+function openChat(id) {
+    const chat = getChats().find(
+        item => item.id === id
+    );
+
+    if (!chat) {
+        return;
+    }
+
+    saveCurrentChat();
+
+    currentChatId = chat.id;
+
+    messages =
+        Array.isArray(chat.messages)
+            ? chat.messages.slice()
+            : [];
+
+    renderMessages();
+    renderChatHistory();
+    hideWelcomeScreen();
+}
+
+function deleteChat(id, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    const chats =
+        getChats().filter(
+            chat => chat.id !== id
+        );
+
+    saveChats(chats);
+
+    if (currentChatId === id) {
+        currentChatId = null;
+        messages = [];
+        newChat();
+    }
+
+    renderChatHistory();
+}
+
+function togglePinChat(id, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    const chats = getChats();
+
+    const chat = chats.find(
+        item => item.id === id
+    );
+
+    if (!chat) {
+        return;
+    }
+
+    chat.pinned =
+        !Boolean(chat.pinned);
+
+    saveChats(chats);
+    renderChatHistory();
+}
+
+function renderChatHistory() {
+    const container =
+        $('#chat-history');
+
+    if (!container) {
+        return;
+    }
+
+    let chats = getChats();
+
+    if (currentSearchQuery) {
+        const query =
+            currentSearchQuery.toLowerCase();
+
+        chats = chats.filter(chat =>
+            String(
+                chat.title || ''
+            )
+                .toLowerCase()
+                .includes(query)
+        );
+    }
+
+    chats.sort((a, b) => {
+        if (
+            Boolean(a.pinned) !==
+            Boolean(b.pinned)
+        ) {
+            return a.pinned
+                ? -1
+                : 1;
+        }
+
+        return (
+            b.updatedAt -
+            a.updatedAt
+        );
+    });
+
+    container.innerHTML = '';
+
+    if (!chats.length) {
+        const empty =
+            document.createElement(
+                'div'
+            );
+
+        empty.className =
+            'chat-history-empty';
+
+        empty.textContent =
+            currentSearchQuery
+                ? 'Ничего не найдено'
+                : 'История чатов пуста';
+
+        container.appendChild(empty);
+
+        return;
+    }
+
+    chats.forEach(chat => {
+        const item =
+            document.createElement(
+                'div'
+            );
+
+        item.className =
+            'chat-item' +
+            (
+                chat.id ===
+                currentChatId
+                    ? ' active'
+                    : ''
+            );
+
+        const title =
+            document.createElement(
+                'span'
+            );
+
+        title.className =
+            'chat-item-title';
+
+        title.textContent =
+            chat.pinned
+                ? `📌 ${chat.title || 'Новый чат'}`
+                : (
+                    chat.title ||
+                    'Новый чат'
+                );
+
+        const actions =
+            document.createElement(
+                'div'
+            );
+
+        actions.className =
+            'chat-item-actions';
+
+        const pin =
+            document.createElement(
+                'button'
+            );
+
+        pin.type = 'button';
+        pin.textContent =
+            chat.pinned
+                ? '📌'
+                : '○';
+
+        pin.addEventListener(
+            'click',
+            event =>
+                togglePinChat(
+                    chat.id,
+                    event
+                )
+        );
+
+        const remove =
+            document.createElement(
+                'button'
+            );
+
+        remove.type = 'button';
+        remove.textContent = '×';
+
+        remove.addEventListener(
+            'click',
+            event =>
+                deleteChat(
+                    chat.id,
+                    event
+                )
+        );
+
+        actions.appendChild(pin);
+        actions.appendChild(remove);
+
+        item.appendChild(title);
+        item.appendChild(actions);
+
+        item.addEventListener(
+            'click',
+            () =>
+                openChat(chat.id)
+        );
+
+        container.appendChild(item);
+    });
+}
+
+function searchChats(value) {
+    currentSearchQuery =
+        String(value || '').trim();
+
+    renderChatHistory();
+}
+
+/* =========================================================
+   СООБЩЕНИЯ
+   ========================================================= */
+
+function renderMessages() {
+    const container =
+        $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    messages.forEach(message => {
+        addMessageToDOM(message);
+    });
+
+    scrollMessages();
+}
+
+function addMessageToDOM(message) {
+    const container =
+        $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    const wrapper =
+        document.createElement(
+            'div'
+        );
+
+    wrapper.className =
+        `message ${
+            message.role === 'user'
+                ? 'user-message'
+                : 'assistant-message'
+        }`;
+
+    const bubble =
+        document.createElement(
+            'div'
+        );
+
+    bubble.className =
+        'message-bubble';
+
+    bubble.innerHTML =
+        formatMessage(
+            message.content
+        );
+
+    wrapper.appendChild(bubble);
+    container.appendChild(wrapper);
+
+    return wrapper;
+}
+
+function formatMessage(text) {
+    let value = escapeHTML(
+        String(text || '')
+    );
+
+    /*
+     * Простая поддержка markdown-подобного текста.
+     */
+    value = value.replace(
+        /```([\s\S]*?)```/g,
+        '<pre><code>$1</code></pre>'
+    );
+
+    value = value.replace(
+        /\*\*(.*?)\*\*/g,
+        '<strong>$1</strong>'
+    );
+
+    value = value.replace(
+        /`([^`]+)`/g,
+        '<code>$1</code>'
+    );
+
+    value = value.replace(
+        /\n/g,
+        '<br>'
+    );
+
+    return value;
+}
+
+function showWelcomeScreen() {
+    const welcome =
+        $('#welcome-screen');
+
+    if (welcome) {
+        welcome.style.display = '';
+    }
+}
+
+function hideWelcomeScreen() {
+    const welcome =
+        $('#welcome-screen');
+
+    if (welcome) {
+        welcome.style.display = 'none';
+    }
+}
+
+function updateChatTitle(title) {
+    const elements = $$(
+        '[data-chat-title]'
+    );
+
+    elements.forEach(
+        element =>
+            element.textContent =
+                title
+    );
+}
+
+function scrollMessages() {
+    const container =
+        $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        container.scrollTop =
+            container.scrollHeight;
+    });
+}
+
+/* =========================================================
+   AI
+   ========================================================= */
+
+async function callAI() {
+    const contextMessages =
+        messages
+            .slice(-MAX_CONTEXT_MESSAGES)
+            .map(message => ({
+                role: message.role,
+                content: message.content
+            }));
+
+    const settings =
+        getSettings();
+
+    const model =
+        settings.model ||
+        selectedModel ||
+        DEFAULT_MODEL;
+
+    const response =
+        await fetch(
+            '/api/chat',
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages:
+                        contextMessages,
+                    temperature: 0.7,
+                    max_tokens: 8192
+                }),
+                signal:
+                    abortController?.signal
+            }
+        );
+
+    let data = null;
+
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error(
+            'Сервер вернул некорректный ответ.'
+        );
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data?.error ||
+            'Ошибка AI-сервера.'
+        );
+    }
+
+    if (!data.message) {
+        throw new Error(
+            'AI не вернул сообщение.'
+        );
+    }
+
+    return data.message;
+}
+
+async function sendMessage(event) {
+    if (event) {
+        event.preventDefault();
+    }
+
+    if (isGenerating) {
+        return;
+    }
+
+    const input =
+        $('#user-input');
+
+    if (!input) {
+        return;
+    }
+
+    const text =
+        input.value.trim();
+
+    if (!text && !attachedFiles.length) {
+        return;
+    }
+
+    if (!currentUser) {
+        notify(
+            'Сначала войдите в аккаунт.',
+            'error'
+        );
+        return;
+    }
+
+    hideWelcomeScreen();
+
+    const userMessage = {
+        id: createId('message'),
+        role: 'user',
+        content:
+            text ||
+            'Отправлены вложения.',
+        createdAt: Date.now()
+    };
+
+    if (attachedFiles.length) {
+        userMessage.attachments =
+            attachedFiles.map(file => ({
+                name: file.name,
+                type: file.type,
+                size: file.size
+            }));
+    }
+
+    messages.push(userMessage);
+
+    input.value = '';
+
+    clearAttachedFiles();
+    renderMessages();
+
+    isGenerating = true;
+
+    showTypingIndicator();
+
+    abortController =
+        new AbortController();
+
+    try {
+        const answer =
+            await callAI();
+
+        messages.push({
+            id: createId('message'),
+            role: 'assistant',
+            content:
+                answer.content ||
+                'Пустой ответ AI.',
+            createdAt: Date.now()
+        });
+
+        renderMessages();
+        saveCurrentChat();
+    } catch (error) {
+        if (
+            error?.name ===
+            'AbortError'
+        ) {
+            return;
+        }
+
+        messages.push({
+            id: createId('message'),
+            role: 'assistant',
+            content:
+                `⚠️ ${error.message || 'Не удалось получить ответ от AI.'}`,
+            createdAt: Date.now()
+        });
+
+        renderMessages();
+    } finally {
+        hideTypingIndicator();
+
+        isGenerating = false;
+        abortController = null;
+    }
+}
+
+function stopGeneration() {
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
+    }
+
+    isGenerating = false;
+    hideTypingIndicator();
+}
+
+function showTypingIndicator() {
+    const container =
+        $('#messages');
+
+    if (!container) {
+        return;
+    }
+
+    hideTypingIndicator();
+
+    const typing =
+        document.createElement(
+            'div'
+        );
+
+    typing.id =
+        'neuro-typing';
+
+    typing.className =
+        'message assistant-message';
+
+    typing.innerHTML = `
+        <div class="message-bubble typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    `;
+
+    container.appendChild(typing);
+
+    scrollMessages();
+}
+
+function hideTypingIndicator() {
+    $('#neuro-typing')?.remove();
+}
+
+/* =========================================================
+   БЫСТРЫЕ ЗАПРОСЫ
+   ========================================================= */
+
+function quickPrompt(text) {
+    const input =
+        $('#user-input');
+
+    if (!input) {
+        return;
+    }
+
+    input.value = text;
+    input.focus();
+}
+
+/* =========================================================
+   ВЛОЖЕНИЯ
+   ========================================================= */
+
+function toggleAttach() {
+    const menu =
+        $('#attach-menu');
+
+    if (!menu) {
+        return;
+    }
+
+    menu.classList.toggle('open');
+
+    if (menu.style.display === 'none') {
+        menu.style.display = '';
+    }
+}
+
+function closeAttachMenu() {
+    const menu =
+        $('#attach-menu');
+
+    if (menu) {
+        menu.classList.remove(
+            'open'
+        );
+    }
+}
+
+function attachType(type) {
+    closeAttachMenu();
+
+    let input = null;
+
+    if (type === 'file') {
+        input = $('#file-input');
+    } else if (type === 'photo') {
+        input = $('#photo-input');
+    } else if (type === 'camera') {
+        input = $('#camera-input');
+    } else if (type === 'model') {
+        input = $('#model-file-input');
+    }
+
+    if (input) {
+        input.click();
+    }
+}
+
+function handleFiles(fileList) {
+    if (!fileList) {
+        return;
+    }
+
+    Array.from(fileList).forEach(
+        file => {
+            attachedFiles.push(file);
+        }
+    );
+
+    renderAttachedFiles();
+}
+
+function renderAttachedFiles() {
+    const container =
+        $('#attached-files');
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    attachedFiles.forEach(
+        (file, index) => {
+            const item =
+                document.createElement(
+                    'div'
+                );
+
+            item.className =
+                'attached-file';
+
+            item.innerHTML = `
+                <span>${escapeHTML(file.name)}</span>
+                <button type="button">×</button>
+            `;
+
+            item
+                .querySelector('button')
+                .addEventListener(
+                    'click',
+                    () =>
+                        removeAttachedFile(
+                            index
+                        )
+                );
+
+            container.appendChild(item);
+        }
+    );
+}
+
+function removeAttachedFile(index) {
+    attachedFiles.splice(
+        index,
+        1
+    );
+
+    renderAttachedFiles();
+}
+
+function clearAttachedFiles() {
+    attachedFiles = [];
+
+    const container =
+        $('#attached-files');
+
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+
+/* =========================================================
+   НАСТРОЙКА INPUT
+   ========================================================= */
+
+function setupInput() {
+    const input =
+        $('#user-input');
+
+    const send =
+        $('#send-button');
+
+    if (input) {
+        input.addEventListener(
+            'keydown',
+            event => {
+                if (
+                    event.key === 'Enter' &&
+                    !event.shiftKey
+                ) {
+                    event.preventDefault();
+                    sendMessage();
+                }
+            }
+        );
+
+        input.addEventListener(
+            'input',
+            () => {
+                input.style.height =
+                    'auto';
+
+                input.style.height =
+                    Math.min(
+                        input.scrollHeight,
+                        180
+                    ) + 'px';
+            }
+        );
+    }
+
+    if (send) {
+        send.addEventListener(
+            'click',
+            sendMessage
+        );
+    }
+}
+
+function setupAttachments() {
+    const inputs = [
+        '#file-input',
+        '#photo-input',
+        '#camera-input',
+        '#model-file-input'
+    ];
+
+    inputs.forEach(
+        selector => {
+            const input =
+                $(selector);
+
+            if (!input) {
+                return;
+            }
+
+            input.addEventListener(
+                'change',
+                event => {
+                    handleFiles(
+                        event.target.files
+                    );
+
+                    event.target.value =
+                        '';
+                }
+            );
+        }
+    );
+}
+
+function setupSearch() {
+    const input =
+        $('#chat-search');
+
+    if (!input) {
+        return;
+    }
+
+    input.addEventListener(
+        'input',
+        event =>
+            searchChats(
+                event.target.value
+            )
+    );
+}
+
+function setupKeyboardShortcuts() {
+    document.addEventListener(
+        'keydown',
+        event => {
+            if (
+                (event.ctrlKey ||
+                    event.metaKey) &&
+                event.key.toLowerCase() ===
+                    'k'
+            ) {
+                event.preventDefault();
+
+                $('#chat-search')?.focus();
+            }
+
+            if (
+                event.key === 'Escape' &&
+                isGenerating
+            ) {
+                stopGeneration();
+            }
+        }
+    );
+}
+
+/* =========================================================
+   НАВИГАЦИЯ
+   ========================================================= */
+
+function setupNavigation() {
+    $$('.nav-item').forEach(item => {
+        item.addEventListener(
+            'click',
+            () => {
+                const action =
+                    item.dataset.action ||
+                    item.dataset.page;
+
+                $$('.nav-item').forEach(
+                    element =>
+                        element.classList.remove(
+                            'active'
+                        )
+                );
+
+                item.classList.add(
+                    'active'
+                );
+
+                navigate(action);
+            }
+        );
+    });
+}
+
+function navigate(section) {
+    const sections = [
+        '#chat-section',
+        '#library-section',
+        '#projects-section',
+        '#plugins-section',
+        '#scheduled-section'
+    ];
+
+    sections.forEach(
+        selector => {
+            const element =
+                $(selector);
+
+            if (element) {
+                element.style.display =
+                    'none';
+            }
+        }
+    );
+
+    let target = null;
+
+    switch (section) {
+        case 'chat':
+        case 'home':
+            target =
+                $('#chat-section');
+            break;
+
+        case 'library':
+            target =
+                $('#library-section');
+            break;
+
+        case 'projects':
+            target =
+                $('#projects-section');
+            break;
+
+        case 'plugins':
+            target =
+                $('#plugins-section');
+            break;
+
+        case 'scheduled':
+            target =
+                $('#scheduled-section');
+            break;
+
+        default:
+            target =
+                $('#chat-section');
+    }
+
+    if (target) {
+        target.style.display = '';
+    }
+
+    if (
+        section === 'chat' ||
+        section === 'home'
+    ) {
+        renderMessages();
+    }
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+function toggleSidebar() {
+    const sidebar =
+        $('#sidebar');
+
+    if (!sidebar) {
+        return;
+    }
+
+    sidebar.classList.toggle(
+        'open'
+    );
+}
+
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
+function openSettings() {
+    const modal =
+        $('#settings-modal');
+
+    if (modal) {
+        modal.style.display =
+            'flex';
+    }
+
+    loadSettings();
+}
+
+function closeSettings() {
+    const modal =
+        $('#settings-modal');
+
+    if (modal) {
+        modal.style.display =
+            'none';
+    }
+}
+
+function openSupport() {
+    const modal =
+        $('#support-modal');
+
+    if (modal) {
+        modal.style.display =
+            'flex';
+    }
+}
+
+function closeSupport() {
+    const modal =
+        $('#support-modal');
+
+    if (modal) {
+        modal.style.display =
+            'none';
+    }
+}
+
+/* =========================================================
+   БИБЛИОТЕКА
+   ========================================================= */
+
+function openLibrary() {
+    navigate('library');
+}
+
+function openProjects() {
+    navigate('projects');
+    renderProjects();
+}
+
+function openPlugins() {
+    navigate('plugins');
+}
+
+function openScheduled() {
+    navigate('scheduled');
+}
+
+/* =========================================================
+   ПРОЕКТЫ
+   ========================================================= */
 
 function getProjects() {
-const session = getSession();
+    if (!currentUser) {
+        return [];
+    }
 
-if (!session) return [];
-const all = readStorage(STORAGE.PROJECTS, {});
-return Array.isArray(all[session.id])
-  ? all[session.id]
-  : [];
-
+    return parseJSON(
+        localStorage.getItem(
+            userKey('projects')
+        ),
+        []
+    );
 }
 
 function saveProjects(projects) {
-const session = getSession();
+    if (!currentUser) {
+        return;
+    }
 
-if (!session) return;
-const all = readStorage(STORAGE.PROJECTS, {});
-all[session.id] = projects;
-writeStorage(STORAGE.PROJECTS, all);
-
+    localStorage.setItem(
+        userKey('projects'),
+        JSON.stringify(projects)
+    );
 }
 
-function openProjectModal() {
-const form = get(“project-form”);
+function createProject() {
+    if (!currentUser) {
+        return;
+    }
 
-if (form) form.reset();
-openModal("project-modal");
+    const name =
+        prompt(
+            'Название проекта:'
+        );
 
-}
+    if (!name?.trim()) {
+        return;
+    }
 
-function createProject(event) {
-event.preventDefault();
+    const projects =
+        getProjects();
 
-const name = get("project-name")?.value.trim();
-const description =
-  get("project-description")?.value.trim();
-if (!name) {
-  toast("Введите название проекта.", "warning");
-  return;
-}
-const projects = getProjects();
-projects.unshift({
-  id: uid("project"),
-  name,
-  description,
-  createdAt: new Date().toISOString()
-});
-saveProjects(projects);
-closeModal("project-modal");
-renderProjects();
-toast("Проект создан.", "success");
+    projects.unshift({
+        id: createId('project'),
+        name: name.trim(),
+        createdAt: Date.now()
+    });
 
+    saveProjects(projects);
+    renderProjects();
+
+    notify(
+        'Проект создан.',
+        'success'
+    );
 }
 
 function deleteProject(id) {
-const projects =
-getProjects().filter(project => project.id !== id);
+    const projects =
+        getProjects().filter(
+            project =>
+                project.id !== id
+        );
 
-saveProjects(projects);
-renderProjects();
-toast("Проект удалён.", "success");
-
+    saveProjects(projects);
+    renderProjects();
 }
 
 function renderProjects() {
-const grid = get(“projects-grid”);
-const empty = get(“projects-empty”);
+    const container =
+        $('#projects-list');
 
-if (!grid) return;
-const projects = getProjects();
-grid.innerHTML = "";
-if (projects.length === 0) {
-  show(empty);
-  return;
-}
-hide(empty);
-projects.forEach(project => {
-  const card = document.createElement("article");
-  card.className = "project-card";
-  card.innerHTML = `
-    <div class="project-card-top">
-      <div class="project-icon">📁</div>
-      <button
-        class="delete-project"
-        title="Удалить проект"
-      >
-        ×
-      </button>
-    </div>
-    <h3>${escapeHTML(project.name)}</h3>
-    <p>
-      ${escapeHTML(
-        project.description ||
-        "Без описания"
-      )}
-    </p>
-    <small>
-      Создан ${formatDate(project.createdAt)}
-    </small>
-  `;
-  card
-    .querySelector(".delete-project")
-    .addEventListener("click", () => {
-      deleteProject(project.id);
+    if (!container) {
+        return;
+    }
+
+    const projects =
+        getProjects();
+
+    container.innerHTML = '';
+
+    if (!projects.length) {
+        container.innerHTML =
+            '<div class="empty-state">Проектов пока нет.</div>';
+        return;
+    }
+
+    projects.forEach(project => {
+        const item =
+            document.createElement(
+                'div'
+            );
+
+        item.className =
+            'project-item';
+
+        item.innerHTML = `
+            <span>${escapeHTML(project.name)}</span>
+            <button type="button">Удалить</button>
+        `;
+
+        item
+            .querySelector('button')
+            .addEventListener(
+                'click',
+                () =>
+                    deleteProject(
+                        project.id
+                    )
+            );
+
+        container.appendChild(item);
     });
-  grid.appendChild(card);
-});
-
 }
 
-/* =======================================================
-SCHEDULED
-======================================================= */
+/* =========================================================
+   ЗАПЛАНИРОВАННЫЕ ЗАДАЧИ
+   ========================================================= */
 
-function getScheduled() {
-const session = getSession();
+function getScheduledTasks() {
+    if (!currentUser) {
+        return [];
+    }
 
-if (!session) return [];
-const all =
-  readStorage(STORAGE.SCHEDULED, {});
-return Array.isArray(all[session.id])
-  ? all[session.id]
-  : [];
-
+    return parseJSON(
+        localStorage.getItem(
+            userKey('scheduled')
+        ),
+        []
+    );
 }
 
-function saveScheduled(items) {
-const session = getSession();
+function saveScheduledTasks(tasks) {
+    if (!currentUser) {
+        return;
+    }
 
-if (!session) return;
-const all =
-  readStorage(STORAGE.SCHEDULED, {});
-all[session.id] = items;
-writeStorage(STORAGE.SCHEDULED, all);
-
+    localStorage.setItem(
+        userKey('scheduled'),
+        JSON.stringify(tasks)
+    );
 }
 
-function openScheduledModal() {
-const form = get(“scheduled-form”);
+function createScheduledTask() {
+    if (!currentUser) {
+        return;
+    }
 
-if (form) form.reset();
-openModal("scheduled-modal");
+    const text =
+        prompt(
+            'Что нужно запланировать?'
+        );
 
-}
+    if (!text?.trim()) {
+        return;
+    }
 
-function createScheduledTask(event) {
-event.preventDefault();
+    const tasks =
+        getScheduledTasks();
 
-const title =
-  get("scheduled-title")?.value.trim();
-const date =
-  get("scheduled-date")?.value;
-const time =
-  get("scheduled-time")?.value;
-if (!title || !date || !time) {
-  toast("Заполните все поля.", "warning");
-  return;
-}
-const items = getScheduled();
-items.unshift({
-  id: uid("task"),
-  title,
-  date,
-  time,
-  createdAt: new Date().toISOString()
-});
-saveScheduled(items);
-closeModal("scheduled-modal");
-renderScheduled();
-toast("Задача запланирована.", "success");
+    tasks.unshift({
+        id: createId('task'),
+        text: text.trim(),
+        createdAt: Date.now()
+    });
 
+    saveScheduledTasks(tasks);
+    renderScheduledTasks();
+
+    notify(
+        'Задача сохранена.',
+        'success'
+    );
 }
 
 function deleteScheduledTask(id) {
-const items =
-getScheduled().filter(item => item.id !== id);
+    const tasks =
+        getScheduledTasks().filter(
+            task =>
+                task.id !== id
+        );
 
-saveScheduled(items);
-renderScheduled();
-toast("Задача удалена.", "success");
-
+    saveScheduledTasks(tasks);
+    renderScheduledTasks();
 }
 
-function renderScheduled() {
-const container = get(“scheduled-list”);
-const empty = get(“scheduled-empty”);
+function renderScheduledTasks() {
+    const container =
+        $('#scheduled-list');
 
-if (!container) return;
-const items = getScheduled();
-container.innerHTML = "";
-if (items.length === 0) {
-  show(empty);
-  return;
-}
-hide(empty);
-items.forEach(item => {
-  const element = document.createElement("div");
-  element.className = "scheduled-item";
-  element.innerHTML = `
-    <div class="scheduled-icon">⏰</div>
-    <div class="scheduled-info">
-      <strong>${escapeHTML(item.title)}</strong>
-      <span>
-        ${escapeHTML(item.date)}
-        ·
-        ${escapeHTML(item.time)}
-      </span>
-    </div>
-    <button class="scheduled-delete">
-      ×
-    </button>
-  `;
-  element
-    .querySelector(".scheduled-delete")
-    .addEventListener("click", () => {
-      deleteScheduledTask(item.id);
+    if (!container) {
+        return;
+    }
+
+    const tasks =
+        getScheduledTasks();
+
+    container.innerHTML = '';
+
+    if (!tasks.length) {
+        container.innerHTML =
+            '<div class="empty-state">Запланированных задач нет.</div>';
+        return;
+    }
+
+    tasks.forEach(task => {
+        const item =
+            document.createElement(
+                'div'
+            );
+
+        item.className =
+            'scheduled-item';
+
+        item.innerHTML = `
+            <span>${escapeHTML(task.text)}</span>
+            <button type="button">Удалить</button>
+        `;
+
+        item
+            .querySelector('button')
+            .addEventListener(
+                'click',
+                () =>
+                    deleteScheduledTask(
+                        task.id
+                    )
+            );
+
+        container.appendChild(item);
     });
-  container.appendChild(element);
-});
-
 }
 
-/* =======================================================
-LIBRARY
-======================================================= */
-
-function getLibrary() {
-const session = getSession();
-
-if (!session) return [];
-const all =
-  readStorage(STORAGE.LIBRARY, {});
-return Array.isArray(all[session.id])
-  ? all[session.id]
-  : [];
-
-}
-
-function saveLibrary(items) {
-const session = getSession();
-
-if (!session) return;
-const all =
-  readStorage(STORAGE.LIBRARY, {});
-all[session.id] = items;
-writeStorage(STORAGE.LIBRARY, all);
-
-}
-
-function addLibraryFiles(files) {
-if (!files?.length) return;
-
-const library = getLibrary();
-[...files].forEach(file => {
-  library.unshift({
-    id: uid("library"),
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    createdAt: new Date().toISOString()
-  });
-});
-saveLibrary(library);
-renderLibrary();
-toast(
-  `${files.length} файл(ов) добавлено в библиотеку.`,
-  "success"
-);
-
-}
-
-function deleteLibraryItem(id) {
-const library =
-getLibrary().filter(item => item.id !== id);
-
-saveLibrary(library);
-renderLibrary();
-
-}
-
-function renderLibrary() {
-const grid = get(“library-grid”);
-const empty = get(“library-empty”);
-
-if (!grid) return;
-const items = getLibrary();
-grid.innerHTML = "";
-if (items.length === 0) {
-  show(empty);
-  return;
-}
-hide(empty);
-items.forEach(item => {
-  const card = document.createElement("article");
-  card.className = "library-card";
-  card.innerHTML = `
-    <div class="library-icon">📄</div>
-    <div class="library-info">
-      <strong>
-        ${escapeHTML(item.name)}
-      </strong>
-      <small>
-        ${formatFileSize(item.size)}
-      </small>
-    </div>
-    <button
-      class="library-delete"
-      title="Удалить"
-    >
-      ×
-    </button>
-  `;
-  card
-    .querySelector(".library-delete")
-    .addEventListener("click", () => {
-      deleteLibraryItem(item.id);
-    });
-  grid.appendChild(card);
-});
-
-}
-
-/* =======================================================
-CODE STUDIO
-======================================================= */
+/* =========================================================
+   CODE MODE
+   ========================================================= */
 
 function openCodeMode() {
-openModal(“code-modal”);
+    const modal =
+        $('#code-modal');
+
+    if (modal) {
+        modal.style.display =
+            'flex';
+    }
+}
+
+function closeCodeMode() {
+    const modal =
+        $('#code-modal');
+
+    if (modal) {
+        modal.style.display =
+            'none';
+    }
+}
+
+function selectCodeFile() {
+    $('#code-file-input')?.click();
 }
 
 function runCode() {
-const code = get(“code-editor”)?.value || “”;
+    const editor =
+        $('#code-editor');
 
-if (!code.trim()) {
-  toast("Редактор пуст.", "warning");
-  return;
-}
-const frame = get("site-preview-frame");
-if (!frame) {
-  toast("Предпросмотр недоступен.", "error");
-  return;
-}
-frame.srcdoc = code;
-openModal("site-preview-modal");
-toast("Код запущен.", "success");
+    if (!editor) {
+        return;
+    }
 
+    const code =
+        editor.value;
+
+    const preview =
+        window.open(
+            '',
+            '_blank'
+        );
+
+    if (!preview) {
+        notify(
+            'Браузер заблокировал окно предпросмотра.',
+            'error'
+        );
+        return;
+    }
+
+    preview.document.open();
+    preview.document.write(code);
+    preview.document.close();
 }
+
+async function askCodeAI() {
+    const editor =
+        $('#code-editor');
+
+    if (!editor) {
+        return;
+    }
+
+    const code =
+        editor.value;
+
+    const input =
+        prompt(
+            'Что изменить в коде?'
+        );
+
+    if (!input?.trim()) {
+        return;
+    }
+
+    const oldMessages =
+        messages;
+
+    messages = [
+        {
+            role: 'user',
+            content:
+                `Измени этот код по запросу: ${input}\n\nКОД:\n${code}`
+        }
+    ];
+
+    try {
+        const result =
+            await callAI();
+
+        editor.value =
+            result.content ||
+            code;
+
+        notify(
+            'Код обновлён.',
+            'success'
+        );
+    } catch (error) {
+        notify(
+            error.message,
+            'error'
+        );
+    } finally {
+        messages =
+            oldMessages;
+    }
+}
+
+/* =========================================================
+   ПРЕДПРОСМОТР САЙТА
+   ========================================================= */
 
 function openSitePreview() {
-const code = get(“code-editor”)?.value || “”;
+    const modal =
+        $('#site-preview-modal');
 
-const frame = get("site-preview-frame");
-if (!frame) return;
-frame.srcdoc = code;
-openModal("site-preview-modal");
+    const frame =
+        $('#site-preview-frame');
 
+    const editor =
+        $('#code-editor');
+
+    if (frame && editor) {
+        frame.srcdoc =
+            editor.value;
+    }
+
+    if (modal) {
+        modal.style.display =
+            'flex';
+    }
 }
 
-function loadCodeFile(file) {
-if (!file) return;
+function closeSitePreview() {
+    const modal =
+        $('#site-preview-modal');
 
-const reader = new FileReader();
-reader.onload = event => {
-  const editor = get("code-editor");
-  if (editor) {
-    editor.value =
-      String(event.target.result || "");
-    toast("Файл открыт.", "success");
-  }
-};
-reader.onerror = () => {
-  toast("Не удалось открыть файл.", "error");
-};
-reader.readAsText(file);
-
+    if (modal) {
+        modal.style.display =
+            'none';
+    }
 }
 
-function askCodeAI() {
-const editor = get(“code-editor”);
+function startSiteBuilder() {
+    siteBuilderMode = true;
 
-if (!editor) return;
-const code = editor.value.trim();
-const input = get("user-input");
-if (!input) return;
-closeModal("code-modal");
-navigate("chat-section");
-input.value =
-  code
-    ? `Проанализируй этот код и предложи улучшения:\n\n\`\`\`\n${code}\n\`\`\``
-    : "Помоги мне написать код.";
-updateComposerState();
-autoResizeTextarea();
-input.focus();
+    newChat();
 
-}
+    const input =
+        $('#user-input');
 
-/* =======================================================
-PLUGINS
-======================================================= */
+    if (input) {
+        input.value =
+            'Создай сайт. Опиши структуру, дизайн и функции.';
+        input.focus();
+    }
 
-function handlePlugin(name) {
-switch (name) {
-case “web”:
-toast(
-“Веб-поиск будет подключён через backend.”,
-“info”
-);
-break;
-
-  case "code":
-    openCodeMode();
-    break;
-  case "3d":
-    openFilePicker("model");
-    break;
-  case "creative":
-    quickPrompt(
-      "Помоги мне с творческой задачей."
+    notify(
+        'Режим создания сайта включён.',
+        'success'
     );
-    navigate("chat-section");
-    break;
-  default:
-    toast("Плагин недоступен.", "warning");
 }
 
-}
-
-/* =======================================================
-SEARCH
-======================================================= */
-
-function searchChats(event) {
-const query =
-event.target.value.trim().toLowerCase();
-
-const items =
-  $$(".chat-history-item");
-items.forEach(item => {
-  const name =
-    item
-      .querySelector(".chat-history-name")
-      ?.textContent
-      .toLowerCase() || "";
-  item.style.display =
-    !query || name.includes(query)
-      ? ""
-      : "none";
-});
-
-}
-
-/* =======================================================
-CLIPBOARD
-======================================================= */
+/* =========================================================
+   КОПИРОВАНИЕ
+   ========================================================= */
 
 async function copyText(text) {
-try {
-await navigator.clipboard.writeText(text);
+    try {
+        await navigator.clipboard.writeText(
+            String(text || '')
+        );
 
-  toast("Скопировано.", "success");
-} catch {
-  const textarea =
-    document.createElement("textarea");
-  textarea.value = text;
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
-  toast("Скопировано.", "success");
+        notify(
+            'Скопировано.',
+            'success'
+        );
+    } catch {
+        notify(
+            'Не удалось скопировать.',
+            'error'
+        );
+    }
 }
 
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ========================================================= */
+
+let initialized = false;
+
+function initializeApplication() {
+    if (initialized) {
+        /*
+         * Не запускаем обработчики повторно.
+         * Это одна из причин появления дубликатов
+         * и повторных действий в старой версии.
+         */
+        loadSettings();
+        renderChatHistory();
+        renderMessages();
+        return;
+    }
+
+    initialized = true;
+
+    loadSettings();
+
+    setupNavigation();
+    setupInput();
+    setupAttachments();
+    setupSearch();
+    setupKeyboardShortcuts();
+
+    renderChatHistory();
+    renderProjects();
+    renderScheduledTasks();
+
+    const chats =
+        getChats();
+
+    if (chats.length) {
+        chats.sort(
+            (a, b) =>
+                b.updatedAt -
+                a.updatedAt
+        );
+
+        openChat(
+            chats[0].id
+        );
+    } else {
+        newChat();
+    }
 }
 
-/* =======================================================
-DATE / FILE HELPERS
-======================================================= */
-
-function formatDate(value) {
-try {
-return new Intl.DateTimeFormat(
-“ru-RU”,
-{
-day: “2-digit”,
-month: “2-digit”,
-year: “numeric”
-}
-).format(new Date(value));
-} catch {
-return “”;
-}
+function initialize() {
+    /*
+     * Всегда сначала проверяем сессию.
+     * Если пользователь уже вошёл,
+     * login-screen больше не показывается.
+     */
+    restoreSession();
 }
 
-function formatFileSize(bytes) {
-if (!bytes) return “0 Б”;
+/* =========================================================
+   ГЛОБАЛЬНЫЕ ФУНКЦИИ
+   Нужны для onclick/onsubmit в index.html.
+   ========================================================= */
 
-const units = [
-  "Б",
-  "КБ",
-  "МБ",
-  "ГБ"
-];
-let size = bytes;
-let index = 0;
-while (
-  size >= 1024 &&
-  index < units.length - 1
-) {
-  size /= 1024;
-  index++;
-}
-return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
+window.showLogin = showLogin;
+window.showRegister = showRegister;
 
-}
+window.login = login;
+window.register = register;
+window.logout = logout;
 
-/* =======================================================
-KEYBOARD
-======================================================= */
+window.newChat = newChat;
+window.clearChat = clearChat;
+window.selectChat = selectChat;
+window.deleteChat = deleteChat;
 
-function handleComposerKeydown(event) {
-if (event.key === “Enter” && !event.shiftKey) {
-event.preventDefault();
+window.quickPrompt = quickPrompt;
+window.sendMessage = sendMessage;
+window.stopGeneration = stopGeneration;
 
-  sendMessage();
-}
+window.toggleAttach = toggleAttach;
+window.attachType = attachType;
+window.removeAttachedFile =
+    removeAttachedFile;
 
-}
+window.toggleSidebar =
+    toggleSidebar;
 
-function handleGlobalKeydown(event) {
-if (event.key === “Escape”) {
-closeAttachMenu();
-closeAllModals();
-closeSidebarMobile();
-}
+window.openSettings =
+    openSettings;
 
-if (
-  (event.ctrlKey || event.metaKey) &&
-  event.key.toLowerCase() === "k"
-) {
-  event.preventDefault();
-  const search = get("chat-search");
-  search?.focus();
-}
+window.closeSettings =
+    closeSettings;
 
-}
+window.saveApiKey =
+    saveApiKey;
 
-/* =======================================================
-EVENT BINDING
-======================================================= */
+window.saveAllSettings =
+    saveAllSettings;
 
-function bindEvents() {
+window.openSupport =
+    openSupport;
 
-/* ---------- Auth ---------- */
-get("login-form")?.addEventListener(
-  "submit",
-  login
+window.closeSupport =
+    closeSupport;
+
+window.createProject =
+    createProject;
+
+window.deleteProject =
+    deleteProject;
+
+window.createScheduledTask =
+    createScheduledTask;
+
+window.deleteScheduledTask =
+    deleteScheduledTask;
+
+window.openCodeMode =
+    openCodeMode;
+
+window.closeCodeMode =
+    closeCodeMode;
+
+window.selectCodeFile =
+    selectCodeFile;
+
+window.runCode =
+    runCode;
+
+window.openSitePreview =
+    openSitePreview;
+
+window.closeSitePreview =
+    closeSitePreview;
+
+window.askCodeAI =
+    askCodeAI;
+
+window.copyText =
+    copyText;
+
+window.navigate =
+    navigate;
+
+window.startSiteBuilder =
+    startSiteBuilder;
+
+/* =========================================================
+   ЗАПУСК
+   ========================================================= */
+
+document.addEventListener(
+    'DOMContentLoaded',
+    initialize
 );
-get("register-form")?.addEventListener(
-  "submit",
-  register
-);
-get("show-register-button")?.addEventListener(
-  "click",
-  () => switchAuthMode("register")
-);
-get("show-login-button")?.addEventListener(
-  "click",
-  () => switchAuthMode("login")
-);
-get("logout-button")?.addEventListener(
-  "click",
-  logout
-);
-/* ---------- Chat ---------- */
-get("new-chat-button")?.addEventListener(
-  "click",
-  newChat
-);
-get("clear-chat-button")?.addEventListener(
-  "click",
-  clearCurrentChat
-);
-get("send-button")?.addEventListener(
-  "click",
-  sendMessage
-);
-get("user-input")?.addEventListener(
-  "input",
-  () => {
-    updateComposerState();
-    autoResizeTextarea();
-  }
-);
-get("user-input")?.addEventListener(
-  "keydown",
-  handleComposerKeydown
-);
-get("voice-button")?.addEventListener(
-  "click",
-  startVoiceInput
-);
-/* ---------- Attachments ---------- */
-get("attach-button")?.addEventListener(
-  "click",
-  event => {
-    event.stopPropagation();
-    toggleAttachMenu();
-  }
-);
-$$("#attach-menu [data-attach]").forEach(
-  button => {
-    button.addEventListener(
-      "click",
-      () => openFilePicker(button.dataset.attach)
-    );
-  }
-);
-get("file-input")?.addEventListener(
-  "change",
-  event => processFiles(event.target.files)
-);
-get("photo-input")?.addEventListener(
-  "change",
-  event => processFiles(event.target.files)
-);
-get("camera-input")?.addEventListener(
-  "change",
-  event => processFiles(event.target.files)
-);
-get("model-file-input")?.addEventListener(
-  "change",
-  event => processFiles(event.target.files)
-);
-/* ---------- Navigation ---------- */
-$$(".nav-item").forEach(button => {
-  button.addEventListener(
-    "click",
-    () => navigate(button.dataset.section)
-  );
-});
-/* ---------- Sidebar ---------- */
-get("mobile-open-sidebar")?.addEventListener(
-  "click",
-  openSidebarMobile
-);
-get("mobile-close-sidebar")?.addEventListener(
-  "click",
-  closeSidebarMobile
-);
-get("sidebar-overlay")?.addEventListener(
-  "click",
-  closeSidebarMobile
-);
-/* ---------- Search ---------- */
-get("chat-search")?.addEventListener(
-  "input",
-  searchChats
-);
-/* ---------- Settings ---------- */
-get("open-settings-button")?.addEventListener(
-  "click",
-  openSettings
-);
-get("top-settings-button")?.addEventListener(
-  "click",
-  openSettings
-);
-get("save-settings-button")?.addEventListener(
-  "click",
-  saveAllSettings
-);
-get("cancel-settings-button")?.addEventListener(
-  "click",
-  () => closeModal("settings-modal")
-);
-/* ---------- Support ---------- */
-get("open-support-button")?.addEventListener(
-  "click",
-  openSupport
-);
-get("close-support-button")?.addEventListener(
-  "click",
-  () => closeModal("support-modal")
-);
-/* ---------- Projects ---------- */
-get("create-project-button")?.addEventListener(
-  "click",
-  openProjectModal
-);
-get("project-form")?.addEventListener(
-  "submit",
-  createProject
-);
-/* ---------- Scheduled ---------- */
-get("create-scheduled-button")?.addEventListener(
-  "click",
-  openScheduledModal
-);
-get("scheduled-form")?.addEventListener(
-  "submit",
-  createScheduledTask
-);
-/* ---------- Library ---------- */
-get("library-upload-button")?.addEventListener(
-  "click",
-  () => openFilePicker("file")
-);
-/* ---------- Code ---------- */
-get("open-code-button")?.addEventListener(
-  "click",
-  openCodeMode
-);
-get("code-file-button")?.addEventListener(
-  "click",
-  () => get("code-file-input")?.click()
-);
-get("code-file-input")?.addEventListener(
-  "change",
-  event => loadCodeFile(event.target.files?.[0])
-);
-get("run-code-button")?.addEventListener(
-  "click",
-  runCode
-);
-get("preview-site-button")?.addEventListener(
-  "click",
-  openSitePreview
-);
-get("ask-code-ai-button")?.addEventListener(
-  "click",
-  askCodeAI
-);
-/* ---------- Plugins ---------- */
-$$(".plugin-button").forEach(button => {
-  button.addEventListener(
-    "click",
-    () => handlePlugin(button.dataset.plugin)
-  );
-});
-/* ---------- Quick prompts ---------- */
-$$(".quick-prompt").forEach(button => {
-  button.addEventListener(
-    "click",
-    () => quickPrompt(button.dataset.prompt)
-  );
-});
-/* ---------- Modal closing ---------- */
-$$("[data-close-modal]").forEach(button => {
-  button.addEventListener(
-    "click",
+
+window.addEventListener(
+    'beforeunload',
     () => {
-      const target =
-        button.dataset.closeModal;
-      const map = {
-        settings: "settings-modal",
-        support: "support-modal",
-        project: "project-modal",
-        scheduled: "scheduled-modal",
-        code: "code-modal",
-        preview: "site-preview-modal"
-      };
-      closeModal(map[target]);
+        saveCurrentChat();
     }
-  );
-});
-/* ---------- Global ---------- */
-document.addEventListener(
-  "click",
-  event => {
-    const attachMenu = get("attach-menu");
-    const attachButton = get("attach-button");
-    if (
-      attachMenu &&
-      !attachMenu.classList.contains("hidden") &&
-      !attachMenu.contains(event.target) &&
-      !attachButton?.contains(event.target)
-    ) {
-      closeAttachMenu();
-    }
-  }
 );
-document.addEventListener(
-  "keydown",
-  handleGlobalKeydown
-);
-/* ---------- System theme ---------- */
-window
-  .matchMedia?.("(prefers-color-scheme: light)")
-  ?.addEventListener(
-    "change",
-    () => {
-      if (getSettings().theme === "system") {
-        applySettings();
-      }
-    }
-  );
-
-}
-
-/* =======================================================
-STARTUP
-======================================================= */
-
-function start() {
-bindEvents();
-applySettings();
-
-const session = getSession();
-if (session) {
-  enterApplication();
-} else {
-  show(get("login-screen"));
-  hide(get("main-app"));
-}
-updateComposerState();
-
-}
-
-/* =======================================================
-GLOBAL API
-======================================================= */
-
-window.NeuroChat = {
-login,
-register,
-logout,
-newChat,
-selectChat,
-deleteChat,
-clearCurrentChat,
-sendMessage,
-quickPrompt,
-navigate,
-openSettings,
-openSupport,
-openCodeMode,
-openSitePreview,
-runCode,
-toast
-};
-
-/* =======================================================
-INIT
-======================================================= */
-
-if (document.readyState === “loading”) {
-document.addEventListener(
-“DOMContentLoaded”,
-start,
-{ once: true }
-);
-} else {
-start();
-}
-
-})();
