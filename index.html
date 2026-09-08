@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Нейро-чат</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+</head>
+<body>
+  <!-- Экран входа -->
+  <div id="login-screen" class="screen">
+    <div class="login-box">
+      <img src="logo.svg" alt="Нейро-чат" class="logo">
+      <h1>Нейро-чат</h1>
+      <p class="subtitle">Умный помощник</p>
+
+      <div id="step-username">
+        <input type="text" id="username" placeholder="Имя пользователя" autocomplete="username">
+        <button onclick="nextStep()">Далее</button>
+      </div>
+
+      <div id="step-password" style="display:none;">
+        <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
+        <button onclick="login()">Войти</button>
+        <button class="secondary" onclick="backToUsername()">Назад</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Основной интерфейс -->
+  <div id="app" class="screen" style="display:none;">
+    <!-- Боковое меню -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <img src="logo.svg" alt="logo" class="sidebar-logo">
+        <span>Нейро-чат</span>
+      </div>
+
+      <nav>
+        <a href="#" class="nav-item active" onclick="showMainChat()"><span class="icon">💬</span> Чат</a>
+        <a href="#" class="nav-item" onclick="showLibrary()"><span class="icon">📚</span> Библиотека</a>
+        <a href="#" class="nav-item"><span class="icon">📁</span> Проекты</a>
+        <a href="#" class="nav-item"><span class="icon">🔌</span> Плагины</a>
+        <a href="#" class="nav-item"><span class="icon">⏰</span> Запланированные</a>
+        <a href="#" class="nav-item"><span class="icon">⋯</span> Больше</a>
+      </nav>
+
+      <div class="sidebar-section">
+        <div class="section-title">Закреплено</div>
+        <div class="chat-item">3 бойца</div>
+        <div class="chat-item">Стикеры «3D гусь»</div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">Недавнее</div>
+        <div class="chat-item" onclick="loadChat('Редактирование ТЗ сайта')">Редактирование ТЗ сайта</div>
+        <div class="chat-item">Ежедневные фото для кан...</div>
+        <div class="chat-item">Поиск Airwheel SE3S</div>
+        <div class="chat-item">Где взять ключ</div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button onclick="openSettings()">⚙️ Настройки</button>
+        <button onclick="logout()" class="logout">Выйти</button>
+      </div>
+    </div>
+
+    <!-- Основная область чата -->
+    <div class="main">
+      <div class="top-bar">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <div class="chat-title" id="chat-title">Временный чат</div>
+        <div class="top-actions">
+          <button onclick="newChat()">＋</button>
+        </div>
+      </div>
+
+      <div id="messages" class="messages">
+        <div class="welcome">
+          <img src="logo.svg" class="welcome-logo">
+          <h2>Нейро-чат</h2>
+          <p>Чем я могу помочь?</p>
+          <div class="suggestions">
+            <button onclick="quickPrompt('Создай сайт по описанию')">Создать сайт</button>
+            <button onclick="quickPrompt('Напиши код')">Написать код</button>
+            <button onclick="quickPrompt('Создай видео по описанию')">Создать видео</button>
+            <button onclick="quickPrompt('Создай музыку')">Создать музыку</button>
+            <button onclick="quickPrompt('Сделай 3D-модель')">3D-модель</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-box">
+          <button class="attach-btn" onclick="toggleAttach()">＋</button>
+          <textarea id="user-input" placeholder="Спросить Нейро-чат" rows="1"></textarea>
+          <button class="send-btn" onclick="sendMessage()">➤</button>
+        </div>
+        <div class="attach-menu" id="attach-menu" style="display:none;">
+          <button onclick="attachType('camera')">📷 Камера</button>
+          <button onclick="attachType('photo')">🖼️ Фото</button>
+          <button onclick="attachType('file')">📎 Файлы</button>
+          <button onclick="attachType('plugin')">🔌 Плагины</button>
+        </div>
+        <p class="disclaimer">Нейро-чат может допускать ошибки. Проверяйте важную информацию.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка настроек -->
+  <div id="settings-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Настройки</h3>
+        <button onclick="closeSettings()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting-item">
+          <label>API-ключ OpenAI</label>
+          <input type="password" id="api-key" placeholder="sk-...">
+          <button onclick="saveApiKey()">Сохранить ключ</button>
+        </div>
+        <div class="setting-item">
+          <label>Модель</label>
+          <select id="model">
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gpt-4o-mini">GPT-4o-mini</option>
+            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+          </select>
+        </div>
+        <div class="setting-item">
+          <label>Тема</label>
+          <select id="theme">
+            <option value="dark">Тёмная</option>
+            <option value="light">Светлая</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
