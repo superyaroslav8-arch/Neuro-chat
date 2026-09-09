@@ -1,707 +1,1009 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0d12">
-  <meta name="description" content="Neuro-chat — современный AI-чат">
-  <title>Neuro-chat</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08090c">
+<title>Нейро-чат</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden}
+body{
+font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,Arial,sans-serif;
+background:#08090c;color:#f5f5f7
+}
+button,input,textarea{font:inherit}
+button{cursor:pointer}
+.app{height:100dvh;display:flex}
+
+.sidebar{
+width:280px;flex-shrink:0;background:#0d0e12;
+border-right:1px solid #24252b;padding:14px;
+display:flex;flex-direction:column;gap:12px
+}
+.logo{display:flex;align-items:center;gap:10px;padding:8px;font-weight:700}
+.logoIcon{
+width:34px;height:34px;border-radius:11px;background:#fff;color:#000;
+display:grid;place-items:center;font-weight:900
+}
+.new{
+height:45px;border:0;border-radius:12px;background:#fff;color:#000;font-weight:700
+}
+.chatList{flex:1;overflow:auto}
+.chat{
+display:flex;align-items:center;gap:8px;padding:11px;border-radius:10px;
+color:#ccc;margin-bottom:3px;cursor:pointer
+}
+.chat:hover,.chat.active{background:#202126;color:#fff}
+.chatName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.deleteChat{
+background:none;color:#777;border:0;font-size:18px
+}
+.account{
+border:0;border-top:1px solid #24252b;background:none;color:#ddd;
+padding:14px 7px;display:flex;align-items:center;gap:10px;text-align:left
+}
+.avatar{
+width:32px;height:32px;border-radius:50%;background:#292a30;
+display:grid;place-items:center;font-weight:700
+}
+
+.main{flex:1;min-width:0;height:100%;display:flex;flex-direction:column}
+.header{
+height:62px;flex-shrink:0;border-bottom:1px solid #222329;
+display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+background:rgba(10,11,14,.8);backdrop-filter:blur(20px)
+}
+.headerTitle{font-weight:700}
+.headerButtons{display:flex;gap:5px}
+.icon{
+width:38px;height:38px;border:0;border-radius:10px;background:transparent;
+color:#bbb;font-size:18px
+}
+.icon:hover{background:#202126;color:#fff}
+.mobileMenu{display:none}
+
+.messages{
+flex:1;overflow-y:auto;padding:25px 15px 150px
+}
+.messagesInner{max-width:850px;margin:auto}
+.welcome{
+min-height:calc(100vh - 250px);
+display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center
+}
+.welcomeIcon{
+width:65px;height:65px;border-radius:20px;background:#fff;color:#000;
+display:grid;place-items:center;font-size:28px;font-weight:900;margin-bottom:20px
+}
+.welcome h1{margin:0 0 8px;font-size:38px}
+.welcome p{color:#888;margin:0}
+.cards{
+display:grid;grid-template-columns:1fr 1fr;gap:10px;
+width:min(650px,100%);margin-top:25px
+}
+.card{
+border:1px solid #292a30;background:#111217;color:#ccc;
+padding:14px;border-radius:13px;text-align:left
+}
+.card:hover{background:#1b1c21}
+
+.message{display:flex;gap:12px;margin-bottom:25px}
+.messageAvatar{
+width:34px;height:34px;min-width:34px;border-radius:10px;
+background:#25262c;display:grid;place-items:center;font-weight:700
+}
+.messageBody{min-width:0;flex:1}
+.role{font-size:13px;font-weight:700;margin:3px 0 7px}
+.content{
+font-size:15px;line-height:1.65;color:#ddd;overflow-wrap:anywhere
+}
+.content pre{
+background:#0b0c0f;border:1px solid #292a30;border-radius:12px;
+padding:13px;overflow:auto
+}
+.content code{font-family:monospace}
+.media{
+max-width:100%;max-height:450px;border-radius:14px;margin-top:8px;
+border:1px solid #292a30
+}
+
+.composerArea{
+position:absolute;left:0;right:0;bottom:0;padding:12px 15px 18px;
+background:linear-gradient(transparent,#08090c 30%)
+}
+.composer{
+max-width:850px;margin:auto;background:#1a1b20;border:1px solid #303138;
+border-radius:18px;overflow:hidden
+}
+.preview{display:none;padding:10px}
+.preview.show{display:block}
+.previewItem{
+display:flex;align-items:center;gap:8px;background:#25262c;
+border-radius:10px;padding:8px;color:#ccc;font-size:13px
+}
+.textarea{
+width:100%;border:0;outline:0;resize:none;min-height:55px;max-height:180px;
+padding:15px;background:none;color:#fff;font-size:15px
+}
+.textarea::placeholder{color:#777}
+.bottom{
+height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 8px
+}
+.leftButtons{display:flex;gap:3px}
+.tool{
+height:36px;min-width:36px;padding:0 10px;border:0;border-radius:10px;
+background:transparent;color:#aaa;font-size:18px
+}
+.tool:hover{background:#292a30;color:#fff}
+.send{
+width:38px;height:38px;border:0;border-radius:11px;background:#fff;color:#000;
+font-size:19px;font-weight:700
+}
+.send:disabled{opacity:.35}
+
+.modal{
+display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+backdrop-filter:blur(12px);z-index:100;align-items:center;justify-content:center;padding:15px
+}
+.modal.show{display:flex}
+.box{
+width:min(440px,100%);background:#18191f;border:1px solid #303138;
+border-radius:20px;padding:20px
+}
+.box h2{margin:0 0 17px}
+.close{
+float:right;border:0;background:none;color:#aaa;font-size:24px
+}
+.field{margin-bottom:12px}
+.field label{display:block;color:#aaa;font-size:12px;margin-bottom:6px}
+.field input,.field textarea,.field select{
+width:100%;border:1px solid #303138;background:#0d0e12;color:#fff;
+border-radius:11px;padding:12px;outline:0
+}
+.primary{
+width:100%;height:45px;border:0;border-radius:11px;background:#fff;color:#000;font-weight:700
+}
+.secondary{
+width:100%;height:44px;border:0;border-radius:11px;background:#292a30;color:#fff;margin-top:8px
+}
+.error{
+display:none;background:#351b1b;color:#ff817c;padding:9px;border-radius:9px;
+font-size:12px;margin-bottom:10px
+}
+.error.show{display:block}
+
+@media(max-width:760px){
+.sidebar{
+position:fixed;top:0;bottom:0;left:0;z-index:90;
+transform:translateX(-105%);transition:.2s
+}
+.sidebar.open{transform:translateX(0)}
+.mobileMenu{display:block}
+.header{padding:0 9px}
+.cards{grid-template-columns:1fr}
+.welcome h1{font-size:30px}
+.messages{padding-left:10px;padding-right:10px}
+}
+</style>
 </head>
+
 <body>
-  <!-- =========================
-       APP
-  ========================== -->
-  <div id="app">
-<!-- =========================
-     LOGIN
-========================== -->
-<section id="login-screen" class="auth-screen">
-  <div class="auth-background"></div>
-  <div class="auth-card">
-    <div class="brand">
-      <div class="brand-logo">N</div>
-      <div>
-        <h1>Neuro-chat</h1>
-        <p>Ваш персональный AI</p>
-      </div>
-    </div>
-    <form id="login-form" class="auth-form">
-      <label>
-        <span>Имя пользователя</span>
-        <input
-          id="username"
-          name="username"
-          type="text"
-          autocomplete="username"
-          placeholder="Введите имя пользователя"
-          required
-        >
-      </label>
-      <label>
-        <span>Пароль</span>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          placeholder="Введите пароль"
-          required
-        >
-      </label>
-      <button type="submit" class="primary-button">
-        <span>Войти</span>
-      </button>
-      <button type="button" id="show-register-button" class="text-button">
-        Создать аккаунт
-      </button>
-    </form>
-    <form id="register-form" class="auth-form hidden">
-      <label>
-        <span>Имя пользователя</span>
-        <input
-          id="register-username"
-          name="register-username"
-          type="text"
-          autocomplete="username"
-          placeholder="Придумайте имя"
-          required
-        >
-      </label>
-      <label>
-        <span>Пароль</span>
-        <input
-          id="register-password"
-          name="register-password"
-          type="password"
-          autocomplete="new-password"
-          placeholder="Придумайте пароль"
-          required
-        >
-      </label>
-      <label>
-        <span>Повторите пароль</span>
-        <input
-          id="register-password-confirm"
-          name="register-password-confirm"
-          type="password"
-          autocomplete="new-password"
-          placeholder="Повторите пароль"
-          required
-        >
-      </label>
-      <button type="submit" class="primary-button">
-        Создать аккаунт
-      </button>
-      <button type="button" id="show-login-button" class="text-button">
-        Уже есть аккаунт
-      </button>
-    </form>
-    <div id="auth-message" class="auth-message"></div>
-  </div>
+<div class="app">
+
+<aside class="sidebar" id="sidebar">
+<div class="logo">
+<div class="logoIcon">N</div>
+<span>Нейро-чат</span>
+</div>
+
+<button class="new" id="newChat">＋ Новый чат</button>
+
+<div class="chatList" id="chatList"></div>
+
+<button class="account" id="account">
+<div class="avatar" id="avatar">?</div>
+<span id="accountName">Войти</span>
+</button>
+</aside>
+
+<main class="main">
+
+<header class="header">
+<div style="display:flex;align-items:center;gap:8px">
+<button class="icon mobileMenu" id="mobileMenu">☰</button>
+<div class="headerTitle">Нейро-чат</div>
+</div>
+
+<div class="headerButtons">
+<button class="icon" id="imageOpen" title="Изображение">▧</button>
+<button class="icon" id="videoOpen" title="Видео">▶</button>
+</div>
+</header>
+
+<section class="messages" id="messages">
+<div class="messagesInner" id="messagesInner"></div>
 </section>
-<!-- =========================
-     MAIN APPLICATION
-========================== -->
-<div id="main-app" class="main-app hidden">
-  <!-- Mobile overlay -->
-  <div id="sidebar-overlay" class="sidebar-overlay"></div>
-  <!-- =========================
-       SIDEBAR
-  ========================== -->
-  <aside id="sidebar" class="sidebar">
-    <div class="sidebar-header">
-      <button id="mobile-close-sidebar" class="icon-button" aria-label="Закрыть меню">
-        ×
-      </button>
-      <div class="sidebar-brand">
-        <div class="mini-logo">N</div>
-        <span>Neuro-chat</span>
-      </div>
-    </div>
-    <button id="new-chat-button" class="new-chat-button">
-      <span class="button-icon">＋</span>
-      <span>Новый чат</span>
-    </button>
-    <div class="sidebar-search">
-      <span>⌕</span>
-      <input
-        id="chat-search"
-        type="search"
-        placeholder="Поиск чатов..."
-        autocomplete="off"
-      >
-    </div>
-    <nav class="main-navigation">
-      <button class="nav-item active" data-section="chat-section">
-        <span>💬</span>
-        <span>Чаты</span>
-      </button>
-      <button class="nav-item" data-section="library-section">
-        <span>📚</span>
-        <span>Библиотека</span>
-      </button>
-      <button class="nav-item" data-section="projects-section">
-        <span>📁</span>
-        <span>Проекты</span>
-      </button>
-      <button class="nav-item" data-section="plugins-section">
-        <span>🧩</span>
-        <span>Плагины</span>
-      </button>
-      <button class="nav-item" data-section="scheduled-section">
-        <span>⏰</span>
-        <span>Запланированные</span>
-      </button>
-    </nav>
-    <div class="chat-history-title">
-      <span>Ваши чаты</span>
-      <span id="chat-count">0</span>
-    </div>
-    <div id="chat-history" class="chat-history"></div>
-    <div class="sidebar-bottom">
-      <button id="open-settings-button" class="sidebar-action">
-        <span>⚙️</span>
-        <span>Настройки</span>
-      </button>
-      <button id="open-support-button" class="sidebar-action">
-        <span>❓</span>
-        <span>Поддержка</span>
-      </button>
-      <button id="logout-button" class="sidebar-action danger">
-        <span>↪</span>
-        <span>Выйти</span>
-      </button>
-      <div class="user-profile">
-        <div id="user-avatar" class="user-avatar">U</div>
-        <div class="user-info">
-          <strong id="sidebar-username">Пользователь</strong>
-          <small>Neuro-chat</small>
-        </div>
-      </div>
-    </div>
-  </aside>
-  <!-- =========================
-       CONTENT
-  ========================== -->
-  <main class="content">
-    <!-- =========================
-         CHAT
-    ========================== -->
-    <section id="chat-section" class="app-section active">
-      <header class="topbar">
-        <button id="mobile-open-sidebar" class="icon-button" aria-label="Открыть меню">
-          ☰
-        </button>
-        <div class="topbar-title">
-          <h2 id="current-chat-title">Новый чат</h2>
-          <span id="connection-status" class="connection-status">
-            ● Готов
-          </span>
-        </div>
-        <div class="topbar-actions">
-          <button id="clear-chat-button" class="icon-button" title="Очистить чат">
-            🗑️
-          </button>
-          <button id="open-code-button" class="icon-button" title="Режим кода">
-            &lt;/&gt;
-          </button>
-          <button id="top-settings-button" class="icon-button" title="Настройки">
-            ⚙️
-          </button>
-        </div>
-      </header>
-      <!-- Messages -->
-      <div id="messages-container" class="messages-container">
-        <div id="welcome-screen" class="welcome-screen">
-          <div class="welcome-logo">N</div>
-          <h1>Чем я могу помочь?</h1>
-          <p>
-            Общайтесь с Neuro-chat, создавайте идеи,
-            пишите код и работайте с файлами.
-          </p>
-          <div class="quick-prompts">
-            <button class="quick-prompt" data-prompt="Придумай идею для нового проекта">
-              <span>💡</span>
-              <span>Придумать идею</span>
-            </button>
-            <button class="quick-prompt" data-prompt="Напиши красивый текст">
-              <span>✍️</span>
-              <span>Написать текст</span>
-            </button>
-            <button class="quick-prompt" data-prompt="Помоги написать код">
-              <span>💻</span>
-              <span>Написать код</span>
-            </button>
-            <button class="quick-prompt" data-prompt="Объясни сложную тему простыми словами">
-              <span>🧠</span>
-              <span>Объяснить тему</span>
-            </button>
-          </div>
-        </div>
-        <div id="messages" class="messages"></div>
-        <div id="typing-indicator" class="typing-indicator hidden">
-          <div class="message-avatar ai-avatar">N</div>
-          <div class="typing-bubble">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        </div>
-      </div>
-      <!-- =========================
-           COMPOSER
-      ========================== -->
-      <div class="composer-wrapper">
-        <div id="attached-files" class="attached-files"></div>
-        <div id="attach-menu" class="attach-menu hidden">
-          <button data-attach="file">
-            <span>📎</span>
-            <span>Файл</span>
-          </button>
-          <button data-attach="photo">
-            <span>🖼️</span>
-            <span>Фото</span>
-          </button>
-          <button data-attach="camera">
-            <span>📷</span>
-            <span>Камера</span>
-          </button>
-          <button data-attach="model">
-            <span>🧊</span>
-            <span>3D-модель</span>
-          </button>
-        </div>
-        <div class="composer">
-          <button id="attach-button" class="composer-icon" title="Прикрепить">
-            ＋
-          </button>
-          <textarea
-            id="user-input"
-            rows="1"
-            maxlength="20000"
-            placeholder="Напишите сообщение..."
-            autocomplete="off"
-          ></textarea>
-          <button
-            id="voice-button"
-            class="composer-icon"
-            title="Голосовой ввод"
-          >
-            🎙️
-          </button>
-          <button
-            id="send-button"
-            class="send-button"
-            title="Отправить"
-            disabled
-          >
-            ↑
-          </button>
-        </div>
-        <div class="composer-footer">
-          <span>Neuro-chat может допускать ошибки. Проверяйте важную информацию.</span>
-          <span id="char-counter">0 / 20000</span>
-        </div>
-      </div>
-      <!-- Hidden inputs -->
-      <input id="file-input" type="file" hidden multiple>
-      <input id="photo-input" type="file" hidden accept="image/*" multiple>
-      <input id="camera-input" type="file" hidden accept="image/*" capture="environment">
-      <input id="model-file-input" type="file" hidden accept=".stl,.obj,.step,.stp,.3mf,.gltf,.glb">
-    </section>
-    <!-- =========================
-         LIBRARY
-    ========================== -->
-    <section id="library-section" class="app-section">
-      <header class="page-header">
-        <div>
-          <h2>Библиотека</h2>
-          <p>Ваши сохранённые материалы</p>
-        </div>
-        <button id="library-upload-button" class="primary-small-button">
-          ＋ Добавить
-        </button>
-      </header>
-      <div id="library-grid" class="content-grid"></div>
-      <div id="library-empty" class="empty-state">
-        <div>📚</div>
-        <h3>Библиотека пуста</h3>
-        <p>Добавляйте файлы и сохраняйте нужные материалы.</p>
-      </div>
-    </section>
-    <!-- =========================
-         PROJECTS
-    ========================== -->
-    <section id="projects-section" class="app-section">
-      <header class="page-header">
-        <div>
-          <h2>Проекты</h2>
-          <p>Организуйте работу по проектам</p>
-        </div>
-        <button id="create-project-button" class="primary-small-button">
-          ＋ Новый проект
-        </button>
-      </header>
-      <div id="projects-grid" class="content-grid"></div>
-      <div id="projects-empty" class="empty-state">
-        <div>📁</div>
-        <h3>Пока нет проектов</h3>
-        <p>Создайте первый проект для организации работы.</p>
-      </div>
-    </section>
-    <!-- =========================
-         PLUGINS
-    ========================== -->
-    <section id="plugins-section" class="app-section">
-      <header class="page-header">
-        <div>
-          <h2>Плагины</h2>
-          <p>Дополнительные возможности Neuro-chat</p>
-        </div>
-      </header>
-      <div class="plugins-grid">
-        <article class="plugin-card">
-          <div class="plugin-icon">🌐</div>
-          <h3>Веб-поиск</h3>
-          <p>Поиск актуальной информации в интернете.</p>
-          <button class="plugin-button" data-plugin="web">
-            Подключить
-          </button>
-        </article>
-        <article class="plugin-card">
-          <div class="plugin-icon">💻</div>
-          <h3>Code Studio</h3>
-          <p>Работа с кодом и быстрый предпросмотр.</p>
-          <button class="plugin-button" data-plugin="code">
-            Открыть
-          </button>
-        </article>
-        <article class="plugin-card">
-          <div class="plugin-icon">🧊</div>
-          <h3>3D Studio</h3>
-          <p>Работа с 3D-файлами и моделями.</p>
-          <button class="plugin-button" data-plugin="3d">
-            Открыть
-          </button>
-        </article>
-        <article class="plugin-card">
-          <div class="plugin-icon">🎨</div>
-          <h3>Creative</h3>
-          <p>Инструменты для творческих задач.</p>
-          <button class="plugin-button" data-plugin="creative">
-            Открыть
-          </button>
-        </article>
-      </div>
-    </section>
-    <!-- =========================
-         SCHEDULED
-    ========================== -->
-    <section id="scheduled-section" class="app-section">
-      <header class="page-header">
-        <div>
-          <h2>Запланированные</h2>
-          <p>Автоматические задачи и напоминания</p>
-        </div>
-        <button id="create-scheduled-button" class="primary-small-button">
-          ＋ Добавить
-        </button>
-      </header>
-      <div id="scheduled-list" class="scheduled-list"></div>
-      <div id="scheduled-empty" class="empty-state">
-        <div>⏰</div>
-        <h3>Нет запланированных задач</h3>
-        <p>Создайте задачу, чтобы не забыть о важном.</p>
-      </div>
-    </section>
-  </main>
+
+<div class="composerArea">
+<div class="composer">
+
+<div class="preview" id="preview"></div>
+
+<textarea
+class="textarea"
+id="input"
+placeholder="Напишите сообщение..."
+rows="1"></textarea>
+
+<div class="bottom">
+<div class="leftButtons">
+
+<button class="tool" id="plus" title="Добавить медиа">＋</button>
+
+<input
+id="fileInput"
+type="file"
+hidden
+accept="image/*,video/*,audio/*">
+
 </div>
-<!-- =========================
-     SETTINGS MODAL
-========================== -->
-<div id="settings-modal" class="modal hidden">
-  <div class="modal-backdrop" data-close-modal="settings"></div>
-  <div class="modal-card settings-card">
-    <div class="modal-header">
-      <div>
-        <h2>Настройки</h2>
-        <p>Настройте Neuro-chat под себя</p>
-      </div>
-      <button class="modal-close" data-close-modal="settings">
-        ×
-      </button>
-    </div>
-    <div class="settings-content">
-      <div class="settings-group">
-        <h3>AI</h3>
-        <label class="setting-row">
-          <span>
-            <strong>Модель</strong>
-            <small>Выберите модель для чата</small>
-          </span>
-          <select id="model">
-            <option value="default">Neuro AI</option>
-            <option value="fast">Neuro Fast</option>
-            <option value="smart">Neuro Smart</option>
-          </select>
-        </label>
-        <label class="setting-row vertical">
-          <span>
-            <strong>API Key</strong>
-            <small>Используется для подключения AI</small>
-          </span>
-          <input
-            id="api-key"
-            type="password"
-            placeholder="API ключ"
-            autocomplete="off"
-          >
-        </label>
-      </div>
-      <div class="settings-group">
-        <h3>Внешний вид</h3>
-        <label class="setting-row">
-          <span>
-            <strong>Тема</strong>
-            <small>Оформление интерфейса</small>
-          </span>
-          <select id="theme">
-            <option value="dark">Тёмная</option>
-            <option value="light">Светлая</option>
-            <option value="system">Системная</option>
-          </select>
-        </label>
-      </div>
-      <div class="settings-group">
-        <h3>Чат</h3>
-        <label class="toggle-row">
-          <span>
-            <strong>Временный чат</strong>
-            <small>Не сохранять историю этого чата</small>
-          </span>
-          <input id="temporary-chat" type="checkbox">
-          <span class="toggle"></span>
-        </label>
-        <label class="toggle-row">
-          <span>
-            <strong>Конструктор сайтов</strong>
-            <small>Дополнительные инструменты для веб-разработки</small>
-          </span>
-          <input id="site-builder-mode" type="checkbox">
-          <span class="toggle"></span>
-        </label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button id="cancel-settings-button" class="secondary-button">
-        Отмена
-      </button>
-      <button id="save-settings-button" class="primary-button">
-        Сохранить
-      </button>
-    </div>
-  </div>
+
+<button class="send" id="send">↑</button>
 </div>
-<!-- =========================
-     SUPPORT MODAL
-========================== -->
-<div id="support-modal" class="modal hidden">
-  <div class="modal-backdrop" data-close-modal="support"></div>
-  <div class="modal-card">
-    <div class="modal-header">
-      <div>
-        <h2>Поддержка</h2>
-        <p>Мы готовы помочь</p>
-      </div>
-      <button class="modal-close" data-close-modal="support">
-        ×
-      </button>
-    </div>
-    <div class="support-content">
-      <div class="support-item">
-        <span>💬</span>
-        <div>
-          <strong>Помощь по Neuro-chat</strong>
-          <p>Опишите проблему максимально подробно.</p>
-        </div>
-      </div>
-      <div class="support-item">
-        <span>🐛</span>
-        <div>
-          <strong>Нашли ошибку?</strong>
-          <p>Сообщите, что произошло и какие действия привели к ошибке.</p>
-        </div>
-      </div>
-      <div class="support-item">
-        <span>💡</span>
-        <div>
-          <strong>Есть идея?</strong>
-          <p>Предлагайте новые функции для Neuro-chat.</p>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button id="close-support-button" class="secondary-button">
-        Закрыть
-      </button>
-    </div>
-  </div>
 </div>
-<!-- =========================
-     PROJECT MODAL
-========================== -->
-<div id="project-modal" class="modal hidden">
-  <div class="modal-backdrop" data-close-modal="project"></div>
-  <div class="modal-card">
-    <div class="modal-header">
-      <div>
-        <h2>Новый проект</h2>
-        <p>Создайте рабочее пространство</p>
-      </div>
-      <button class="modal-close" data-close-modal="project">
-        ×
-      </button>
-    </div>
-    <form id="project-form" class="modal-form">
-      <label>
-        <span>Название</span>
-        <input
-          id="project-name"
-          type="text"
-          placeholder="Например: Мой сайт"
-          required
-        >
-      </label>
-      <label>
-        <span>Описание</span>
-        <textarea
-          id="project-description"
-          rows="4"
-          placeholder="Краткое описание проекта"
-        ></textarea>
-      </label>
-      <div class="modal-footer">
-        <button type="button" class="secondary-button" data-close-modal="project">
-          Отмена
+</div>
+
+</main>
+</div>
+
+
+<!-- AUTH -->
+
+<div class="modal" id="authModal">
+<div class="box">
+<button class="close" data-close="authModal">×</button>
+<h2 id="authTitle">Вход</h2>
+
+<div class="error" id="authError"></div>
+
+<div class="field">
+<label>Имя пользователя</label>
+<input id="username" autocomplete="username">
+</div>
+
+<div class="field">
+<label>Пароль</label>
+<input id="password" type="password" autocomplete="current-password">
+</div>
+
+<button class="primary" id="authSubmit">Войти</button>
+
+<button class="secondary" id="authSwitch">
+Создать аккаунт
+</button>
+</div>
+</div>
+
+
+<!-- PROFILE -->
+
+<div class="modal" id="profileModal">
+<div class="box">
+<button class="close" data-close="profileModal">×</button>
+<h2>Аккаунт</h2>
+<button class="primary" id="logout">Выйти</button>
+</div>
+</div>
+
+
+<!-- IMAGE -->
+
+<div class="modal" id="imageModal">
+<div class="box">
+<button class="close" data-close="imageModal">×</button>
+<h2>Создать изображение</h2>
+
+<div class="field">
+<textarea id="imagePrompt" rows="5"
+placeholder="Опишите изображение..."></textarea>
+</div>
+
+<button class="primary" id="generateImage">Создать</button>
+
+<div id="imageResult" style="margin-top:14px"></div>
+</div>
+</div>
+
+
+<!-- VIDEO -->
+
+<div class="modal" id="videoModal">
+<div class="box">
+<button class="close" data-close="videoModal">×</button>
+<h2>Создать видео</h2>
+
+<div class="field">
+<textarea id="videoPrompt" rows="5"
+placeholder="Опишите видео..."></textarea>
+</div>
+
+<div class="field">
+<label>Длительность</label>
+<select id="videoDuration">
+<option value="5">5 секунд</option>
+<option value="10">10 секунд</option>
+<option value="15">15 секунд</option>
+</select>
+</div>
+
+<button class="primary" id="generateVideo">Создать</button>
+
+<div id="videoResult" style="margin-top:14px"></div>
+</div>
+</div>
+
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+
+const state = {
+  user:null,
+  chats:[],
+  activeChat:null,
+  messages:[],
+  authMode:"login",
+  file:null,
+  sending:false
+};
+
+
+/* API */
+
+async function api(url, options={}){
+  const response = await fetch(url,{
+    credentials:"include",
+    ...options,
+    headers:{
+      "Content-Type":"application/json",
+      ...(options.headers||{})
+    }
+  });
+
+  const text = await response.text();
+
+  let data={};
+
+  if(text){
+    try{
+      data=JSON.parse(text);
+    }catch{
+      throw new Error("Сервер вернул некорректный ответ.");
+    }
+  }
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      data.message ||
+      `Ошибка сервера: ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+
+/* MODALS */
+
+function open(id){
+  $(id).classList.add("show");
+}
+
+function close(id){
+  $(id).classList.remove("show");
+}
+
+document.querySelectorAll("[data-close]").forEach(b=>{
+  b.onclick=()=>close(b.dataset.close);
+});
+
+
+/* AUTH */
+
+$("account").onclick=()=>{
+  if(state.user){
+    open("profileModal");
+  }else{
+    setAuthMode("login");
+    open("authModal");
+  }
+};
+
+function setAuthMode(mode){
+  state.authMode=mode;
+
+  $("authTitle").textContent =
+    mode==="login" ? "Вход" : "Создание аккаунта";
+
+  $("authSubmit").textContent =
+    mode==="login" ? "Войти" : "Создать аккаунт";
+
+  $("authSwitch").textContent =
+    mode==="login" ? "Создать аккаунт" : "Уже есть аккаунт?";
+
+  $("authError").classList.remove("show");
+}
+
+$("authSwitch").onclick=()=>{
+  setAuthMode(
+    state.authMode==="login" ? "register" : "login"
+  );
+};
+
+$("authSubmit").onclick=async()=>{
+  const username=$("username").value.trim();
+  const password=$("password").value;
+
+  if(username.length<3){
+    return authError("Имя пользователя: минимум 3 символа.");
+  }
+
+  if(password.length<6){
+    return authError("Пароль: минимум 6 символов.");
+  }
+
+  const button=$("authSubmit");
+  button.disabled=true;
+
+  try{
+    const data=await api(
+      state.authMode==="login"
+        ? "/api/auth/login"
+        : "/api/auth/register",
+      {
+        method:"POST",
+        body:JSON.stringify({username,password})
+      }
+    );
+
+    state.user=data.user || data.account || data;
+
+    close("authModal");
+    updateAccount();
+
+    await loadChats();
+
+  }catch(e){
+    authError(e.message);
+  }finally{
+    button.disabled=false;
+  }
+};
+
+function authError(text){
+  $("authError").textContent=text;
+  $("authError").classList.add("show");
+}
+
+function updateAccount(){
+  if(!state.user){
+    $("accountName").textContent="Войти";
+    $("avatar").textContent="?";
+    return;
+  }
+
+  const name=state.user.username || "Пользователь";
+
+  $("accountName").textContent=name;
+  $("avatar").textContent=name[0].toUpperCase();
+}
+
+
+/* SESSION */
+
+async function checkSession(){
+  try{
+    const data=await api("/api/auth/me");
+
+    if(data.user){
+      state.user=data.user;
+      updateAccount();
+      await loadChats();
+    }else{
+      renderWelcome();
+    }
+  }catch{
+    renderWelcome();
+  }
+}
+
+
+/* CHATS */
+
+async function loadChats(){
+  const data=await api("/api/chats");
+
+  state.chats=
+    Array.isArray(data)
+      ? data
+      : data.chats || [];
+
+  renderChats();
+
+  if(state.chats.length){
+    await openChat(state.chats[0].id);
+  }else{
+    renderWelcome();
+  }
+}
+
+function renderChats(){
+  const list=$("chatList");
+  list.innerHTML="";
+
+  state.chats.forEach(chat=>{
+    const row=document.createElement("div");
+    row.className="chat"+
+      (String(chat.id)===String(state.activeChat)?" active":"");
+
+    const name=document.createElement("span");
+    name.className="chatName";
+    name.textContent=chat.title || "Новый чат";
+
+    const del=document.createElement("button");
+    del.className="deleteChat";
+    del.textContent="×";
+
+    row.append(name,del);
+
+    row.onclick=()=>openChat(chat.id);
+
+    del.onclick=async e=>{
+      e.stopPropagation();
+
+      if(!confirm("Удалить чат?"))return;
+
+      await api(
+        "/api/chats/"+encodeURIComponent(chat.id),
+        {method:"DELETE"}
+      );
+
+      await loadChats();
+    };
+
+    list.appendChild(row);
+  });
+}
+
+$("newChat").onclick=async()=>{
+  if(!state.user){
+    open("authModal");
+    return;
+  }
+
+  const data=await api("/api/chats",{
+    method:"POST",
+    body:JSON.stringify({title:"Новый чат"})
+  });
+
+  const chat=data.chat || data;
+
+  state.chats.unshift(chat);
+
+  renderChats();
+
+  await openChat(chat.id);
+};
+
+async function openChat(id){
+  state.activeChat=id;
+
+  renderChats();
+
+  const data=await api(
+    "/api/chats/"+encodeURIComponent(id)+"/messages"
+  );
+
+  state.messages=
+    Array.isArray(data)
+      ? data
+      : data.messages || [];
+
+  renderMessages();
+
+  $("sidebar").classList.remove("open");
+}
+
+
+/* MESSAGES */
+
+function escape(text){
+  return String(text||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;");
+}
+
+function format(text){
+  let x=escape(text);
+
+  x=x.replace(
+    /```([\s\S]*?)```/g,
+    "<pre><code>$1</code></pre>"
+  );
+
+  x=x.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>");
+  x=x.replace(/`([^`]+)`/g,"<code>$1</code>");
+  x=x.replace(/\n/g,"<br>");
+
+  return x;
+}
+
+function renderWelcome(){
+  $("messagesInner").innerHTML=`
+    <div class="welcome">
+      <div class="welcomeIcon">N</div>
+      <h1>Чем я могу помочь?</h1>
+      <p>Задайте вопрос Нейро-чату</p>
+
+      <div class="cards">
+        <button class="card" data-prompt="Объясни мне сложную тему простыми словами.">
+          💡 Объясни сложную тему
         </button>
-        <button type="submit" class="primary-button">
-          Создать
+
+        <button class="card" data-prompt="Придумай интересную идею для проекта.">
+          🚀 Придумай идею
+        </button>
+
+        <button class="card" data-prompt="Напиши красивое описание товара.">
+          ✍️ Напиши описание
+        </button>
+
+        <button class="card" data-prompt="Составь подробный план действий.">
+          📋 Составь план
         </button>
       </div>
-    </form>
-  </div>
-</div>
-<!-- =========================
-     SCHEDULED MODAL
-========================== -->
-<div id="scheduled-modal" class="modal hidden">
-  <div class="modal-backdrop" data-close-modal="scheduled"></div>
-  <div class="modal-card">
-    <div class="modal-header">
-      <div>
-        <h2>Запланированная задача</h2>
-        <p>Добавьте напоминание</p>
-      </div>
-      <button class="modal-close" data-close-modal="scheduled">
-        ×
-      </button>
     </div>
-    <form id="scheduled-form" class="modal-form">
-      <label>
-        <span>Название</span>
-        <input
-          id="scheduled-title"
-          type="text"
-          placeholder="Например: Проверить проект"
-          required
-        >
-      </label>
-      <label>
-        <span>Дата</span>
-        <input id="scheduled-date" type="date" required>
-      </label>
-      <label>
-        <span>Время</span>
-        <input id="scheduled-time" type="time" required>
-      </label>
-      <div class="modal-footer">
-        <button type="button" class="secondary-button" data-close-modal="scheduled">
-          Отмена
-        </button>
-        <button type="submit" class="primary-button">
-          Создать
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-<!-- =========================
-     CODE MODAL
-========================== -->
-<div id="code-modal" class="modal hidden code-modal">
-  <div class="modal-backdrop" data-close-modal="code"></div>
-  <div class="modal-card code-card">
-    <div class="modal-header">
-      <div>
-        <h2>Code Studio</h2>
-        <p>Редактор кода</p>
-      </div>
-      <button class="modal-close" data-close-modal="code">
-        ×
-      </button>
+  `;
+
+  document.querySelectorAll("[data-prompt]").forEach(b=>{
+    b.onclick=()=>{
+      $("input").value=b.dataset.prompt;
+      resize();
+      $("input").focus();
+    };
+  });
+}
+
+function renderMessages(){
+  const root=$("messagesInner");
+  root.innerHTML="";
+
+  if(!state.messages.length){
+    renderWelcome();
+    return;
+  }
+
+  state.messages.forEach(m=>{
+    const article=document.createElement("div");
+    article.className="message";
+
+    const avatar=document.createElement("div");
+    avatar.className="messageAvatar";
+    avatar.textContent=m.role==="user"?"Я":"N";
+
+    const body=document.createElement("div");
+    body.className="messageBody";
+
+    const role=document.createElement("div");
+    role.className="role";
+    role.textContent=m.role==="user"?"Вы":"Нейро-чат";
+
+    const content=document.createElement("div");
+    content.className="content";
+    content.innerHTML=format(
+      m.content ?? m.text ?? ""
+    );
+
+    body.append(role,content);
+    article.append(avatar,body);
+
+    root.appendChild(article);
+  });
+
+  scroll();
+}
+
+function scroll(){
+  requestAnimationFrame(()=>{
+    $("messages").scrollTop=$("messages").scrollHeight;
+  });
+}
+
+
+/* SEND */
+
+$("send").onclick=send;
+
+$("input").addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&!e.shiftKey){
+    e.preventDefault();
+    send();
+  }
+});
+
+async function send(){
+  if(state.sending)return;
+
+  const text=$("input").value.trim();
+
+  if(!text&&!state.file)return;
+
+  if(!state.user){
+    open("authModal");
+    return;
+  }
+
+  if(!state.activeChat){
+    await $("newChat").click();
+  }
+
+  state.sending=true;
+  $("send").disabled=true;
+
+  let content=text;
+
+  if(state.file){
+    content +=
+      `\n\n[Прикреплённый файл: ${state.file.name}]`;
+  }
+
+  $("input").value="";
+  resize();
+
+  state.messages.push({
+    role:"user",
+    content
+  });
+
+  renderMessages();
+
+  const typing={
+    role:"assistant",
+    content:"…"
+  };
+
+  state.messages.push(typing);
+  renderMessages();
+
+  try{
+    const messages=state.messages
+      .filter(m=>m!==typing)
+      .slice(-40)
+      .map(m=>({
+        role:m.role,
+        content:m.content
+      }));
+
+    const data=await api("/api/chat",{
+      method:"POST",
+      body:JSON.stringify({
+        chatId:state.activeChat,
+        messages
+      })
+    });
+
+    state.messages.pop();
+
+    const answer=
+      data.message ??
+      data.response ??
+      data.answer ??
+      data.text ??
+      data.content ??
+      data.result?.response ??
+      data.choices?.[0]?.message?.content;
+
+    if(typeof answer!=="string"||!answer.trim()){
+      throw new Error("AI не вернул текстовый ответ.");
+    }
+
+    state.messages.push({
+      role:"assistant",
+      content:answer
+    });
+
+    renderMessages();
+
+  }catch(e){
+    state.messages.pop();
+
+    state.messages.push({
+      role:"assistant",
+      content:"⚠️ "+e.message
+    });
+
+    renderMessages();
+
+  }finally{
+    state.sending=false;
+    $("send").disabled=false;
+    clearFile();
+    $("input").focus();
+  }
+}
+
+
+/* MEDIA */
+
+$("plus").onclick=()=>{
+  $("fileInput").click();
+};
+
+$("fileInput").onchange=()=>{
+  const file=$("fileInput").files[0];
+
+  if(!file)return;
+
+  state.file=file;
+
+  $("preview").classList.add("show");
+
+  $("preview").innerHTML=`
+    <div class="previewItem">
+      📎
+      <span style="flex:1">${escape(file.name)}</span>
+      <button id="removeFile"
+        style="border:0;background:none;color:#aaa;font-size:18px">×</button>
     </div>
-    <div class="code-toolbar">
-      <button id="code-file-button" class="secondary-button">
-        📂 Открыть
-      </button>
-      <button id="run-code-button" class="primary-button">
-        ▶ Запустить
-      </button>
-      <button id="preview-site-button" class="secondary-button">
-        🌐 Предпросмотр
-      </button>
-      <button id="ask-code-ai-button" class="secondary-button">
-        ✨ AI
-      </button>
-    </div>
-    <textarea
-      id="code-editor"
-      class="code-editor"
-      spellcheck="false"
-      placeholder="// Напишите код здесь..."
-    ></textarea>
-    <input id="code-file-input" type="file" hidden>
-  </div>
-</div>
-<!-- =========================
-     SITE PREVIEW
-========================== -->
-<div id="site-preview-modal" class="modal hidden">
-  <div class="modal-backdrop" data-close-modal="preview"></div>
-  <div class="modal-card preview-card">
-    <div class="modal-header">
-      <div>
-        <h2>Предпросмотр</h2>
-        <p>Результат вашего проекта</p>
-      </div>
-      <button class="modal-close" data-close-modal="preview">
-        ×
-      </button>
-    </div>
-    <iframe
-      id="site-preview-frame"
-      title="Предпросмотр сайта"
-      sandbox="allow-scripts allow-forms allow-modals"
-    ></iframe>
-  </div>
-</div>
-<!-- =========================
-     TOAST
-========================== -->
-<div id="toast-container" class="toast-container"></div>
-  </div>
-  <!-- Единственный JavaScript -->
-  <script src="script.js" defer></script>
+  `;
+
+  $("removeFile").onclick=clearFile;
+};
+
+function clearFile(){
+  state.file=null;
+  $("fileInput").value="";
+  $("preview").classList.remove("show");
+  $("preview").innerHTML="";
+}
+
+
+/* TEXT SIZE */
+
+$("input").addEventListener("input",resize);
+
+function resize(){
+  const el=$("input");
+  el.style.height="auto";
+  el.style.height=Math.min(el.scrollHeight,180)+"px";
+}
+
+
+/* IMAGE */
+
+$("imageOpen").onclick=()=>{
+  if(!state.user){
+    open("authModal");
+    return;
+  }
+
+  $("imageResult").innerHTML="";
+  open("imageModal");
+};
+
+$("generateImage").onclick=async()=>{
+  const prompt=$("imagePrompt").value.trim();
+
+  if(!prompt)return;
+
+  $("generateImage").disabled=true;
+  $("generateImage").textContent="Создание…";
+
+  try{
+    const data=await api("/api/generate/image",{
+      method:"POST",
+      body:JSON.stringify({prompt})
+    });
+
+    const src=data.image||data.url;
+
+    if(!src)throw new Error("Изображение не получено.");
+
+    $("imageResult").innerHTML=
+      `<img class="media" src="${src}" alt="Созданное изображение">`;
+
+  }catch(e){
+    $("imageResult").textContent=e.message;
+  }finally{
+    $("generateImage").disabled=false;
+    $("generateImage").textContent="Создать";
+  }
+};
+
+
+/* VIDEO */
+
+$("videoOpen").onclick=()=>{
+  if(!state.user){
+    open("authModal");
+    return;
+  }
+
+  $("videoResult").innerHTML="";
+  open("videoModal");
+};
+
+$("generateVideo").onclick=async()=>{
+  const prompt=$("videoPrompt").value.trim();
+
+  if(!prompt)return;
+
+  $("generateVideo").disabled=true;
+  $("generateVideo").textContent="Создание…";
+
+  try{
+    const data=await api("/api/generate/video",{
+      method:"POST",
+      body:JSON.stringify({
+        prompt,
+        duration:Number($("videoDuration").value),
+        aspect_ratio:"16:9",
+        generate_audio:true
+      })
+    });
+
+    const src=data.video||data.url;
+
+    if(!src)throw new Error("Видео не получено.");
+
+    $("videoResult").innerHTML=
+      `<video class="media" controls playsinline src="${src}"></video>`;
+
+  }catch(e){
+    $("videoResult").textContent=e.message;
+  }finally{
+    $("generateVideo").disabled=false;
+    $("generateVideo").textContent="Создать";
+  }
+};
+
+
+/* LOGOUT */
+
+$("logout").onclick=async()=>{
+  try{
+    await api("/api/auth/logout",{method:"POST"});
+  }catch{}
+
+  state.user=null;
+  state.chats=[];
+  state.activeChat=null;
+  state.messages=[];
+
+  close("profileModal");
+  updateAccount();
+  renderWelcome();
+  renderChats();
+};
+
+
+/* MOBILE */
+
+$("mobileMenu").onclick=()=>{
+  $("sidebar").classList.toggle("open");
+};
+
+
+/* START */
+
+renderWelcome();
+checkSession();
+
+</script>
 </body>
 </html>
