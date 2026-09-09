@@ -1,904 +1,754 @@
+"use strict";
+/*
+ * =========================================================
+ * NEURO CHAT — SERVER
+ * server.js
+ * =========================================================
+ *
+ * Переменные окружения:
+ *
+ * PORT=3000
+ *
+ * AI_API_URL=https://...
+ * AI_API_KEY=...
+ * AI_MODEL=...
+ *
+ * SESSION_SECRET=...
+ *
+ * Не помещайте AI_API_KEY в index.html или script.js.
+ * =========================================================
+ */
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 const crypto = require("crypto");
-
 const app = express();
-
-const PORT = process.env.PORT || 3000;
-const ROOT = __dirname;
-
-const DATA_DIR = path.join(ROOT, "data");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-const CHATS_FILE = path.join(DATA_DIR, "chats.json");
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-function ensureFile(file, fallback) {
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
-  }
-}
-
-ensureFile(USERS_FILE, []);
-ensureFile(CHATS_FILE, []);
-
+/* =========================================================
+   CONFIG
+   ========================================================= */
+const PORT = Number(process.env.PORT) || 3000;
+const AI_API_URL =
+  process.env.AI_API_URL || "";
+const AI_API_KEY =
+  process.env.AI_API_KEY || "";
+const AI_MODEL =
+  process.env.AI_MODEL || "";
+const SESSION_SECRET =
+  process.env.SESSION_SECRET ||
+  "change-this-session-secret";
+/*
+ * Ограничение размера обычного JSON-запроса.
+ */
+app.use(express.json({ limit: "2mb" }));
+/*
+ * Статические файлы Neuro Chat.
+ */
+app.use(
+  express.static(
+    path.join(__dirname)
+  )
+);
+/* =========================================================
+   SIMPLE DATABASE
+   =========================================================
+ *
+ * Это временное серверное хранилище.
+ *
+ * Для Cloudflare Workers / serverless-развёртывания
+ * его нельзя считать постоянной базой данных.
+ *
+ * Если твой текущий проект уже использует БД,
+ * этот блок нужно заменить на неё.
+ */
+const users = new Map();
 const sessions = new Map();
-
-app.disable("x-powered-by");
-
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
-
-app.use(express.static(ROOT, {
-  index: false
-}));
-
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return fallback;
-  }
+/* =========================================================
+   HELPERS
+   ========================================================= */
+function normalizeUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
-
-function writeJson(file, value) {
-  fs.writeFileSync(
-    file,
-    JSON.stringify(value, null, 2)
+function isValidUsername(username) {
+  /*
+   * Разрешаем:
+   * латинские буквы
+   * цифры
+   * .
+   * _
+   * -
+   *
+   * Минимум 3 символа.
+   */
+  return /^[a-zA-Z0-9._-]{3,40}$/.test(
+    username
   );
 }
-
-function clean(value, max = 12000) {
-  return String(value ?? "")
-    .replace(
-      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
-      ""
-    )
-    .trim()
-    .slice(0, max);
+function isValidPassword(password) {
+  return (
+    typeof password === "string" &&
+    password.length >= 6 &&
+    password.length <= 200
+  );
 }
-
-function hashPassword(
-  password,
-  salt = crypto.randomBytes(16).toString("hex")
-) {
+function hashPassword(password, salt) {
+  return crypto
+    .pbkdf2Sync(
+      password,
+      salt,
+      120000,
+      64,
+      "sha512"
+    )
+    .toString("hex");
+}
+function createPasswordRecord(password) {
+  const salt =
+    crypto.randomBytes(32).toString("hex");
+  const hash =
+    hashPassword(password, salt);
   return {
     salt,
-    hash: crypto
-      .scryptSync(password, salt, 64)
-      .toString("hex")
+    hash
   };
 }
-
-function verifyPassword(password, user) {
-  try {
-    const actual = crypto
-      .scryptSync(password, user.salt, 64)
-      .toString("hex");
-
-    return crypto.timingSafeEqual(
-      Buffer.from(actual, "hex"),
-      Buffer.from(user.hash, "hex")
+function verifyPassword(password, record) {
+  const hash =
+    hashPassword(
+      password,
+      record.salt
     );
-  } catch {
-    return false;
-  }
+  return crypto.timingSafeEqual(
+    Buffer.from(hash, "hex"),
+    Buffer.from(record.hash, "hex")
+  );
 }
-
-function createToken() {
-  return crypto.randomBytes(32).toString("hex");
-}
-
-function setSession(res, userId) {
-  const sessionToken = createToken();
-
-  sessions.set(sessionToken, {
+function createSession(userId) {
+  const sessionId =
+    crypto.randomBytes(32).toString("hex");
+  sessions.set(sessionId, {
     userId,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    lastUsedAt: Date.now()
   });
-
-  res.setHeader(
-    "Set-Cookie",
-    `neuro_session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`
-  );
+  return sessionId;
 }
-
-function getUser(req) {
-  const cookie = req.headers.cookie || "";
-
-  const match = cookie.match(
-    /(?:^|;\s*)neuro_session=([^;]+)/
-  );
-
-  if (!match) {
+function parseCookies(header) {
+  const cookies = {};
+  if (!header) {
+    return cookies;
+  }
+  header
+    .split(";")
+    .forEach((part) => {
+      const index = part.indexOf("=");
+      if (index === -1) return;
+      const key =
+        part
+          .slice(0, index)
+          .trim();
+      const value =
+        part
+          .slice(index + 1)
+          .trim();
+      cookies[key] =
+        decodeURIComponent(value);
+    });
+  return cookies;
+}
+function getSession(req) {
+  const cookies =
+    parseCookies(
+      req.headers.cookie
+    );
+  const sessionId =
+    cookies.neuro_session;
+  if (!sessionId) {
     return null;
   }
-
-  const session = sessions.get(match[1]);
-
+  const session =
+    sessions.get(sessionId);
   if (!session) {
     return null;
   }
-
-  const users = readJson(USERS_FILE, []);
-
-  return users.find(
-    user => user.id === session.userId
-  ) || null;
-}
-
-function requireUser(req, res, next) {
-  const user = getUser(req);
-
+  const user =
+    [...users.values()].find(
+      (item) =>
+        item.id === session.userId
+    );
   if (!user) {
-    return res.status(401).json({
-      ok: false,
-      error: "Требуется вход в аккаунт."
-    });
+    sessions.delete(sessionId);
+    return null;
   }
-
-  req.user = user;
-  next();
-}
-
-/* =========================
-   АВТОНОМНЫЙ НЕЙРО-ДВИЖОК
-========================= */
-
-const stopWords = new Set([
-  "и",
-  "а",
-  "но",
-  "это",
-  "как",
-  "что",
-  "для",
-  "или",
-  "на",
-  "в",
-  "с",
-  "по",
-  "у",
-  "я",
-  "ты",
-  "мне",
-  "мы",
-  "вы",
-  "же",
-  "не",
-  "да",
-  "из",
-  "за",
-  "к",
-  "о",
-  "про",
-  "то"
-]);
-
-function words(text) {
-  return (
-    clean(text, 3000)
-      .toLowerCase()
-      .replace(/ё/g, "е")
-      .match(/[a-zа-я0-9]+/gi) || []
-  );
-}
-
-function localAnswer(message, history = []) {
-  const q = clean(message, 5000);
-
-  if (!q) {
-    return "Напиши вопрос или задачу — я помогу разобраться.";
-  }
-
-  const lower = q.toLowerCase();
-
-  const has = (...items) =>
-    items.some(item => lower.includes(item));
-
-  const wordList = words(q);
-
-  /* Приветствие */
-
-  if (
-    has(
-      "привет",
-      "здравствуй",
-      "добрый вечер",
-      "доброе утро",
-      "добрый день"
-    )
-  ) {
-    return (
-      "Привет! 👋 Я Нейро.\n\n" +
-      "Готов помочь с вопросом, текстом, кодом, " +
-      "идеей или твоим проектом."
-    );
-  }
-
-  /* Кто такой Нейро */
-
-  if (
-    has(
-      "кто ты",
-      "ты кто",
-      "что ты"
-    )
-  ) {
-    return (
-      "Я Нейро — помощник этого сайта.\n\n" +
-      "Сейчас я работаю в автономном режиме без " +
-      "внешнего API-ключа. Я умею вести контекст " +
-      "диалога и помогать с задачами, кодом, " +
-      "текстами и проектами."
-    );
-  }
-
-  /* Спасибо */
-
-  if (
-    has(
-      "спасибо",
-      "благодарю"
-    )
-  ) {
-    return (
-      "Пожалуйста! 😊\n\n" +
-      "Если есть следующая задача — присылай."
-    );
-  }
-
-  /* Время */
-
-  if (
-    has(
-      "время",
-      "который час"
-    )
-  ) {
-    return (
-      `Сейчас серверное время: ${
-        new Date().toLocaleString("ru-RU")
-      }.`
-    );
-  }
-
-  /* Дата */
-
-  if (
-    has(
-      "дата",
-      "какое сегодня число",
-      "сегодня"
-    )
-  ) {
-    return (
-      `Сегодня ${
-        new Date().toLocaleDateString(
-          "ru-RU",
-          {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-          }
-        )
-      }.`
-    );
-  }
-
-  /* Код */
-
-  if (
-    has(
-      "код",
-      "javascript",
-      "js",
-      "html",
-      "css",
-      "python",
-      "server.js",
-      "script.js"
-    )
-  ) {
-    return (
-      "Понял, это задача по коду. 🧩\n\n" +
-      "Пришли файл или вставь проблемный фрагмент " +
-      "и напиши, что должно происходить.\n\n" +
-      "Я помогу разобрать структуру, найти типичные " +
-      "ошибки и подготовить готовую замену."
-    );
-  }
-
-  /* Сайт */
-
-  if (
-    has(
-      "сайт",
-      "страниц",
-      "интерфейс",
-      "кнопк"
-    )
-  ) {
-    return (
-      "Для сайта лучше идти по слоям:\n\n" +
-      "1. Интерфейс\n" +
-      "2. Клиентский JavaScript\n" +
-      "3. Серверный API\n" +
-      "4. Хранение данных\n\n" +
-      "В Neuro-chat сначала важно добиться стабильной " +
-      "работы чата и авторизации, а затем подключать " +
-      "дополнительные генераторы."
-    );
-  }
-
-  /* 3D */
-
-  if (
-    has(
-      "3d",
-      "3д",
-      "модель",
-      "печать",
-      "принтер"
-    )
-  ) {
-    return (
-      "Могу помочь с 3D-проектом: настройками печати, " +
-      "Bambu Studio, поддержками, соединениями деталей " +
-      "и подготовкой модели."
-    );
-  }
-
-  /* Ошибки */
-
-  if (
-    has(
-      "ошибк",
-      "не работает",
-      "сломал",
-      "ошибка"
-    )
-  ) {
-    return (
-      `Давай разберём ошибку по фактам.\n\n` +
-      `Я получил сообщение:\n«${q.slice(0, 240)}»\n\n` +
-      "Если это ошибка сайта, пришли её текст или " +
-      "скриншот — я помогу определить конкретный файл " +
-      "и место, которое нужно исправить."
-    );
-  }
-
-  /* Общий ответ */
-
-  const usefulWords = wordList
-    .filter(word => !stopWords.has(word))
-    .slice(0, 8);
-
-  const topic =
-    usefulWords.length > 0
-      ? usefulWords.join(", ")
-      : "твой запрос";
-
-  const previousUsers = history
-    .filter(item => item && item.role === "user")
-    .slice(-3)
-    .map(item => clean(item.content, 180));
-
-  const variants = [
-    `Понял задачу. Ключевые темы здесь: ${topic}. Давай разложим её на конкретные шаги и сначала сделаем самое важное.`,
-
-    `Хорошо. Я бы начал с главного: ${topic}. После этого можно последовательно проверить детали и убрать лишнее.`,
-
-    `Принял. По текущему запросу вижу задачу на тему «${topic}». Могу помочь довести её до рабочего результата без лишних действий.`,
-
-    previousUsers.length
-      ? `Продолжаю с учётом предыдущего контекста: «${previousUsers[previousUsers.length - 1]}». Теперь можно перейти к следующему шагу.`
-      : "Принял. Опиши желаемый результат чуть конкретнее, и я помогу построить решение."
-  ];
-
-  return variants[
-    (q.length +
-      wordList.length +
-      history.length) %
-      variants.length
-  ];
-}
-
-/* =========================
-   SYSTEM
-========================= */
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "neuro-chat",
-    mode: "autonomous",
-    externalApi: false,
-    time: new Date().toISOString()
-  });
-});
-
-app.get("/api/status", (req, res) => {
-  res.json({
-    ok: true,
-    ai: "local",
-    externalApi: false
-  });
-});
-
-/* =========================
-   AUTH
-========================= */
-
-app.post("/api/auth/register", (req, res) => {
-  const username = clean(
-    req.body.username,
-    80
-  ).toLowerCase();
-
-  const password = String(
-    req.body.password || ""
-  );
-
-  if (
-    !/^[a-z0-9._-]{3,40}$/.test(username)
-  ) {
-    return res.status(400).json({
-      ok: false,
-      error:
-        "Логин: 3–40 символов, только английские буквы, цифры, точка, _ или -."
-    });
-  }
-
-  if (password.length < 6) {
-    return res.status(400).json({
-      ok: false,
-      error:
-        "Пароль должен быть не короче 6 символов."
-    });
-  }
-
-  const users = readJson(
-    USERS_FILE,
-    []
-  );
-
-  if (
-    users.some(
-      user => user.username === username
-    )
-  ) {
-    return res.status(409).json({
-      ok: false,
-      error:
-        "Такой пользователь уже существует."
-    });
-  }
-
-  const {
-    salt,
-    hash
-  } = hashPassword(password);
-
-  const user = {
-    id: crypto.randomUUID(),
-    username,
-    salt,
-    hash,
-    createdAt:
-      new Date().toISOString()
+  session.lastUsedAt =
+    Date.now();
+  return {
+    sessionId,
+    session,
+    user
   };
-
-  users.push(user);
-
-  writeJson(
-    USERS_FILE,
-    users
+}
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name
+  };
+}
+function setSessionCookie(
+  res,
+  sessionId
+) {
+  /*
+   * HttpOnly:
+   * JavaScript не может прочитать cookie.
+   * SameSite=Lax:
+   * защищает от части CSRF-сценариев.
+   * Secure:
+   * включаем на HTTPS.
+   */
+  const secure =
+    process.env.NODE_ENV ===
+      "production"
+      ? "; Secure"
+      : "";
+  res.setHeader(
+    "Set-Cookie",
+    `neuro_session=${encodeURIComponent(
+      sessionId
+    )}; Path=/; HttpOnly; SameSite=Lax${secure}`
   );
-
-  setSession(
-    res,
-    user.id
-  );
-
-  res.json({
-    ok: true,
-    user: {
-      id: user.id,
-      username: user.username
-    }
-  });
-});
-
-app.post("/api/auth/login", (req, res) => {
-  const username = clean(
-    req.body.username,
-    80
-  ).toLowerCase();
-
-  const password = String(
-    req.body.password || ""
-  );
-
-  const users = readJson(
-    USERS_FILE,
-    []
-  );
-
-  const user = users.find(
-    item =>
-      item.username === username
-  );
-
-  if (
-    !user ||
-    !verifyPassword(
-      password,
-      user
-    )
-  ) {
-    return res.status(401).json({
-      ok: false,
-      error:
-        "Неверный логин или пароль."
-    });
-  }
-
-  setSession(
-    res,
-    user.id
-  );
-
-  res.json({
-    ok: true,
-    user: {
-      id: user.id,
-      username: user.username
-    }
-  });
-});
-
-app.post("/api/auth/logout", (req, res) => {
-  const cookie =
-    req.headers.cookie || "";
-
-  const match = cookie.match(
-    /(?:^|;\s*)neuro_session=([^;]+)/
-  );
-
-  if (match) {
-    sessions.delete(match[1]);
-  }
-
+}
+function clearSessionCookie(res) {
   res.setHeader(
     "Set-Cookie",
     "neuro_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
   );
-
-  res.json({
-    ok: true
+}
+function sendError(
+  res,
+  status,
+  message
+) {
+  return res.status(status).json({
+    ok: false,
+    error: message
   });
-});
-
-app.get("/api/auth/me", (req, res) => {
-  const user = getUser(req);
-
-  res.json({
-    ok: true,
-    authenticated: !!user,
-    user: user
-      ? {
-          id: user.id,
-          username: user.username
-        }
-      : null
-  });
-});
-
-/* =========================
-   CHATS
-========================= */
-
-app.get(
-  "/api/chats",
-  requireUser,
-  (req, res) => {
-    const chats = readJson(
-      CHATS_FILE,
-      []
-    )
-      .filter(
-        chat =>
-          chat.userId ===
-          req.user.id
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt) -
-          new Date(a.updatedAt)
-      );
-
-    res.json({
-      ok: true,
-      chats: chats.map(chat => ({
-        id: chat.id,
-        title: chat.title,
-        updatedAt: chat.updatedAt
-      }))
-    });
+}
+function cleanAIError(error) {
+  if (!error) {
+    return "Не удалось получить ответ от Neuro.";
   }
-);
-
-app.post(
-  "/api/chats",
-  requireUser,
-  (req, res) => {
-    const chats = readJson(
-      CHATS_FILE,
-      []
+  const message =
+    String(
+      error.message ||
+      error
     );
-
-    const chat = {
-      id: crypto.randomUUID(),
-      userId: req.user.id,
-      title:
-        clean(
-          req.body.title,
-          80
-        ) ||
-        "Новый чат",
-      messages: [],
-      createdAt:
-        new Date().toISOString(),
-      updatedAt:
-        new Date().toISOString()
-    };
-
-    chats.push(chat);
-
-    writeJson(
-      CHATS_FILE,
-      chats
-    );
-
-    res.json({
-      ok: true,
-      chat
-    });
+  /*
+   * Не отправляем пользователю:
+   * IP
+   * stack trace
+   * внутренние URL
+   * технические данные
+   */
+  if (
+    /ECONNREFUSED/i.test(message) ||
+    /ENOTFOUND/i.test(message) ||
+    /ECONNRESET/i.test(message)
+  ) {
+    return "AI-сервис временно недоступен. Попробуйте ещё раз.";
   }
-);
-
+  if (
+    /fetch failed/i.test(message) ||
+    /network/i.test(message)
+  ) {
+    return "Не удалось связаться с AI-сервисом. Попробуйте ещё раз.";
+  }
+  return "Не удалось получить ответ от Neuro.";
+}
+/* =========================================================
+   AUTH MIDDLEWARE
+   ========================================================= */
+function requireAuth(
+  req,
+  res,
+  next
+) {
+  const auth =
+    getSession(req);
+  if (!auth) {
+    return sendError(
+      res,
+      401,
+      "Требуется авторизация."
+    );
+  }
+  req.user = auth.user;
+  req.session = auth.session;
+  next();
+}
+/* =========================================================
+   AUTH — SESSION
+   ========================================================= */
 app.get(
-  "/api/chats/:id",
-  requireUser,
+  "/api/auth/session",
   (req, res) => {
-    const chats = readJson(
-      CHATS_FILE,
-      []
-    );
-
-    const chat = chats.find(
-      item =>
-        item.id ===
-          req.params.id &&
-        item.userId ===
-          req.user.id
-    );
-
-    if (!chat) {
-      return res.status(404).json({
-        ok: false,
-        error: "Чат не найден."
+    const auth =
+      getSession(req);
+    if (!auth) {
+      return res.json({
+        ok: true,
+        authenticated: false
       });
     }
-
-    res.json({
+    return res.json({
       ok: true,
-      chat
+      authenticated: true,
+      user: publicUser(
+        auth.user
+      )
     });
   }
 );
-
-app.delete(
-  "/api/chats/:id",
-  requireUser,
+/* =========================================================
+   AUTH — REGISTER
+   ========================================================= */
+app.post(
+  "/api/auth/register",
   (req, res) => {
-    let chats = readJson(
-      CHATS_FILE,
-      []
+    const username =
+      normalizeUsername(
+        req.body?.username
+      );
+    const password =
+      req.body?.password;
+    if (!isValidUsername(username)) {
+      return sendError(
+        res,
+        400,
+        "Логин должен содержать от 3 до 40 латинских букв, цифр, точек, дефисов или символов _."
+      );
+    }
+    if (!isValidPassword(password)) {
+      return sendError(
+        res,
+        400,
+        "Пароль должен содержать минимум 6 символов."
+      );
+    }
+    if (users.has(username)) {
+      return sendError(
+        res,
+        409,
+        "Пользователь с таким логином уже существует."
+      );
+    }
+    const passwordRecord =
+      createPasswordRecord(
+        password
+      );
+    const user = {
+      id: crypto.randomUUID(),
+      username,
+      name: username,
+      ...passwordRecord,
+      createdAt: Date.now()
+    };
+    users.set(
+      username,
+      user
     );
-
-    const oldLength =
-      chats.length;
-
-    chats = chats.filter(
-      chat =>
-        !(
-          chat.id ===
-            req.params.id &&
-          chat.userId ===
-            req.user.id
-        )
+    const sessionId =
+      createSession(
+        user.id
+      );
+    setSessionCookie(
+      res,
+      sessionId
     );
-
-    writeJson(
-      CHATS_FILE,
-      chats
-    );
-
-    res.json({
+    return res.status(201).json({
       ok: true,
-      deleted:
-        oldLength !==
-        chats.length
+      user: publicUser(user)
     });
   }
 );
-
-/* =========================
+/* =========================================================
+   AUTH — LOGIN
+   ========================================================= */
+app.post(
+  "/api/auth/login",
+  (req, res) => {
+    const username =
+      normalizeUsername(
+        req.body?.username
+      );
+    const password =
+      req.body?.password;
+    if (
+      !username ||
+      !password
+    ) {
+      return sendError(
+        res,
+        400,
+        "Введите логин и пароль."
+      );
+    }
+    const user =
+      users.get(username);
+    if (!user) {
+      return sendError(
+        res,
+        401,
+        "Неверный логин или пароль."
+      );
+    }
+    let valid = false;
+    try {
+      valid =
+        verifyPassword(
+          password,
+          user
+        );
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
+      return sendError(
+        res,
+        401,
+        "Неверный логин или пароль."
+      );
+    }
+    const sessionId =
+      createSession(
+        user.id
+      );
+    setSessionCookie(
+      res,
+      sessionId
+    );
+    return res.json({
+      ok: true,
+      user: publicUser(user)
+    });
+  }
+);
+/* =========================================================
+   AUTH — LOGOUT
+   ========================================================= */
+app.post(
+  "/api/auth/logout",
+  (req, res) => {
+    const cookies =
+      parseCookies(
+        req.headers.cookie
+      );
+    const sessionId =
+      cookies.neuro_session;
+    if (sessionId) {
+      sessions.delete(
+        sessionId
+      );
+    }
+    clearSessionCookie(res);
+    return res.json({
+      ok: true
+    });
+  }
+);
+/* =========================================================
+   AI
+   ========================================================= */
+async function askAI({
+  messages,
+  tool
+}) {
+  if (!AI_API_URL) {
+    throw new Error(
+      "AI_API_URL is not configured."
+    );
+  }
+  if (!AI_API_KEY) {
+    throw new Error(
+      "AI_API_KEY is not configured."
+    );
+  }
+  const controller =
+    new AbortController();
+  const timeout =
+    setTimeout(
+      () => controller.abort(),
+      120000
+    );
+  try {
+    /*
+     * Формат запроса ниже соответствует
+     * OpenAI-compatible Chat Completions API.
+     * Если твой провайдер использует другой формат,
+     * этот участок нужно адаптировать под его API.
+     */
+    const body = {
+      model: AI_MODEL,
+      messages
+    };
+    const response =
+      await fetch(
+        AI_API_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            "Authorization":
+              `Bearer ${AI_API_KEY}`
+          },
+          body:
+            JSON.stringify(body),
+          signal:
+            controller.signal
+        }
+      );
+    const text =
+      await response.text();
+    let data = null;
+    try {
+      data =
+        JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    if (!response.ok) {
+      console.error(
+        "AI provider status:",
+        response.status
+      );
+      throw new Error(
+        "AI provider returned an error."
+      );
+    }
+    /*
+     * Поддерживаем несколько распространённых
+     * вариантов ответа.
+     */
+    const answer =
+      data?.choices?.[0]?.message?.content ||
+      data?.choices?.[0]?.text ||
+      data?.answer ||
+      data?.response ||
+      data?.content ||
+      data?.text ||
+      "";
+    if (
+      typeof answer !== "string" ||
+      !answer.trim()
+    ) {
+      throw new Error(
+        "AI provider returned an empty response."
+      );
+    }
+    return answer.trim();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+/* =========================================================
    CHAT
-========================= */
-
+   ========================================================= */
 app.post(
   "/api/chat",
-  requireUser,
-  (req, res) => {
-    const message = clean(
-      req.body.message,
-      5000
-    );
-
-    if (!message) {
-      return res.status(400).json({
-        ok: false,
-        error:
-          "Пустое сообщение."
+  requireAuth,
+  async (req, res) => {
+    try {
+      const message =
+        typeof req.body?.message ===
+        "string"
+          ? req.body.message.trim()
+          : "";
+      if (!message) {
+        return sendError(
+          res,
+          400,
+          "Сообщение не может быть пустым."
+        );
+      }
+      if (message.length > 12000) {
+        return sendError(
+          res,
+          400,
+          "Сообщение слишком длинное."
+        );
+      }
+      const incomingMessages =
+        Array.isArray(
+          req.body?.messages
+        )
+          ? req.body.messages
+          : [];
+      /*
+       * Защищаем сервер от слишком больших
+       * или неправильных объектов истории.
+       */
+      const history =
+        incomingMessages
+          .filter(
+            (item) =>
+              item &&
+              (
+                item.role ===
+                  "user" ||
+                item.role ===
+                  "assistant"
+              ) &&
+              typeof item.content ===
+                "string"
+          )
+          .slice(-30)
+          .map(
+            (item) => ({
+              role: item.role,
+              content:
+                item.content.slice(
+                  0,
+                  12000
+                )
+            })
+          );
+      const tool =
+        typeof req.body?.tool ===
+        "string"
+          ? req.body.tool
+          : null;
+      const messages = [
+        {
+          role: "system",
+          content:
+            "Ты Neuro — интеллектуальный AI-помощник. Отвечай на русском языке, если пользователь пишет по-русски. Отвечай понятно, точно и полезно. Не утверждай то, чего не знаешь."
+        },
+        ...history
+      ];
+      /*
+       * Не дублируем последнее сообщение,
+       * если frontend уже передал его в history.
+       */
+      const last =
+        messages[
+          messages.length - 1
+        ];
+      if (
+        !last ||
+        last.role !== "user" ||
+        last.content !== message
+      ) {
+        messages.push({
+          role: "user",
+          content: message
+        });
+      }
+      if (tool) {
+        messages[0].content +=
+          `\nПользователь сейчас использует инструмент: ${tool}.`;
+      }
+      const answer =
+        await askAI({
+          messages,
+          tool
+        });
+      return res.json({
+        ok: true,
+        answer
       });
+    } catch (error) {
+      console.error(
+        "Chat error:",
+        error
+      );
+      return sendError(
+        res,
+        502,
+        cleanAIError(error)
+      );
     }
-
-    const chats = readJson(
-      CHATS_FILE,
-      []
-    );
-
-    let chat = chats.find(
-      item =>
-        item.id ===
-          req.body.chatId &&
-        item.userId ===
-          req.user.id
-    );
-
-    if (!chat) {
-      chat = {
-        id: crypto.randomUUID(),
-        userId: req.user.id,
-        title:
-          message.slice(0, 60),
-        messages: [],
-        createdAt:
-          new Date().toISOString(),
-        updatedAt:
-          new Date().toISOString()
-      };
-
-      chats.push(chat);
-    }
-
-    chat.messages.push({
-      role: "user",
-      content: message,
-      createdAt:
-        new Date().toISOString()
-    });
-
-    const answer = localAnswer(
-      message,
-      chat.messages
-    );
-
-    chat.messages.push({
-      role: "assistant",
-      content: answer,
-      createdAt:
-        new Date().toISOString()
-    });
-
-    chat.updatedAt =
-      new Date().toISOString();
-
-    writeJson(
-      CHATS_FILE,
-      chats
-    );
-
+  }
+);
+/* =========================================================
+   HEALTH
+   ========================================================= */
+app.get(
+  "/api/health",
+  (req, res) => {
     res.json({
       ok: true,
-      chatId: chat.id,
-      message: {
-        role: "assistant",
-        content: answer
-      }
+      service: "Neuro Chat",
+      aiConfigured:
+        Boolean(
+          AI_API_URL &&
+          AI_API_KEY
+        )
     });
   }
 );
-
-/* =========================
-   GENERATION PLACEHOLDERS
-========================= */
-
-app.post(
-  "/api/generate/image",
-  requireUser,
-  (req, res) => {
-    res.status(501).json({
-      ok: false,
-      error:
-        "Генератор изображений пока не подключён. Интерфейс готов для подключения модели."
-    });
+/* =========================================================
+   SPA FALLBACK
+   ========================================================= */
+app.get(
+  "*",
+  (req, res, next) => {
+    /*
+     * API-маршруты сюда попадать не должны.
+     */
+    if (
+      req.path.startsWith(
+        "/api/"
+      )
+    ) {
+      return next();
+    }
+    res.sendFile(
+      path.join(
+        __dirname,
+        "index.html"
+      )
+    );
   }
 );
-
-app.post(
-  "/api/generate/video",
-  requireUser,
-  (req, res) => {
-    res.status(501).json({
-      ok: false,
-      error:
-        "Генератор видео пока не подключён. Интерфейс готов для подключения модели."
-    });
-  }
-);
-
-/* =========================
-   FRONTEND
-========================= */
-
-app.get("/*splat", (req, res, next) => {
-  if (
-    req.path.startsWith("/api/")
-  ) {
-    return next();
-  }
-
-  res.sendFile(
-    path.join(
-      ROOT,
-      "index.html"
-    )
-  );
-});
-
-app.use(
-  (req, res) => {
-    res.status(404).json({
-      ok: false,
-      error:
-        "Маршрут не найден."
-    });
-  }
-);
-
+/* =========================================================
+   ERROR HANDLER
+   ========================================================= */
 app.use(
   (err, req, res, next) => {
-    console.error(err);
-
-    res.status(500).json({
-      ok: false,
-      error:
-        "Внутренняя ошибка сервера."
-    });
+    console.error(
+      "Unhandled server error:",
+      err
+    );
+    if (res.headersSent) {
+      return next(err);
+    }
+    return sendError(
+      res,
+      500,
+      "Внутренняя ошибка сервера."
+    );
   }
 );
-
+/* =========================================================
+   START
+   ========================================================= */
 app.listen(
   PORT,
   () => {
     console.log(
-      `Neuro-chat запущен на порту ${PORT}`
+      `Neuro Chat server started on port ${PORT}`
     );
+    if (!AI_API_URL) {
+      console.warn(
+        "AI_API_URL is not configured."
+      );
+    }
+    if (!AI_API_KEY) {
+      console.warn(
+        "AI_API_KEY is not configured."
+      );
+    }
   }
 );
