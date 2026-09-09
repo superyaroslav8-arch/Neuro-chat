@@ -1,131 +1,211 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#08090c">
-<meta name="description" content="Нейро-чат — AI-чат с генерацией изображений и видео">
-<link rel="manifest" href="/site.webmanifest">
-<link rel="stylesheet" href="/глав.css">
-<title>Нейро-чат</title>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#07080b"
+  >
+
+  <meta
+    name="description"
+    content="Нейро-чат — AI-помощник"
+  >
+
+  <title>Нейро-чат</title>
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
 </head>
+
 <body>
 
 <div id="authScreen" class="auth-screen">
+
   <div class="auth-card">
 
-    <div class="auth-title">Нейро-чат</div>
+    <div class="logo">✦</div>
 
-    <div class="auth-sub">
-      Войдите или создайте аккаунт.
-      После входа окно авторизации автоматически закроется.
-    </div>
+    <h1>Нейро-чат</h1>
+
+    <p class="auth-description">
+      Ваш интеллектуальный AI-помощник
+    </p>
 
     <div class="tabs">
-      <button id="loginTab" class="tab active" type="button">
+
+      <button
+        id="loginTab"
+        class="tab active"
+        type="button"
+      >
         Войти
       </button>
 
-      <button id="registerTab" class="tab" type="button">
+      <button
+        id="registerTab"
+        class="tab"
+        type="button"
+      >
         Регистрация
       </button>
+
     </div>
 
     <form id="authForm">
 
-      <div class="field">
-        <label for="username">Имя пользователя</label>
+      <label class="field">
+
+        <span>Имя пользователя</span>
 
         <input
           id="username"
+          type="text"
           autocomplete="username"
           minlength="3"
           maxlength="40"
+          placeholder="Введите имя"
           required
         >
-      </div>
 
-      <div class="field">
-        <label for="password">Пароль</label>
+      </label>
+
+      <label class="field">
+
+        <span>Пароль</span>
 
         <input
           id="password"
           type="password"
           autocomplete="current-password"
           minlength="6"
+          placeholder="Введите пароль"
           required
         >
-      </div>
 
-      <div id="confirmField" class="field hidden">
-        <label for="password2">Повторите пароль</label>
+      </label>
+
+      <label
+        id="confirmField"
+        class="field hidden"
+      >
+
+        <span>Повторите пароль</span>
 
         <input
           id="password2"
           type="password"
           autocomplete="new-password"
           minlength="6"
+          placeholder="Повторите пароль"
         >
-      </div>
 
-      <div id="authError" class="auth-error"></div>
+      </label>
 
-      <button id="authSubmit" class="primary" type="submit">
+      <div
+        id="authError"
+        class="error"
+      ></div>
+
+      <button
+        id="authSubmit"
+        class="primary-button"
+        type="submit"
+      >
         Войти
       </button>
 
     </form>
 
   </div>
+
 </div>
 
 
-<div id="app" class="app hidden">
+<div
+  id="app"
+  class="app hidden"
+>
 
-  <aside id="sidebar" class="sidebar">
+  <aside
+    id="sidebar"
+    class="sidebar"
+  >
 
-    <div class="brand">
-      Нейро-чат
+    <div class="sidebar-top">
+
+      <div class="brand">
+        <div class="brand-icon">✦</div>
+
+        <div>
+          <strong>Нейро</strong>
+          <span>AI-помощник</span>
+        </div>
+      </div>
+
+      <button
+        id="newChat"
+        class="new-chat"
+        type="button"
+      >
+        <span>＋</span>
+        <span>Новый чат</span>
+      </button>
+
+      <div
+        id="chatList"
+        class="chat-list"
+      ></div>
+
     </div>
 
-    <button id="newChat" class="new-chat" type="button">
-      <span>＋</span>
-      <span>Новый чат</span>
-    </button>
-
-    <div id="chatList" class="chat-list"></div>
 
     <div class="account">
 
-      <div class="account-row">
+      <div
+        id="avatar"
+        class="avatar"
+      >
+        Н
+      </div>
 
-        <div id="avatar" class="avatar">
-          Н
-        </div>
+      <div class="account-info">
 
-        <div id="accountName" class="account-name">
+        <strong id="accountName">
           Пользователь
-        </div>
+        </strong>
 
-        <button
-          id="settingsBtn"
-          class="icon-btn"
-          title="Настройки"
-          type="button"
-        >
-          ⚙
-        </button>
-
-        <button
-          id="logoutBtn"
-          class="icon-btn"
-          title="Выйти"
-          type="button"
-        >
-          ↪
-        </button>
+        <span>
+          Аккаунт
+        </span>
 
       </div>
+
+      <button
+        id="settingsBtn"
+        class="round-button"
+        type="button"
+        title="Настройки"
+      >
+        ⚙
+      </button>
+
+      <button
+        id="logoutBtn"
+        class="round-button"
+        type="button"
+        title="Выйти"
+      >
+        ↪
+      </button>
 
     </div>
 
@@ -136,81 +216,81 @@
 
     <header class="topbar">
 
-      <div class="top-actions">
+      <button
+        id="menuBtn"
+        class="round-button mobile-only"
+        type="button"
+      >
+        ☰
+      </button>
 
-        <button
-          id="menuBtn"
-          class="icon-btn mobile-menu"
-          type="button"
-          title="Меню"
-        >
-          ☰
-        </button>
-
-      </div>
-
-      <div id="chatTitle" class="top-title">
+      <div
+        id="chatTitle"
+        class="chat-title-main"
+      >
         Новый чат
       </div>
 
-      <div class="top-actions">
-
-        <button
-          id="deleteChatBtn"
-          class="icon-btn"
-          title="Удалить чат"
-          type="button"
-        >
-          ⌫
-        </button>
-
-      </div>
+      <button
+        id="deleteChatBtn"
+        class="round-button"
+        type="button"
+        title="Удалить чат"
+      >
+        🗑
+      </button>
 
     </header>
 
 
-    <section id="messages" class="messages">
+    <section
+      id="messages"
+      class="messages"
+    >
 
-      <div id="welcome" class="welcome">
+      <div
+        id="welcome"
+        class="welcome"
+      >
 
-        <div class="welcome-inner">
+        <div class="welcome-icon">
+          ✦
+        </div>
 
-          <h1>
-            Чем помочь?
-          </h1>
+        <h2>
+          Чем помочь?
+        </h2>
 
-          <p>
-            Задавайте вопросы, прикрепляйте изображения
-            и используйте генерацию изображений и видео.
-          </p>
+        <p>
+          Задайте вопрос, попросите придумать идею
+          или создайте изображение.
+        </p>
 
-          <div class="suggestions">
+        <div class="suggestions">
 
-            <button
-              class="suggestion"
-              data-prompt="Объясни простыми словами, как работает 3D-печать"
-              type="button"
-            >
-              Объяснить тему
-            </button>
+          <button
+            class="suggestion"
+            data-prompt="Объясни простыми словами, как работает 3D-печать"
+            type="button"
+          >
+            🧩 Объяснить тему
+          </button>
 
-            <button
-              class="suggestion"
-              data-prompt="Придумай 5 идей для проекта"
-              type="button"
-            >
-              Придумать идеи
-            </button>
+          <button
+            class="suggestion"
+            data-prompt="Придумай 5 идей для современного сайта"
+            type="button"
+          >
+            💡 Придумать идеи
+          </button>
 
-            <button
-              class="suggestion"
-              data-prompt="Помоги написать красивый текст для сайта"
-              type="button"
-            >
-              Написать текст
-            </button>
-
-          </div>
+          <button
+            class="suggestion"
+            data-prompt="Помоги написать красивый текст для сайта"
+            type="button"
+          >
+            ✍️ Написать текст
+          </button>
 
         </div>
 
@@ -219,70 +299,73 @@
     </section>
 
 
-    <div class="composer-wrap">
+    <div class="composer-area">
 
-      <div id="composer" class="composer">
+      <div
+        id="attachments"
+        class="attachments hidden"
+      ></div>
 
-        <div id="attachments" class="attachments hidden"></div>
+      <div class="composer">
 
-        <div class="composer-row">
+        <button
+          id="attachBtn"
+          class="composer-button"
+          type="button"
+          title="Прикрепить файл"
+        >
+          ＋
+        </button>
 
-          <button
-            id="attachBtn"
-            class="icon-btn"
-            type="button"
-            title="Прикрепить фото или видео"
-          >
-            ＋
-          </button>
+        <textarea
+          id="prompt"
+          rows="1"
+          maxlength="10000"
+          placeholder="Сообщение для Нейро…"
+        ></textarea>
 
-          <textarea
-            id="prompt"
-            class="prompt"
-            rows="1"
-            placeholder="Сообщение для Нейро-чата…"
-          ></textarea>
+        <button
+          id="sendBtn"
+          class="send-button"
+          type="button"
+          title="Отправить"
+        >
+          ➤
+        </button>
 
-          <button
-            id="sendBtn"
-            class="send-btn"
-            type="button"
-            title="Отправить"
-          >
-            ➤
-          </button>
-
-        </div>
+      </div>
 
 
-        <div class="tool-row">
+      <div class="tool-row">
 
-          <button
-            id="imageMode"
-            class="tool-btn"
-            type="button"
-          >
-            ▧ Изображение
-          </button>
+        <button
+          id="chatMode"
+          class="tool-button active"
+          type="button"
+        >
+          ✦ Чат
+        </button>
 
-          <button
-            id="videoMode"
-            class="tool-btn"
-            type="button"
-          >
-            ▶ Видео
-          </button>
+        <button
+          id="imageMode"
+          class="tool-button"
+          type="button"
+        >
+          ◇ Изображение
+        </button>
 
-          <button
-            id="chatMode"
-            class="tool-btn active"
-            type="button"
-          >
-            ✦ Чат
-          </button>
+        <button
+          id="videoMode"
+          class="tool-button"
+          type="button"
+        >
+          ▶ Видео
+        </button>
 
-        </div>
+      </div>
 
+      <div class="composer-note">
+        Нейро может ошибаться. Проверяйте важную информацию.
       </div>
 
     </div>
@@ -301,11 +384,14 @@
 >
 
 
-<div id="attachModal" class="modal-backdrop hidden">
+<div
+  id="attachModal"
+  class="modal hidden"
+>
 
-  <div class="modal">
+  <div class="modal-card">
 
-    <div class="modal-head">
+    <div class="modal-header">
 
       <h2>
         Добавить файл
@@ -313,7 +399,7 @@
 
       <button
         id="closeAttach"
-        class="icon-btn"
+        class="round-button"
         type="button"
       >
         ×
@@ -321,77 +407,55 @@
 
     </div>
 
+    <button
+      id="pickPhoto"
+      class="modal-option"
+      type="button"
+    >
+      📷
+      <span>
+        <strong>Фото</strong>
+        <small>Выбрать изображение</small>
+      </span>
+    </button>
 
-    <div class="modal-actions">
+    <button
+      id="pickVideo"
+      class="modal-option"
+      type="button"
+    >
+      🎬
+      <span>
+        <strong>Видео</strong>
+        <small>Выбрать видео</small>
+      </span>
+    </button>
 
-      <button
-        class="modal-action"
-        id="pickPhoto"
-        type="button"
-      >
-
-        <b>📷</b>
-
-        <span>
-          <strong>Фото</strong>
-          <br>
-          <span class="small">
-            Выбрать изображение с устройства
-          </span>
-        </span>
-
-      </button>
-
-
-      <button
-        class="modal-action"
-        id="pickVideo"
-        type="button"
-      >
-
-        <b>🎬</b>
-
-        <span>
-          <strong>Видео</strong>
-          <br>
-          <span class="small">
-            Выбрать видео с устройства
-          </span>
-        </span>
-
-      </button>
-
-
-      <button
-        class="modal-action"
-        id="pickAny"
-        type="button"
-      >
-
-        <b>🗂</b>
-
-        <span>
-          <strong>Медиа</strong>
-          <br>
-          <span class="small">
-            Выбрать фото или видео
-          </span>
-        </span>
-
-      </button>
-
-    </div>
+    <button
+      id="pickAny"
+      class="modal-option"
+      type="button"
+    >
+      🗂
+      <span>
+        <strong>Медиа</strong>
+        <small>Фото или видео</small>
+      </span>
+    </button>
 
   </div>
 
 </div>
 
 
-<div id="settingsModal" class="modal-backdrop hidden">
+<div
+  id="settingsModal"
+  class="modal hidden"
+>
 
-  <div class="modal">
+  <div class="modal-card">
 
-    <div class="modal-head">
+    <div class="modal-header">
 
       <h2>
         Настройки
@@ -399,7 +463,7 @@
 
       <button
         id="closeSettings"
-        class="icon-btn"
+        class="round-button"
         type="button"
       >
         ×
@@ -407,41 +471,19 @@
 
     </div>
 
-
-    <div class="settings-line">
-
-      <span>
-        Аккаунт
-      </span>
-
-      <span id="settingsUser" class="small"></span>
-
+    <div class="setting">
+      <span>Аккаунт</span>
+      <strong id="settingsUser"></strong>
     </div>
 
-
-    <div class="settings-line">
-
-      <span>
-        Версия интерфейса
-      </span>
-
-      <span class="small">
-        1.0
-      </span>
-
+    <div class="setting">
+      <span>Приложение</span>
+      <strong>Нейро-чат 2.0</strong>
     </div>
 
-
-    <div class="settings-line">
-
-      <span>
-        Сервер
-      </span>
-
-      <span class="small">
-        Cloudflare
-      </span>
-
+    <div class="setting">
+      <span>Сервер</span>
+      <strong>API</strong>
     </div>
 
   </div>
@@ -449,1931 +491,16 @@
 </div>
 
 
-<div id="toast" class="toast"></div>
-
-
-<script>
-(() => {
-
-  "use strict";
-
-
-  const $ = id => document.getElementById(id);
-
-
-  const state = {
-    user: null,
-    chats: [],
-    currentChat: null,
-    messages: [],
-    attachments: [],
-    mode: "chat",
-    busy: false,
-    authMode: "login"
-  };
-
-
-  async function api(path, options = {}) {
-
-    const res = await fetch(
-      path,
-      {
-        credentials: "same-origin",
-        ...options,
-
-        headers: {
-          "content-type": "application/json",
-          ...(options.headers || {})
-        }
-      }
-    );
-
-
-    const text = await res.text();
-
-
-    let data = {};
-
-
-    try {
-
-      data = text
-        ? JSON.parse(text)
-        : {};
-
-    } catch {
-
-      throw new Error(
-        "Сервер вернул некорректный ответ."
-      );
-
-    }
-
-
-    if (!res.ok) {
-
-      throw new Error(
-        data.error ||
-        `Ошибка сервера (${res.status}).`
-      );
-
-    }
-
-
-    return data;
-
-  }
-
-
-  function toast(message) {
-
-    const el = $("toast");
-
-    el.textContent = message;
-
-    el.classList.add("show");
-
-    clearTimeout(toast.t);
-
-    toast.t = setTimeout(
-      () => el.classList.remove("show"),
-      2800
-    );
-
-  }
-
-
-  function escapeHTML(value) {
-
-    return String(value).replace(
-      /[&<>'"]/g,
-
-      c => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        "'": "&#39;",
-        '"': "&quot;"
-      }[c])
-    );
-
-  }
-
-
-  function setAuthError(message = "") {
-
-    $("authError").textContent = message;
-
-  }
-
-
-  function setBusy(value) {
-
-    state.busy = value;
-
-    $("sendBtn").disabled = value;
-
-    $("authSubmit").disabled = value;
-
-  }
-
-
-  function setAuthMode(mode) {
-
-    state.authMode = mode;
-
-    const login = mode === "login";
-
-
-    $("loginTab")
-      .classList
-      .toggle("active", login);
-
-
-    $("registerTab")
-      .classList
-      .toggle("active", !login);
-
-
-    $("confirmField")
-      .classList
-      .toggle("hidden", login);
-
-
-    $("authSubmit").textContent =
-      login
-        ? "Войти"
-        : "Создать аккаунт";
-
-
-    $("password").autocomplete =
-      login
-        ? "current-password"
-        : "new-password";
-
-
-    setAuthError("");
-
-  }
-
-
-  function showAuth() {
-
-    $("authScreen")
-      .classList
-      .remove("hidden");
-
-    $("app")
-      .classList
-      .add("hidden");
-
-  }
-
-
-  function showApp() {
-
-    $("authScreen")
-      .classList
-      .add("hidden");
-
-    $("app")
-      .classList
-      .remove("hidden");
-
-  }
-
-
-  async function authSubmit(e) {
-
-    e.preventDefault();
-
-
-    if (state.busy) {
-      return;
-    }
-
-
-    setAuthError("");
-
-
-    const username =
-      $("username")
-        .value
-        .trim();
-
-
-    const password =
-      $("password")
-        .value;
-
-
-    const password2 =
-      $("password2")
-        .value;
-
-
-    if (!username || !password) {
-
-      setAuthError(
-        "Заполните имя пользователя и пароль."
-      );
-
-      return;
-
-    }
-
-
-    if (
-      state.authMode === "register" &&
-      password !== password2
-    ) {
-
-      setAuthError(
-        "Пароли не совпадают."
-      );
-
-      return;
-
-    }
-
-
-    setBusy(true);
-
-
-    try {
-
-      const data = await api(
-        state.authMode === "login"
-          ? "/api/auth/login"
-          : "/api/auth/register",
-
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            username,
-            password
-          })
-        }
-      );
-
-
-      state.user = data.user;
-
-
-      showApp();
-
-
-      await loadChats();
-
-
-    } catch (err) {
-
-      setAuthError(
-        err.message
-      );
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  }
-
-
-  async function checkAuth() {
-
-    try {
-
-      const data =
-        await api(
-          "/api/auth/me"
-        );
-
-
-      if (data.user) {
-
-        state.user = data.user;
-
-        showApp();
-
-        await loadChats();
-
-      } else {
-
-        showAuth();
-
-      }
-
-    } catch {
-
-      showAuth();
-
-    }
-
-  }
-
-
-  async function loadChats() {
-
-    const data =
-      await api(
-        "/api/chats"
-      );
-
-
-    state.chats =
-      data.chats || [];
-
-
-    renderChats();
-
-
-    if (!state.chats.length) {
-
-      await createChat();
-
-    } else {
-
-      await openChat(
-        state.currentChat &&
-        state.chats.some(
-          c =>
-            c.id ===
-            state.currentChat.id
-        )
-          ? state.currentChat.id
-          : state.chats[0].id
-      );
-
-    }
-
-
-    $("accountName").textContent =
-      state.user.username;
-
-
-    $("settingsUser").textContent =
-      state.user.username;
-
-
-    $("avatar").textContent =
-      state.user.username
-        .charAt(0)
-        .toUpperCase();
-
-  }
-
-
-  function renderChats() {
-
-    const box =
-      $("chatList");
-
-
-    box.innerHTML = "";
-
-
-    state.chats.forEach(
-      chat => {
-
-        const row =
-          document.createElement(
-            "div"
-          );
-
-
-        row.className =
-          "chat-item" +
-          (
-            state.currentChat?.id === chat.id
-              ? " active"
-              : ""
-          );
-
-
-        row.innerHTML = `
-          <span>💬</span>
-          <span class="chat-title">
-            ${escapeHTML(
-              chat.title || "Новый чат"
-            )}
-          </span>
-
-          <button
-            class="chat-delete"
-            title="Удалить"
-            type="button"
-          >
-            ×
-          </button>
-        `;
-
-
-        row.addEventListener(
-          "click",
-          e => {
-
-            if (
-              e.target.closest(
-                ".chat-delete"
-              )
-            ) {
-              return;
-            }
-
-
-            openChat(chat.id);
-
-          }
-        );
-
-
-        row
-          .querySelector(
-            ".chat-delete"
-          )
-          .addEventListener(
-            "click",
-            async e => {
-
-              e.stopPropagation();
-
-              await deleteChat(
-                chat.id
-              );
-
-            }
-          );
-
-
-        box.appendChild(row);
-
-      }
-    );
-
-  }
-
-
-  async function createChat() {
-
-    const data =
-      await api(
-        "/api/chats",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            title: "Новый чат"
-          })
-        }
-      );
-
-
-    state.chats.unshift(
-      data.chat
-    );
-
-
-    renderChats();
-
-
-    await openChat(
-      data.chat.id
-    );
-
-  }
-
-
-  async function openChat(chatId) {
-
-    const chat =
-      state.chats.find(
-        c => c.id === chatId
-      );
-
-
-    if (!chat) {
-      return;
-    }
-
-
-    state.currentChat =
-      chat;
-
-
-    state.messages = [];
-
-
-    $("chatTitle").textContent =
-      chat.title ||
-      "Новый чат";
-
-
-    renderChats();
-
-
-    try {
-
-      const data =
-        await api(
-          `/api/chats/${encodeURIComponent(chatId)}/messages`
-        );
-
-
-      state.messages =
-        data.messages || [];
-
-
-      renderMessages();
-
-
-    } catch (err) {
-
-      toast(
-        err.message
-      );
-
-    }
-
-  }
-
-
-  async function deleteChat(chatId) {
-
-    const chat =
-      state.chats.find(
-        c => c.id === chatId
-      );
-
-
-    if (!chat) {
-      return;
-    }
-
-
-    if (
-      !confirm(
-        `Удалить чат «${chat.title || "Новый чат"}»?`
-      )
-    ) {
-      return;
-    }
-
-
-    try {
-
-      await api(
-        `/api/chats/${encodeURIComponent(chatId)}`,
-        {
-          method: "DELETE"
-        }
-      );
-
-
-      state.chats =
-        state.chats.filter(
-          c => c.id !== chatId
-        );
-
-
-      state.currentChat = null;
-
-
-      if (!state.chats.length) {
-
-        await createChat();
-
-      } else {
-
-        await openChat(
-          state.chats[0].id
-        );
-
-      }
-
-
-    } catch (err) {
-
-      toast(
-        err.message
-      );
-
-    }
-
-  }
-
-
-  function renderMessages() {
-
-    const box =
-      $("messages");
-
-
-    box.innerHTML = "";
-
-
-    if (!state.messages.length) {
-
-      box.innerHTML = `
-        <div id="welcome" class="welcome">
-          <div class="welcome-inner">
-
-            <h1>Чем помочь?</h1>
-
-            <p>
-              Задавайте вопросы,
-              прикрепляйте изображения
-              и используйте генерацию
-              изображений и видео.
-            </p>
-
-            <div class="suggestions">
-
-              <button
-                class="suggestion"
-                data-prompt="Объясни простыми словами, как работает 3D-печать"
-                type="button"
-              >
-                Объяснить тему
-              </button>
-
-              <button
-                class="suggestion"
-                data-prompt="Придумай 5 идей для проекта"
-                type="button"
-              >
-                Придумать идеи
-              </button>
-
-              <button
-                class="suggestion"
-                data-prompt="Помоги написать красивый текст для сайта"
-                type="button"
-              >
-                Написать текст
-              </button>
-
-            </div>
-
-          </div>
-        </div>
-      `;
-
-
-      bindSuggestions();
-
-
-      return;
-
-    }
-
-
-    state.messages.forEach(
-      message => {
-
-        const item =
-          document.createElement(
-            "div"
-          );
-
-
-        item.className =
-          `message ${
-            message.role === "user"
-              ? "user"
-              : "assistant"
-          }`;
-
-
-        const content =
-          escapeHTML(
-            message.content
-          )
-          .replace(
-            /\n/g,
-            "<br>"
-          );
-
-
-        item.innerHTML = `
-          <div class="message-bubble">
-            ${content}
-          </div>
-        `;
-
-
-        box.appendChild(item);
-
-      }
-    );
-
-
-    box.scrollTop =
-      box.scrollHeight;
-
-  }
-
-
-  function bindSuggestions() {
-
-    document
-      .querySelectorAll(
-        ".suggestion"
-      )
-      .forEach(
-        button => {
-
-          button.onclick = () => {
-
-            $("prompt").value =
-              button.dataset.prompt;
-
-
-            autoResize();
-
-
-            $("prompt").focus();
-
-          };
-
-        }
-      );
-
-  }
-
-
-  function addMessageLocal(
-    role,
-    content
-  ) {
-
-    state.messages.push({
-      id:
-        "local_" +
-        Date.now(),
-
-      role,
-
-      content,
-
-      created_at:
-        Date.now()
-    });
-
-
-    renderMessages();
-
-  }
-
-
-  function makeChatTitle(text) {
-
-    const cleaned =
-      String(text || "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-
-    if (!cleaned) {
-      return "Новый чат";
-    }
-
-
-    return cleaned.length > 42
-      ? cleaned.slice(0, 42) + "…"
-      : cleaned;
-
-  }
-
-
-  async function sendMessage() {
-
-    if (state.busy) {
-      return;
-    }
-
-
-    const prompt =
-      $("prompt")
-        .value
-        .trim();
-
-
-    if (
-      !prompt &&
-      !state.attachments.length
-    ) {
-
-      return;
-
-    }
-
-
-    if (!state.currentChat) {
-
-      await createChat();
-
-    }
-
-
-    setBusy(true);
-
-
-    const attachments =
-      [...state.attachments];
-
-
-    const text =
-      prompt ||
-      (
-        attachments.length
-          ? "Посмотри прикреплённые файлы."
-          : ""
-      );
-
-
-    let userContent =
-      text;
-
-
-    const imageAttachments =
-      attachments.filter(
-        item =>
-          item.type === "image"
-      );
-
-
-    if (imageAttachments.length) {
-
-      userContent = [
-        {
-          type: "text",
-          text
-        },
-
-        ...imageAttachments.map(
-          item => ({
-            type: "image_url",
-
-            image_url: {
-              url:
-                item.data
-            }
-          })
-        )
-      ];
-
-    }
-
-
-    addMessageLocal(
-      "user",
-      text +
-      (
-        attachments.length
-          ? `\n\n📎 Прикреплено файлов: ${attachments.length}`
-          : ""
-      )
-    );
-
-
-    $("prompt").value = "";
-
-
-    state.attachments = [];
-
-
-    renderAttachments();
-
-
-    try {
-
-      const history =
-        state.messages
-          .slice(-40)
-          .map(
-            message => {
-
-              return {
-                role:
-                  message.role,
-
-                content:
-                  message.content
-              };
-
-            }
-          );
-
-
-      if (
-        history.length &&
-        history[history.length - 1]
-          .role === "user"
-      ) {
-
-        history[
-          history.length - 1
-        ].content =
-          userContent;
-
-      }
-
-
-      const data =
-        await api(
-          "/api/chat",
-          {
-            method: "POST",
-
-            body: JSON.stringify({
-              chatId:
-                state.currentChat.id,
-
-              messages:
-                history
-            })
-          }
-        );
-
-
-      const answer =
-        data.message ||
-        data.response;
-
-
-      if (
-        typeof answer !== "string" ||
-        !answer.trim()
-      ) {
-
-        throw new Error(
-          "AI не вернул корректный ответ."
-        );
-
-      }
-
-
-      addMessageLocal(
-        "assistant",
-        answer
-      );
-
-
-      if (
-        state.currentChat.title ===
-        "Новый чат"
-      ) {
-
-        state.currentChat.title =
-          makeChatTitle(text);
-
-
-        $("chatTitle").textContent =
-          state.currentChat.title;
-
-
-        const localChat =
-          state.chats.find(
-            c =>
-              c.id ===
-              state.currentChat.id
-          );
-
-
-        if (localChat) {
-
-          localChat.title =
-            state.currentChat.title;
-
-        }
-
-
-        renderChats();
-
-      }
-
-
-    } catch (err) {
-
-      addMessageLocal(
-        "assistant",
-        `Ошибка: ${err.message}`
-      );
-
-      toast(
-        err.message
-      );
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  }
-
-
-  async function generateImage() {
-
-    const prompt =
-      $("prompt")
-        .value
-        .trim();
-
-
-    if (!prompt) {
-
-      toast(
-        "Сначала напишите описание изображения."
-      );
-
-      $("prompt").focus();
-
-      return;
-
-    }
-
-
-    if (state.busy) {
-      return;
-    }
-
-
-    setBusy(true);
-
-
-    try {
-
-      const data =
-        await api(
-          "/api/generate/image",
-          {
-            method: "POST",
-
-            body: JSON.stringify({
-              prompt
-            })
-          }
-        );
-
-
-      if (!data.image) {
-
-        throw new Error(
-          "Изображение не получено."
-        );
-
-      }
-
-
-      $("prompt").value = "";
-
-
-      const wrapper =
-        document.createElement(
-          "div"
-        );
-
-
-      wrapper.className =
-        "message assistant";
-
-
-      wrapper.innerHTML = `
-        <div class="message-bubble generated-media">
-          <div class="generated-title">
-            Изображение готово
-          </div>
-
-          <img
-            src="${data.image}"
-            alt="Сгенерированное изображение"
-          >
-
-          <a
-            class="download-link"
-            href="${data.image}"
-            download="neuro-chat-image.jpg"
-          >
-            Сохранить изображение
-          </a>
-        </div>
-      `;
-
-
-      $("messages")
-        .appendChild(wrapper);
-
-
-      $("messages").scrollTop =
-        $("messages").scrollHeight;
-
-
-      toast(
-        "Изображение создано."
-      );
-
-
-    } catch (err) {
-
-      toast(
-        err.message
-      );
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  }
-
-
-  async function generateVideo() {
-
-    const prompt =
-      $("prompt")
-        .value
-        .trim();
-
-
-    if (!prompt) {
-
-      toast(
-        "Сначала напишите описание видео."
-      );
-
-      $("prompt").focus();
-
-      return;
-
-    }
-
-
-    if (state.busy) {
-      return;
-    }
-
-
-    setBusy(true);
-
-
-    try {
-
-      const data =
-        await api(
-          "/api/generate/video",
-          {
-            method: "POST",
-
-            body: JSON.stringify({
-              prompt,
-              duration: 5,
-              aspect_ratio: "16:9",
-              generate_audio: true
-            })
-          }
-        );
-
-
-      if (!data.video) {
-
-        throw new Error(
-          "Видео не получено."
-        );
-
-      }
-
-
-      $("prompt").value = "";
-
-
-      const wrapper =
-        document.createElement(
-          "div"
-        );
-
-
-      wrapper.className =
-        "message assistant";
-
-
-      wrapper.innerHTML = `
-        <div class="message-bubble generated-media">
-
-          <div class="generated-title">
-            Видео готово
-          </div>
-
-          <video
-            controls
-            playsinline
-            src="${escapeHTML(data.video)}"
-          ></video>
-
-          <a
-            class="download-link"
-            href="${escapeHTML(data.video)}"
-            target="_blank"
-            rel="noopener"
-          >
-            Открыть видео
-          </a>
-
-        </div>
-      `;
-
-
-      $("messages")
-        .appendChild(wrapper);
-
-
-      $("messages").scrollTop =
-        $("messages").scrollHeight;
-
-
-      toast(
-        "Видео создано."
-      );
-
-
-    } catch (err) {
-
-      toast(
-        err.message
-      );
-
-    } finally {
-
-      setBusy(false);
-
-    }
-
-  }
-
-
-  function setMode(mode) {
-
-    state.mode =
-      mode;
-
-
-    $("chatMode")
-      .classList
-      .toggle(
-        "active",
-        mode === "chat"
-      );
-
-
-    $("imageMode")
-      .classList
-      .toggle(
-        "active",
-        mode === "image"
-      );
-
-
-    $("videoMode")
-      .classList
-      .toggle(
-        "active",
-        mode === "video"
-      );
-
-
-    if (mode === "chat") {
-
-      $("prompt").placeholder =
-        "Сообщение для Нейро-чата…";
-
-    }
-
-
-    if (mode === "image") {
-
-      $("prompt").placeholder =
-        "Опишите изображение…";
-
-    }
-
-
-    if (mode === "video") {
-
-      $("prompt").placeholder =
-        "Опишите видео…";
-
-    }
-
-  }
-
-
-  async function handleSend() {
-
-    if (state.mode === "image") {
-
-      await generateImage();
-
-      return;
-
-    }
-
-
-    if (state.mode === "video") {
-
-      await generateVideo();
-
-      return;
-
-    }
-
-
-    await sendMessage();
-
-  }
-
-
-  function openAttachModal() {
-
-    $("attachModal")
-      .classList
-      .remove("hidden");
-
-  }
-
-
-  function closeAttachModal() {
-
-    $("attachModal")
-      .classList
-      .add("hidden");
-
-  }
-
-
-  function openSettings() {
-
-    $("settingsModal")
-      .classList
-      .remove("hidden");
-
-  }
-
-
-  function closeSettings() {
-
-    $("settingsModal")
-      .classList
-      .add("hidden");
-
-  }
-
-
-  function selectFiles(
-    accept
-  ) {
-
-    const input =
-      $("fileInput");
-
-
-    input.accept =
-      accept;
-
-
-    input.click();
-
-
-    closeAttachModal();
-
-  }
-
-
-  function readFile(
-    file
-  ) {
-
-    return new Promise(
-      (resolve, reject) => {
-
-        const reader =
-          new FileReader();
-
-
-        reader.onload =
-          () => resolve(
-            reader.result
-          );
-
-
-        reader.onerror =
-          () => reject(
-            new Error(
-              "Не удалось прочитать файл."
-            )
-          );
-
-
-        reader.readAsDataURL(
-          file
-        );
-
-      }
-    );
-
-  }
-
-
-  async function handleFiles(
-    files
-  ) {
-
-    const list =
-      Array.from(files);
-
-
-    for (
-      const file of list
-    ) {
-
-      if (
-        !file.type.startsWith("image/") &&
-        !file.type.startsWith("video/")
-      ) {
-
-        continue;
-
-      }
-
-
-      if (
-        file.size >
-        8 * 1024 * 1024
-      ) {
-
-        toast(
-          `${file.name}: файл больше 8 МБ.`
-        );
-
-        continue;
-
-      }
-
-
-      try {
-
-        const data =
-          await readFile(file);
-
-
-        state.attachments.push({
-          id:
-            crypto.randomUUID(),
-
-          name:
-            file.name,
-
-          type:
-            file.type.startsWith("image/")
-              ? "image"
-              : "video",
-
-          mime:
-            file.type,
-
-          data,
-
-          size:
-            file.size
-        });
-
-      } catch (err) {
-
-        toast(
-          err.message
-        );
-
-      }
-
-    }
-
-
-    renderAttachments();
-
-  }
-
-
-  function renderAttachments() {
-
-    const box =
-      $("attachments");
-
-
-    box.innerHTML = "";
-
-
-    if (!state.attachments.length) {
-
-      box.classList.add(
-        "hidden"
-      );
-
-      return;
-
-    }
-
-
-    box.classList.remove(
-      "hidden"
-    );
-
-
-    state.attachments.forEach(
-      item => {
-
-        const card =
-          document.createElement(
-            "div"
-          );
-
-
-        card.className =
-          "attachment";
-
-
-        const media =
-          item.type === "image"
-            ? `
-              <img
-                src="${item.data}"
-                alt=""
-              >
-            `
-            : `
-              <video
-                src="${item.data}"
-                muted
-                playsinline
-              ></video>
-            `;
-
-
-        card.innerHTML = `
-          <div class="attachment-preview">
-            ${media}
-          </div>
-
-          <div class="attachment-name">
-            ${escapeHTML(item.name)}
-          </div>
-
-          <button
-            type="button"
-            class="attachment-remove"
-            title="Удалить"
-          >
-            ×
-          </button>
-        `;
-
-
-        card
-          .querySelector(
-            ".attachment-remove"
-          )
-          .onclick = () => {
-
-            state.attachments =
-              state.attachments.filter(
-                a =>
-                  a.id !== item.id
-              );
-
-
-            renderAttachments();
-
-          };
-
-
-        box.appendChild(card);
-
-      }
-    );
-
-  }
-
-
-  function autoResize() {
-
-    const textarea =
-      $("prompt");
-
-
-    textarea.style.height =
-      "auto";
-
-
-    textarea.style.height =
-      Math.min(
-        textarea.scrollHeight,
-        180
-      ) + "px";
-
-  }
-
-
-  function toggleSidebar() {
-
-    $("sidebar")
-      .classList
-      .toggle("open");
-
-  }
-
-
-  function closeMobileSidebar() {
-
-    $("sidebar")
-      .classList
-      .remove("open");
-
-  }
-
-
-  $("loginTab").onclick =
-    () => setAuthMode(
-      "login"
-    );
-
-
-  $("registerTab").onclick =
-    () => setAuthMode(
-      "register"
-    );
-
-
-  $("authForm").addEventListener(
-    "submit",
-    authSubmit
-  );
-
-
-  $("newChat").onclick =
-    async () => {
-
-      try {
-
-        await createChat();
-
-        closeMobileSidebar();
-
-      } catch (err) {
-
-        toast(
-          err.message
-        );
-
-      }
-
-    };
-
-
-  $("sendBtn").onclick =
-    handleSend;
-
-
-  $("prompt").addEventListener(
-    "input",
-    autoResize
-  );
-
-
-  $("prompt").addEventListener(
-    "keydown",
-    e => {
-
-      if (
-        e.key === "Enter" &&
-        !e.shiftKey
-      ) {
-
-        e.preventDefault();
-
-        handleSend();
-
-      }
-
-    }
-  );
-
-
-  $("attachBtn").onclick =
-    openAttachModal;
-
-
-  $("closeAttach").onclick =
-    closeAttachModal;
-
-
-  $("pickPhoto").onclick =
-    () => selectFiles(
-      "image/*"
-    );
-
-
-  $("pickVideo").onclick =
-    () => selectFiles(
-      "video/*"
-    );
-
-
-  $("pickAny").onclick =
-    () => selectFiles(
-      "image/*,video/*"
-    );
-
-
-  $("fileInput").addEventListener(
-    "change",
-    e => {
-
-      handleFiles(
-        e.target.files
-      );
-
-
-      e.target.value =
-        "";
-
-    }
-  );
-
-
-  $("imageMode").onclick =
-    () => setMode(
-      "image"
-    );
-
-
-  $("videoMode").onclick =
-    () => setMode(
-      "video"
-    );
-
-
-  $("chatMode").onclick =
-    () => setMode(
-      "chat"
-    );
-
-
-  $("settingsBtn").onclick =
-    openSettings;
-
-
-  $("closeSettings").onclick =
-    closeSettings;
-
-
-  $("settingsModal").addEventListener(
-    "click",
-    e => {
-
-      if (
-        e.target ===
-        $("settingsModal")
-      ) {
-
-        closeSettings();
-
-      }
-
-    }
-  );
-
-
-  $("attachModal").addEventListener(
-    "click",
-    e => {
-
-      if (
-        e.target ===
-        $("attachModal")
-      ) {
-
-        closeAttachModal();
-
-      }
-
-    }
-  );
-
-
-  $("logoutBtn").onclick =
-    async () => {
-
-      try {
-
-        await api(
-          "/api/auth/logout",
-          {
-            method: "POST"
-          }
-        );
-
-      } catch {
-
-      }
-
-
-      state.user = null;
-      state.chats = [];
-      state.currentChat = null;
-      state.messages = [];
-
-
-      showAuth();
-
-
-      $("password").value = "";
-      $("password2").value = "";
-
-      setAuthMode(
-        "login"
-      );
-
-    };
-
-
-  $("deleteChatBtn").onclick =
-    async () => {
-
-      if (
-        state.currentChat
-      ) {
-
-        await deleteChat(
-          state.currentChat.id
-        );
-
-      }
-
-    };
-
-
-  $("menuBtn").onclick =
-    toggleSidebar;
-
-
-  document.addEventListener(
-    "click",
-    e => {
-
-      if (
-        window.innerWidth <= 860 &&
-        $("sidebar").classList.contains("open") &&
-        !e.target.closest(".sidebar") &&
-        !e.target.closest("#menuBtn")
-      ) {
-
-        closeMobileSidebar();
-
-      }
-
-    }
-  );
-
-
-  document.addEventListener(
-    "keydown",
-    e => {
-
-      if (
-        e.key === "Escape"
-      ) {
-
-        closeAttachModal();
-
-        closeSettings();
-
-        closeMobileSidebar();
-
-      }
-
-    }
-  );
-
-
-  bindSuggestions();
-
-
-  checkAuth();
-
-})();
-</script>
+<div
+  id="toast"
+  class="toast"
+></div>
+
+
+<script
+  src="/script.js"
+  defer
+></script>
 
 </body>
 </html>
