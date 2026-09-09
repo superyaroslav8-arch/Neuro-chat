@@ -1,14 +1,18 @@
 {
   "name": "neuro-chat",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Нейро-чат — AI чат с генерацией изображений и видео",
+  "version": "2.0.0",
+  "description": "Нейро-чат — AI чат с аккаунтами, историей и генерацией изображений",
+  "main": "server.js",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "check": "wrangler deploy --dry-run"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "openai": "^6.0.0"
   }
 }
