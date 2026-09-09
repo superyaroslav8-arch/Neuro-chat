@@ -1,7 +1,8 @@
 {
   "name": "neuro-chat",
-  "version": "2.0.0",
-  "description": "Нейро-чат — AI чат с аккаунтами, историей и генерацией изображений",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Нейро — автономный AI-помощник без внешнего API-ключа",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,8 +12,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "dotenv": "^16.6.1",
-    "express": "^5.1.0",
-    "openai": "^6.0.0"
+    "express": "^5.1.0"
   }
 }
