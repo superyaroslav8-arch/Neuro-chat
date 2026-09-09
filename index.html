@@ -1,506 +1,320 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
 
   <meta
     name="viewport"
-    content="width=device-width,initial-scale=1,viewport-fit=cover"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
   >
 
-  <meta
-    name="theme-color"
-    content="#07080b"
-  >
-
-  <meta
-    name="description"
-    content="Нейро-чат — AI-помощник"
-  >
-
-  <title>Нейро-чат</title>
+  <title>Нейро — AI помощник</title>
 
   <link
     rel="stylesheet"
-    href="/style.css"
+    href="style.css"
   >
 </head>
 
 <body>
 
-<div id="authScreen" class="auth-screen">
+  <!-- =====================
+       AUTH
+  ====================== -->
 
-  <div class="auth-card">
+  <div
+    id="auth"
+    class="auth-screen"
+  >
 
-    <div class="logo">✦</div>
+    <div class="auth-card">
 
-    <h1>Нейро-чат</h1>
+      <div class="brand-mark">
+        N
+      </div>
 
-    <p class="auth-description">
-      Ваш интеллектуальный AI-помощник
-    </p>
+      <h1>Нейро</h1>
 
-    <div class="tabs">
+      <p>
+        Ваш интеллектуальный помощник
+      </p>
 
-      <button
-        id="loginTab"
-        class="tab active"
-        type="button"
-      >
-        Войти
-      </button>
-
-      <button
-        id="registerTab"
-        class="tab"
-        type="button"
-      >
-        Регистрация
-      </button>
-
-    </div>
-
-    <form id="authForm">
-
-      <label class="field">
-
-        <span>Имя пользователя</span>
+      <form id="authForm">
 
         <input
           id="username"
-          type="text"
           autocomplete="username"
-          minlength="3"
-          maxlength="40"
-          placeholder="Введите имя"
+          placeholder="Логин"
           required
         >
-
-      </label>
-
-      <label class="field">
-
-        <span>Пароль</span>
 
         <input
           id="password"
           type="password"
           autocomplete="current-password"
-          minlength="6"
-          placeholder="Введите пароль"
+          placeholder="Пароль"
           required
         >
 
-      </label>
-
-      <label
-        id="confirmField"
-        class="field hidden"
-      >
-
-        <span>Повторите пароль</span>
-
-        <input
-          id="password2"
-          type="password"
-          autocomplete="new-password"
-          minlength="6"
-          placeholder="Повторите пароль"
+        <button
+          class="primary"
+          id="authSubmit"
+          type="submit"
         >
+          Войти
+        </button>
 
-      </label>
+        <button
+          class="ghost"
+          id="toggleAuth"
+          type="button"
+        >
+          Создать аккаунт
+        </button>
 
-      <div
-        id="authError"
-        class="error"
-      ></div>
+        <div
+          id="authError"
+          class="error"
+        ></div>
 
-      <button
-        id="authSubmit"
-        class="primary-button"
-        type="submit"
-      >
-        Войти
-      </button>
+      </form>
 
-    </form>
+    </div>
 
   </div>
 
-</div>
 
+  <!-- =====================
+       APP
+  ====================== -->
 
-<div
-  id="app"
-  class="app hidden"
->
-
-  <aside
-    id="sidebar"
-    class="sidebar"
+  <div
+    id="app"
+    class="app hidden"
   >
 
-    <div class="sidebar-top">
-
-      <div class="brand">
-        <div class="brand-icon">✦</div>
-
-        <div>
-          <strong>Нейро</strong>
-          <span>AI-помощник</span>
-        </div>
-      </div>
-
-      <button
-        id="newChat"
-        class="new-chat"
-        type="button"
-      >
-        <span>＋</span>
-        <span>Новый чат</span>
-      </button>
-
-      <div
-        id="chatList"
-        class="chat-list"
-      ></div>
-
-    </div>
-
-
-    <div class="account">
-
-      <div
-        id="avatar"
-        class="avatar"
-      >
-        Н
-      </div>
-
-      <div class="account-info">
-
-        <strong id="accountName">
-          Пользователь
-        </strong>
-
-        <span>
-          Аккаунт
-        </span>
-
-      </div>
-
-      <button
-        id="settingsBtn"
-        class="round-button"
-        type="button"
-        title="Настройки"
-      >
-        ⚙
-      </button>
-
-      <button
-        id="logoutBtn"
-        class="round-button"
-        type="button"
-        title="Выйти"
-      >
-        ↪
-      </button>
-
-    </div>
-
-  </aside>
-
-
-  <main class="main">
-
-    <header class="topbar">
-
-      <button
-        id="menuBtn"
-        class="round-button mobile-only"
-        type="button"
-      >
-        ☰
-      </button>
-
-      <div
-        id="chatTitle"
-        class="chat-title-main"
-      >
-        Новый чат
-      </div>
-
-      <button
-        id="deleteChatBtn"
-        class="round-button"
-        type="button"
-        title="Удалить чат"
-      >
-        🗑
-      </button>
-
-    </header>
-
-
-    <section
-      id="messages"
-      class="messages"
+    <aside
+      class="sidebar"
+      id="sidebar"
     >
 
-      <div
-        id="welcome"
-        class="welcome"
-      >
-
-        <div class="welcome-icon">
-          ✦
-        </div>
-
-        <h2>
-          Чем помочь?
-        </h2>
-
-        <p>
-          Задайте вопрос, попросите придумать идею
-          или создайте изображение.
-        </p>
-
-        <div class="suggestions">
-
-          <button
-            class="suggestion"
-            data-prompt="Объясни простыми словами, как работает 3D-печать"
-            type="button"
-          >
-            🧩 Объяснить тему
-          </button>
-
-          <button
-            class="suggestion"
-            data-prompt="Придумай 5 идей для современного сайта"
-            type="button"
-          >
-            💡 Придумать идеи
-          </button>
-
-          <button
-            class="suggestion"
-            data-prompt="Помоги написать красивый текст для сайта"
-            type="button"
-          >
-            ✍️ Написать текст
-          </button>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <div class="composer-area">
-
-      <div
-        id="attachments"
-        class="attachments hidden"
-      ></div>
-
-      <div class="composer">
+      <div class="side-top">
 
         <button
-          id="attachBtn"
-          class="composer-button"
-          type="button"
-          title="Прикрепить файл"
+          class="icon-btn"
+          id="closeSide"
+        >
+          ×
+        </button>
+
+        <div class="logo">
+          N
+        </div>
+
+        <button
+          class="icon-btn"
+          id="newChat"
+          title="Новый чат"
         >
           ＋
         </button>
 
-        <textarea
-          id="prompt"
-          rows="1"
-          maxlength="10000"
-          placeholder="Сообщение для Нейро…"
-        ></textarea>
-
-        <button
-          id="sendBtn"
-          class="send-button"
-          type="button"
-          title="Отправить"
-        >
-          ➤
-        </button>
-
       </div>
 
 
-      <div class="tool-row">
+      <div class="profile">
 
-        <button
-          id="chatMode"
-          class="tool-button active"
-          type="button"
-        >
-          ✦ Чат
-        </button>
+        <div class="avatar">
+          N
+        </div>
 
-        <button
-          id="imageMode"
-          class="tool-button"
-          type="button"
-        >
-          ◇ Изображение
-        </button>
+        <div>
 
-        <button
-          id="videoMode"
-          class="tool-button"
-          type="button"
-        >
-          ▶ Видео
-        </button>
+          <b id="userName">
+            Пользователь
+          </b>
+
+          <span>
+            Нейро
+          </span>
+
+        </div>
 
       </div>
 
-      <div class="composer-note">
-        Нейро может ошибаться. Проверяйте важную информацию.
-      </div>
-
-    </div>
-
-  </main>
-
-</div>
-
-
-<input
-  id="fileInput"
-  type="file"
-  accept="image/*,video/*"
-  multiple
-  hidden
->
-
-
-<div
-  id="attachModal"
-  class="modal hidden"
->
-
-  <div class="modal-card">
-
-    <div class="modal-header">
-
-      <h2>
-        Добавить файл
-      </h2>
 
       <button
-        id="closeAttach"
-        class="round-button"
-        type="button"
+        class="new-chat"
+        id="newChat2"
       >
-        ×
+        ＋ Новый чат
       </button>
 
-    </div>
 
-    <button
-      id="pickPhoto"
-      class="modal-option"
-      type="button"
-    >
-      📷
-      <span>
-        <strong>Фото</strong>
-        <small>Выбрать изображение</small>
-      </span>
-    </button>
+      <div
+        class="chat-list"
+        id="chatList"
+      ></div>
 
-    <button
-      id="pickVideo"
-      class="modal-option"
-      type="button"
-    >
-      🎬
-      <span>
-        <strong>Видео</strong>
-        <small>Выбрать видео</small>
-      </span>
-    </button>
 
-    <button
-      id="pickAny"
-      class="modal-option"
-      type="button"
-    >
-      🗂
-      <span>
-        <strong>Медиа</strong>
-        <small>Фото или видео</small>
-      </span>
-    </button>
+      <div class="side-bottom">
+
+        <button id="logout">
+          ↪ Выйти
+        </button>
+
+      </div>
+
+    </aside>
+
+
+    <main class="main">
+
+      <header class="topbar">
+
+        <button
+          class="icon-btn mobile-only"
+          id="openSide"
+        >
+          ☰
+        </button>
+
+        <div class="top-title">
+
+          <strong>
+            Нейро
+          </strong>
+
+          <span>
+            Автономный режим
+          </span>
+
+        </div>
+
+        <button
+          class="icon-btn"
+          id="clearChat"
+          title="Очистить текущий чат"
+        >
+          ⌫
+        </button>
+
+      </header>
+
+
+      <section
+        class="conversation"
+        id="conversation"
+      >
+
+        <div
+          class="welcome"
+          id="welcome"
+        >
+
+          <div class="hero-logo">
+            N
+          </div>
+
+          <h2>
+            Чем могу помочь?
+          </h2>
+
+          <p>
+            Задай вопрос, напиши идею
+            или пришли задачу.
+          </p>
+
+
+          <div class="suggestions">
+
+            <button
+              data-q="Помоги мне придумать идею для сайта"
+            >
+              💡 Идея для сайта
+            </button>
+
+            <button
+              data-q="Помоги исправить мой JavaScript"
+            >
+              🧩 Исправить код
+            </button>
+
+            <button
+              data-q="Расскажи, что ты умеешь"
+            >
+              ✨ Что ты умеешь?
+            </button>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <div class="composer-wrap">
+
+        <div class="quick-tools">
+
+          <button data-tool="image">
+            🖼️ Изображение
+          </button>
+
+          <button data-tool="video">
+            🎬 Видео
+          </button>
+
+          <button data-tool="file">
+            📎 Файл
+          </button>
+
+          <button data-tool="code">
+            ⌘ Код
+          </button>
+
+        </div>
+
+
+        <div class="composer">
+
+          <textarea
+            id="message"
+            rows="1"
+            placeholder="Сообщить Нейро..."
+          ></textarea>
+
+          <button
+            class="send"
+            id="send"
+            aria-label="Отправить"
+          >
+            ↑
+          </button>
+
+        </div>
+
+
+        <div class="hint">
+          Нейро работает без внешнего API-ключа.
+          Проверяй важные сведения перед использованием.
+        </div>
+
+      </div>
+
+    </main>
 
   </div>
 
-</div>
 
+  <input
+    id="fileInput"
+    type="file"
+    hidden
+    multiple
+  >
 
-<div
-  id="settingsModal"
-  class="modal hidden"
->
-
-  <div class="modal-card">
-
-    <div class="modal-header">
-
-      <h2>
-        Настройки
-      </h2>
-
-      <button
-        id="closeSettings"
-        class="round-button"
-        type="button"
-      >
-        ×
-      </button>
-
-    </div>
-
-    <div class="setting">
-      <span>Аккаунт</span>
-      <strong id="settingsUser"></strong>
-    </div>
-
-    <div class="setting">
-      <span>Приложение</span>
-      <strong>Нейро-чат 2.0</strong>
-    </div>
-
-    <div class="setting">
-      <span>Сервер</span>
-      <strong>API</strong>
-    </div>
-
-  </div>
-
-</div>
-
-
-<div
-  id="toast"
-  class="toast"
-></div>
-
-
-<script
-  src="/script.js"
-  defer
-></script>
+  <script src="script.js"></script>
 
 </body>
 </html>
