@@ -1,236 +1,430 @@
-"use strict";
-
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
-const dotenv = require("dotenv");
-const OpenAI = require("openai");
-
-dotenv.config();
 
 const app = express();
 
-const PORT = Number(process.env.PORT) || 3000;
-const DATA_DIR = path.join(__dirname, "data");
+const PORT = process.env.PORT || 3000;
+const ROOT = __dirname;
+
+const DATA_DIR = path.join(ROOT, "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const CHATS_FILE = path.join(DATA_DIR, "chats.json");
 
-const SESSION_COOKIE = "neuro_session";
-const SESSION_MAX_AGE = 1000 * 60 * 60 * 24 * 30;
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function ensureFile(file, fallback) {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify(fallback, null, 2));
+  }
+}
+
+ensureFile(USERS_FILE, []);
+ensureFile(CHATS_FILE, []);
 
 const sessions = new Map();
 
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    })
-  : null;
+app.disable("x-powered-by");
 
-function ensureData() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, "[]", "utf8");
-  }
+app.use(express.static(ROOT, {
+  index: false
+}));
 
-  if (!fs.existsSync(CHATS_FILE)) {
-    fs.writeFileSync(CHATS_FILE, "[]", "utf8");
-  }
-}
-
-ensureData();
-
-function readJSON(file) {
+function readJson(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function writeJSON(file, data) {
+function writeJson(file, value) {
   fs.writeFileSync(
     file,
-    JSON.stringify(data, null, 2),
-    "utf8"
+    JSON.stringify(value, null, 2)
   );
 }
 
-function users() {
-  return readJSON(USERS_FILE);
-}
-
-function chats() {
-  return readJSON(CHATS_FILE);
-}
-
-function id() {
-  return crypto.randomUUID();
-}
-
-function now() {
-  return new Date().toISOString();
-}
-
-function normalizeUsername(value) {
-  return String(value || "")
+function clean(value, max = 12000) {
+  return String(value ?? "")
+    .replace(
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
+      ""
+    )
     .trim()
-    .toLowerCase();
+    .slice(0, max);
 }
 
-function validUsername(username) {
-  return /^[a-zA-Zа-яА-Я0-9_.-]{3,40}$/.test(username);
-}
-
-function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto
-    .pbkdf2Sync(password, salt, 120000, 64, "sha512")
-    .toString("hex");
-
+function hashPassword(
+  password,
+  salt = crypto.randomBytes(16).toString("hex")
+) {
   return {
     salt,
-    hash
+    hash: crypto
+      .scryptSync(password, salt, 64)
+      .toString("hex")
   };
 }
 
-function verifyPassword(password, salt, expectedHash) {
-  const actual = crypto
-    .pbkdf2Sync(password, salt, 120000, 64, "sha512")
-    .toString("hex");
+function verifyPassword(password, user) {
+  try {
+    const actual = crypto
+      .scryptSync(password, user.salt, 64)
+      .toString("hex");
 
-  return crypto.timingSafeEqual(
-    Buffer.from(actual, "hex"),
-    Buffer.from(expectedHash, "hex")
-  );
+    return crypto.timingSafeEqual(
+      Buffer.from(actual, "hex"),
+      Buffer.from(user.hash, "hex")
+    );
+  } catch {
+    return false;
+  }
 }
 
-function publicUser(user) {
-  return {
-    id: user.id,
-    username: user.username,
-    createdAt: user.createdAt
-  };
+function createToken() {
+  return crypto.randomBytes(32).toString("hex");
 }
 
-function createSession(userId) {
-  const token = crypto.randomBytes(48).toString("hex");
+function setSession(res, userId) {
+  const sessionToken = createToken();
 
-  sessions.set(token, {
+  sessions.set(sessionToken, {
     userId,
-    expiresAt: Date.now() + SESSION_MAX_AGE
+    createdAt: Date.now()
   });
 
-  return token;
-}
-
-function parseCookies(req) {
-  const header = req.headers.cookie || "";
-
-  const result = {};
-
-  for (const part of header.split(";")) {
-    const index = part.indexOf("=");
-
-    if (index === -1) {
-      continue;
-    }
-
-    const key = part.slice(0, index).trim();
-    const value = part.slice(index + 1).trim();
-
-    result[key] = decodeURIComponent(value);
-  }
-
-  return result;
-}
-
-function setSessionCookie(res, token) {
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(
-      SESSION_MAX_AGE / 1000
-    )}`
+    `neuro_session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`
   );
 }
 
-function clearSessionCookie(res) {
-  res.setHeader(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`
+function getUser(req) {
+  const cookie = req.headers.cookie || "";
+
+  const match = cookie.match(
+    /(?:^|;\s*)neuro_session=([^;]+)/
   );
-}
 
-function getCurrentUser(req) {
-  const cookies = parseCookies(req);
-  const token = cookies[SESSION_COOKIE];
-
-  if (!token) {
+  if (!match) {
     return null;
   }
 
-  const session = sessions.get(token);
+  const session = sessions.get(match[1]);
 
   if (!session) {
     return null;
   }
 
-  if (session.expiresAt < Date.now()) {
-    sessions.delete(token);
-    return null;
-  }
+  const users = readJson(USERS_FILE, []);
 
-  return users().find(
+  return users.find(
     user => user.id === session.userId
   ) || null;
 }
 
-function requireAuth(req, res, next) {
-  const user = getCurrentUser(req);
+function requireUser(req, res, next) {
+  const user = getUser(req);
 
   if (!user) {
     return res.status(401).json({
-      error: "Требуется авторизация."
+      ok: false,
+      error: "Требуется вход в аккаунт."
     });
   }
 
   req.user = user;
-
   next();
 }
 
-function safeError(error) {
-  console.error(error);
+/* =========================
+   АВТОНОМНЫЙ НЕЙРО-ДВИЖОК
+========================= */
 
-  if (error && error.message) {
-    return error.message;
-  }
+const stopWords = new Set([
+  "и",
+  "а",
+  "но",
+  "это",
+  "как",
+  "что",
+  "для",
+  "или",
+  "на",
+  "в",
+  "с",
+  "по",
+  "у",
+  "я",
+  "ты",
+  "мне",
+  "мы",
+  "вы",
+  "же",
+  "не",
+  "да",
+  "из",
+  "за",
+  "к",
+  "о",
+  "про",
+  "то"
+]);
 
-  return "Внутренняя ошибка сервера.";
+function words(text) {
+  return (
+    clean(text, 3000)
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .match(/[a-zа-я0-9]+/gi) || []
+  );
 }
 
-app.disable("x-powered-by");
+function localAnswer(message, history = []) {
+  const q = clean(message, 5000);
 
-app.use(
-  express.json({
-    limit: "20mb"
-  })
-);
+  if (!q) {
+    return "Напиши вопрос или задачу — я помогу разобраться.";
+  }
 
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "20mb"
-  })
-);
+  const lower = q.toLowerCase();
 
-app.use(express.static(__dirname));
+  const has = (...items) =>
+    items.some(item => lower.includes(item));
+
+  const wordList = words(q);
+
+  /* Приветствие */
+
+  if (
+    has(
+      "привет",
+      "здравствуй",
+      "добрый вечер",
+      "доброе утро",
+      "добрый день"
+    )
+  ) {
+    return (
+      "Привет! 👋 Я Нейро.\n\n" +
+      "Готов помочь с вопросом, текстом, кодом, " +
+      "идеей или твоим проектом."
+    );
+  }
+
+  /* Кто такой Нейро */
+
+  if (
+    has(
+      "кто ты",
+      "ты кто",
+      "что ты"
+    )
+  ) {
+    return (
+      "Я Нейро — помощник этого сайта.\n\n" +
+      "Сейчас я работаю в автономном режиме без " +
+      "внешнего API-ключа. Я умею вести контекст " +
+      "диалога и помогать с задачами, кодом, " +
+      "текстами и проектами."
+    );
+  }
+
+  /* Спасибо */
+
+  if (
+    has(
+      "спасибо",
+      "благодарю"
+    )
+  ) {
+    return (
+      "Пожалуйста! 😊\n\n" +
+      "Если есть следующая задача — присылай."
+    );
+  }
+
+  /* Время */
+
+  if (
+    has(
+      "время",
+      "который час"
+    )
+  ) {
+    return (
+      `Сейчас серверное время: ${
+        new Date().toLocaleString("ru-RU")
+      }.`
+    );
+  }
+
+  /* Дата */
+
+  if (
+    has(
+      "дата",
+      "какое сегодня число",
+      "сегодня"
+    )
+  ) {
+    return (
+      `Сегодня ${
+        new Date().toLocaleDateString(
+          "ru-RU",
+          {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+          }
+        )
+      }.`
+    );
+  }
+
+  /* Код */
+
+  if (
+    has(
+      "код",
+      "javascript",
+      "js",
+      "html",
+      "css",
+      "python",
+      "server.js",
+      "script.js"
+    )
+  ) {
+    return (
+      "Понял, это задача по коду. 🧩\n\n" +
+      "Пришли файл или вставь проблемный фрагмент " +
+      "и напиши, что должно происходить.\n\n" +
+      "Я помогу разобрать структуру, найти типичные " +
+      "ошибки и подготовить готовую замену."
+    );
+  }
+
+  /* Сайт */
+
+  if (
+    has(
+      "сайт",
+      "страниц",
+      "интерфейс",
+      "кнопк"
+    )
+  ) {
+    return (
+      "Для сайта лучше идти по слоям:\n\n" +
+      "1. Интерфейс\n" +
+      "2. Клиентский JavaScript\n" +
+      "3. Серверный API\n" +
+      "4. Хранение данных\n\n" +
+      "В Neuro-chat сначала важно добиться стабильной " +
+      "работы чата и авторизации, а затем подключать " +
+      "дополнительные генераторы."
+    );
+  }
+
+  /* 3D */
+
+  if (
+    has(
+      "3d",
+      "3д",
+      "модель",
+      "печать",
+      "принтер"
+    )
+  ) {
+    return (
+      "Могу помочь с 3D-проектом: настройками печати, " +
+      "Bambu Studio, поддержками, соединениями деталей " +
+      "и подготовкой модели."
+    );
+  }
+
+  /* Ошибки */
+
+  if (
+    has(
+      "ошибк",
+      "не работает",
+      "сломал",
+      "ошибка"
+    )
+  ) {
+    return (
+      `Давай разберём ошибку по фактам.\n\n` +
+      `Я получил сообщение:\n«${q.slice(0, 240)}»\n\n` +
+      "Если это ошибка сайта, пришли её текст или " +
+      "скриншот — я помогу определить конкретный файл " +
+      "и место, которое нужно исправить."
+    );
+  }
+
+  /* Общий ответ */
+
+  const usefulWords = wordList
+    .filter(word => !stopWords.has(word))
+    .slice(0, 8);
+
+  const topic =
+    usefulWords.length > 0
+      ? usefulWords.join(", ")
+      : "твой запрос";
+
+  const previousUsers = history
+    .filter(item => item && item.role === "user")
+    .slice(-3)
+    .map(item => clean(item.content, 180));
+
+  const variants = [
+    `Понял задачу. Ключевые темы здесь: ${topic}. Давай разложим её на конкретные шаги и сначала сделаем самое важное.`,
+
+    `Хорошо. Я бы начал с главного: ${topic}. После этого можно последовательно проверить детали и убрать лишнее.`,
+
+    `Принял. По текущему запросу вижу задачу на тему «${topic}». Могу помочь довести её до рабочего результата без лишних действий.`,
+
+    previousUsers.length
+      ? `Продолжаю с учётом предыдущего контекста: «${previousUsers[previousUsers.length - 1]}». Теперь можно перейти к следующему шагу.`
+      : "Принял. Опиши желаемый результат чуть конкретнее, и я помогу построить решение."
+  ];
+
+  return variants[
+    (q.length +
+      wordList.length +
+      history.length) %
+      variants.length
+  ];
+}
+
+/* =========================
+   SYSTEM
+========================= */
 
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
-    service: "Neuro Chat",
-    aiConfigured: Boolean(openai)
+    service: "neuro-chat",
+    mode: "autonomous",
+    externalApi: false,
+    time: new Date().toISOString()
+  });
+});
+
+app.get("/api/status", (req, res) => {
+  res.json({
+    ok: true,
+    ai: "local",
+    externalApi: false
   });
 });
 
@@ -239,115 +433,149 @@ app.get("/api/health", (req, res) => {
 ========================= */
 
 app.post("/api/auth/register", (req, res) => {
-  try {
-    const username = normalizeUsername(req.body.username);
-    const password = String(req.body.password || "");
+  const username = clean(
+    req.body.username,
+    80
+  ).toLowerCase();
 
-    if (!validUsername(username)) {
-      return res.status(400).json({
-        error:
-          "Имя пользователя: от 3 до 40 символов. Разрешены буквы, цифры, _, - и ."
-      });
-    }
+  const password = String(
+    req.body.password || ""
+  );
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        error: "Пароль должен содержать минимум 6 символов."
-      });
-    }
-
-    const allUsers = users();
-
-    if (
-      allUsers.some(
-        user => user.username === username
-      )
-    ) {
-      return res.status(409).json({
-        error: "Пользователь с таким именем уже существует."
-      });
-    }
-
-    const passwordData = hashPassword(password);
-
-    const user = {
-      id: id(),
-      username,
-      passwordHash: passwordData.hash,
-      passwordSalt: passwordData.salt,
-      createdAt: now()
-    };
-
-    allUsers.push(user);
-
-    writeJSON(USERS_FILE, allUsers);
-
-    const token = createSession(user.id);
-
-    setSessionCookie(res, token);
-
-    res.json({
-      ok: true,
-      user: publicUser(user)
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: safeError(error)
+  if (
+    !/^[a-z0-9._-]{3,40}$/.test(username)
+  ) {
+    return res.status(400).json({
+      ok: false,
+      error:
+        "Логин: 3–40 символов, только английские буквы, цифры, точка, _ или -."
     });
   }
+
+  if (password.length < 6) {
+    return res.status(400).json({
+      ok: false,
+      error:
+        "Пароль должен быть не короче 6 символов."
+    });
+  }
+
+  const users = readJson(
+    USERS_FILE,
+    []
+  );
+
+  if (
+    users.some(
+      user => user.username === username
+    )
+  ) {
+    return res.status(409).json({
+      ok: false,
+      error:
+        "Такой пользователь уже существует."
+    });
+  }
+
+  const {
+    salt,
+    hash
+  } = hashPassword(password);
+
+  const user = {
+    id: crypto.randomUUID(),
+    username,
+    salt,
+    hash,
+    createdAt:
+      new Date().toISOString()
+  };
+
+  users.push(user);
+
+  writeJson(
+    USERS_FILE,
+    users
+  );
+
+  setSession(
+    res,
+    user.id
+  );
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.username
+    }
+  });
 });
 
 app.post("/api/auth/login", (req, res) => {
-  try {
-    const username = normalizeUsername(req.body.username);
-    const password = String(req.body.password || "");
+  const username = clean(
+    req.body.username,
+    80
+  ).toLowerCase();
 
-    const user = users().find(
-      item => item.username === username
-    );
+  const password = String(
+    req.body.password || ""
+  );
 
-    if (!user) {
-      return res.status(401).json({
-        error: "Неверное имя пользователя или пароль."
-      });
-    }
+  const users = readJson(
+    USERS_FILE,
+    []
+  );
 
-    const correct = verifyPassword(
+  const user = users.find(
+    item =>
+      item.username === username
+  );
+
+  if (
+    !user ||
+    !verifyPassword(
       password,
-      user.passwordSalt,
-      user.passwordHash
-    );
-
-    if (!correct) {
-      return res.status(401).json({
-        error: "Неверное имя пользователя или пароль."
-      });
-    }
-
-    const token = createSession(user.id);
-
-    setSessionCookie(res, token);
-
-    res.json({
-      ok: true,
-      user: publicUser(user)
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: safeError(error)
+      user
+    )
+  ) {
+    return res.status(401).json({
+      ok: false,
+      error:
+        "Неверный логин или пароль."
     });
   }
+
+  setSession(
+    res,
+    user.id
+  );
+
+  res.json({
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.username
+    }
+  });
 });
 
 app.post("/api/auth/logout", (req, res) => {
-  const cookies = parseCookies(req);
-  const token = cookies[SESSION_COOKIE];
+  const cookie =
+    req.headers.cookie || "";
 
-  if (token) {
-    sessions.delete(token);
+  const match = cookie.match(
+    /(?:^|;\s*)neuro_session=([^;]+)/
+  );
+
+  if (match) {
+    sessions.delete(match[1]);
   }
 
-  clearSessionCookie(res);
+  res.setHeader(
+    "Set-Cookie",
+    "neuro_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+  );
 
   res.json({
     ok: true
@@ -355,10 +583,17 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 app.get("/api/auth/me", (req, res) => {
-  const user = getCurrentUser(req);
+  const user = getUser(req);
 
   res.json({
-    user: user ? publicUser(user) : null
+    ok: true,
+    authenticated: !!user,
+    user: user
+      ? {
+          id: user.id,
+          username: user.username
+        }
+      : null
   });
 });
 
@@ -366,349 +601,304 @@ app.get("/api/auth/me", (req, res) => {
    CHATS
 ========================= */
 
-app.get("/api/chats", requireAuth, (req, res) => {
-  const result = chats()
-    .filter(chat => chat.userId === req.user.id)
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt) -
-        new Date(a.updatedAt)
+app.get(
+  "/api/chats",
+  requireUser,
+  (req, res) => {
+    const chats = readJson(
+      CHATS_FILE,
+      []
     )
-    .map(chat => ({
-      id: chat.id,
-      title: chat.title,
-      createdAt: chat.createdAt,
-      updatedAt: chat.updatedAt
-    }));
-
-  res.json({
-    chats: result
-  });
-});
-
-app.post("/api/chats", requireAuth, (req, res) => {
-  try {
-    const title =
-      String(req.body.title || "Новый чат")
-        .trim()
-        .slice(0, 100) || "Новый чат";
-
-    const allChats = chats();
-
-    const chat = {
-      id: id(),
-      userId: req.user.id,
-      title,
-      createdAt: now(),
-      updatedAt: now(),
-      messages: []
-    };
-
-    allChats.push(chat);
-
-    writeJSON(CHATS_FILE, allChats);
+      .filter(
+        chat =>
+          chat.userId ===
+          req.user.id
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt) -
+          new Date(a.updatedAt)
+      );
 
     res.json({
       ok: true,
-      chat: {
+      chats: chats.map(chat => ({
         id: chat.id,
         title: chat.title,
-        createdAt: chat.createdAt,
         updatedAt: chat.updatedAt
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: safeError(error)
+      }))
     });
   }
-});
+);
 
-app.get("/api/chats/:chatId", requireAuth, (req, res) => {
-  const chat = chats().find(
-    item =>
-      item.id === req.params.chatId &&
-      item.userId === req.user.id
-  );
+app.post(
+  "/api/chats",
+  requireUser,
+  (req, res) => {
+    const chats = readJson(
+      CHATS_FILE,
+      []
+    );
 
-  if (!chat) {
-    return res.status(404).json({
-      error: "Чат не найден."
+    const chat = {
+      id: crypto.randomUUID(),
+      userId: req.user.id,
+      title:
+        clean(
+          req.body.title,
+          80
+        ) ||
+        "Новый чат",
+      messages: [],
+      createdAt:
+        new Date().toISOString(),
+      updatedAt:
+        new Date().toISOString()
+    };
+
+    chats.push(chat);
+
+    writeJson(
+      CHATS_FILE,
+      chats
+    );
+
+    res.json({
+      ok: true,
+      chat
     });
   }
+);
 
-  res.json({
-    chat: {
-      id: chat.id,
-      title: chat.title,
-      createdAt: chat.createdAt,
-      updatedAt: chat.updatedAt,
-      messages: chat.messages || []
-    }
-  });
-});
+app.get(
+  "/api/chats/:id",
+  requireUser,
+  (req, res) => {
+    const chats = readJson(
+      CHATS_FILE,
+      []
+    );
 
-app.delete("/api/chats/:chatId", requireAuth, (req, res) => {
-  const allChats = chats();
-
-  const index = allChats.findIndex(
-    item =>
-      item.id === req.params.chatId &&
-      item.userId === req.user.id
-  );
-
-  if (index === -1) {
-    return res.status(404).json({
-      error: "Чат не найден."
-    });
-  }
-
-  allChats.splice(index, 1);
-
-  writeJSON(CHATS_FILE, allChats);
-
-  res.json({
-    ok: true
-  });
-});
-
-/* =========================
-   TEXT AI
-========================= */
-
-app.post("/api/chat", requireAuth, async (req, res) => {
-  try {
-    const chatId = String(req.body.chatId || "");
-    const prompt = String(req.body.prompt || "").trim();
-
-    if (!chatId) {
-      return res.status(400).json({
-        error: "Не указан chatId."
-      });
-    }
-
-    if (!prompt) {
-      return res.status(400).json({
-        error: "Введите сообщение."
-      });
-    }
-
-    const allChats = chats();
-
-    const chat = allChats.find(
+    const chat = chats.find(
       item =>
-        item.id === chatId &&
-        item.userId === req.user.id
+        item.id ===
+          req.params.id &&
+        item.userId ===
+          req.user.id
     );
 
     if (!chat) {
       return res.status(404).json({
+        ok: false,
         error: "Чат не найден."
       });
     }
 
-    if (!openai) {
-      return res.status(503).json({
-        error:
-          "ИИ не настроен на сервере. Добавьте OPENAI_API_KEY в переменные окружения сервера."
-      });
-    }
-
-    const userMessage = {
-      id: id(),
-      role: "user",
-      content: prompt,
-      createdAt: now()
-    };
-
-    chat.messages = chat.messages || [];
-    chat.messages.push(userMessage);
-
-    const recentMessages = chat.messages
-      .slice(-30)
-      .map(message => ({
-        role: message.role,
-        content: message.content
-      }));
-
-    const response = await openai.responses.create({
-      model:
-        process.env.OPENAI_MODEL ||
-        "gpt-5.6-luna",
-      instructions:
-        "Ты — Нейро, дружелюбный и точный AI-помощник. Отвечай на русском языке, если пользователь пишет по-русски. Не выдумывай факты. Если информации недостаточно, прямо скажи об этом.",
-      input: recentMessages
+    res.json({
+      ok: true,
+      chat
     });
+  }
+);
 
-    const answer =
-      response.output_text ||
-      "Не удалось получить текстовый ответ.";
+app.delete(
+  "/api/chats/:id",
+  requireUser,
+  (req, res) => {
+    let chats = readJson(
+      CHATS_FILE,
+      []
+    );
 
-    const assistantMessage = {
-      id: id(),
-      role: "assistant",
-      content: answer,
-      createdAt: now()
-    };
+    const oldLength =
+      chats.length;
 
-    chat.messages.push(assistantMessage);
+    chats = chats.filter(
+      chat =>
+        !(
+          chat.id ===
+            req.params.id &&
+          chat.userId ===
+            req.user.id
+        )
+    );
 
-    if (
-      chat.title === "Новый чат" &&
-      prompt.length > 0
-    ) {
-      chat.title =
-        prompt.slice(0, 45) +
-        (prompt.length > 45 ? "…" : "");
-    }
-
-    chat.updatedAt = now();
-
-    writeJSON(CHATS_FILE, allChats);
+    writeJson(
+      CHATS_FILE,
+      chats
+    );
 
     res.json({
       ok: true,
-      message: assistantMessage,
-      chat: {
-        id: chat.id,
-        title: chat.title,
-        updatedAt: chat.updatedAt
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: safeError(error)
+      deleted:
+        oldLength !==
+        chats.length
     });
   }
-});
+);
 
 /* =========================
-   IMAGE GENERATION
+   CHAT
+========================= */
+
+app.post(
+  "/api/chat",
+  requireUser,
+  (req, res) => {
+    const message = clean(
+      req.body.message,
+      5000
+    );
+
+    if (!message) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "Пустое сообщение."
+      });
+    }
+
+    const chats = readJson(
+      CHATS_FILE,
+      []
+    );
+
+    let chat = chats.find(
+      item =>
+        item.id ===
+          req.body.chatId &&
+        item.userId ===
+          req.user.id
+    );
+
+    if (!chat) {
+      chat = {
+        id: crypto.randomUUID(),
+        userId: req.user.id,
+        title:
+          message.slice(0, 60),
+        messages: [],
+        createdAt:
+          new Date().toISOString(),
+        updatedAt:
+          new Date().toISOString()
+      };
+
+      chats.push(chat);
+    }
+
+    chat.messages.push({
+      role: "user",
+      content: message,
+      createdAt:
+        new Date().toISOString()
+    });
+
+    const answer = localAnswer(
+      message,
+      chat.messages
+    );
+
+    chat.messages.push({
+      role: "assistant",
+      content: answer,
+      createdAt:
+        new Date().toISOString()
+    });
+
+    chat.updatedAt =
+      new Date().toISOString();
+
+    writeJson(
+      CHATS_FILE,
+      chats
+    );
+
+    res.json({
+      ok: true,
+      chatId: chat.id,
+      message: {
+        role: "assistant",
+        content: answer
+      }
+    });
+  }
+);
+
+/* =========================
+   GENERATION PLACEHOLDERS
 ========================= */
 
 app.post(
   "/api/generate/image",
-  requireAuth,
-  async (req, res) => {
-    try {
-      const prompt = String(
-        req.body.prompt || ""
-      ).trim();
-
-      if (!prompt) {
-        return res.status(400).json({
-          error: "Введите описание изображения."
-        });
-      }
-
-      if (!openai) {
-        return res.status(503).json({
-          error:
-            "Генерация изображений не настроена. Добавьте OPENAI_API_KEY."
-        });
-      }
-
-      const result =
-        await openai.images.generate({
-          model:
-            process.env.OPENAI_IMAGE_MODEL ||
-            "gpt-image-2",
-          prompt,
-          size: "1024x1024"
-        });
-
-      const item =
-        result.data &&
-        result.data[0];
-
-      if (!item) {
-        throw new Error(
-          "Модель не вернула изображение."
-        );
-      }
-
-      let imageUrl = null;
-
-      if (item.url) {
-        imageUrl = item.url;
-      }
-
-      if (item.b64_json) {
-        imageUrl =
-          `data:image/png;base64,${item.b64_json}`;
-      }
-
-      if (!imageUrl) {
-        throw new Error(
-          "Сервер не получил изображение."
-        );
-      }
-
-      res.json({
-        ok: true,
-        image: imageUrl
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: safeError(error)
-      });
-    }
+  requireUser,
+  (req, res) => {
+    res.status(501).json({
+      ok: false,
+      error:
+        "Генератор изображений пока не подключён. Интерфейс готов для подключения модели."
+    });
   }
 );
-
-/* =========================
-   VIDEO PLACEHOLDER
-========================= */
 
 app.post(
   "/api/generate/video",
-  requireAuth,
-  async (req, res) => {
+  requireUser,
+  (req, res) => {
     res.status(501).json({
+      ok: false,
       error:
-        "Генерация видео пока не подключена к API в этой версии."
+        "Генератор видео пока не подключён. Интерфейс готов для подключения модели."
     });
   }
 );
 
 /* =========================
-   SPA FALLBACK
+   FRONTEND
 ========================= */
 
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({
-      error: "API endpoint не найден."
-    });
+app.get("/*splat", (req, res, next) => {
+  if (
+    req.path.startsWith("/api/")
+  ) {
+    return next();
   }
 
   res.sendFile(
-    path.join(__dirname, "index.html")
+    path.join(
+      ROOT,
+      "index.html"
+    )
   );
 });
 
-/* =========================
-   ERROR HANDLER
-========================= */
-
-app.use((error, req, res, next) => {
-  console.error(error);
-
-  if (res.headersSent) {
-    return next(error);
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      ok: false,
+      error:
+        "Маршрут не найден."
+    });
   }
+);
 
-  res.status(500).json({
-    error: "Внутренняя ошибка сервера."
-  });
-});
+app.use(
+  (err, req, res, next) => {
+    console.error(err);
 
-app.listen(PORT, () => {
-  console.log(
-    `Neuro Chat запущен: http://localhost:${PORT}`
-  );
+    res.status(500).json({
+      ok: false,
+      error:
+        "Внутренняя ошибка сервера."
+    });
+  }
+);
 
-  console.log(
-    `AI API: ${openai ? "подключён" : "не настроен"}`
-  );
-});
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `Neuro-chat запущен на порту ${PORT}`
+    );
+  }
+);
