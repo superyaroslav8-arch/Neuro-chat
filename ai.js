@@ -33,30 +33,31 @@ const MODELS = {
 const DEFAULT_CLOUDFLARE_MODEL =
   "@cf/meta/llama-3.1-8b-instruct";
 
-const MAX_MESSAGE_LENGTH = 12000;
+const DEFAULT_GEMINI_MODEL =
+  "gemini-3.8-flash";
+
+const DEFAULT_XAI_MODEL =
+  "grok-4.6";
+
+const MAX_MESSAGE_LENGTH =
+  12000;
+
 const MAX_HISTORY = 30;
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store"
-    }
-  });
-}
-
 function normalizeModel(model) {
-  const value = String(model || "neuro")
-    .trim()
-    .toLowerCase();
+  const value =
+    String(model || "neuro")
+      .trim()
+      .toLowerCase();
 
   return MODELS[value]
     ? value
     : "neuro";
 }
 
-function normalizeMessages(messages) {
+function normalizeMessages(
+  messages
+) {
   if (!Array.isArray(messages)) {
     return [];
   }
@@ -65,17 +66,22 @@ function normalizeMessages(messages) {
     .slice(-MAX_HISTORY)
     .map((message) => {
       const role =
-        message?.role === "assistant"
+        message?.role ===
+        "assistant"
           ? "assistant"
           : "user";
 
-      const content = String(
-        message?.content ||
-        message?.text ||
-        ""
-      )
-        .trim()
-        .slice(0, MAX_MESSAGE_LENGTH);
+      const content =
+        String(
+          message?.content ||
+          message?.text ||
+          ""
+        )
+          .trim()
+          .slice(
+            0,
+            MAX_MESSAGE_LENGTH
+          );
 
       return {
         role,
@@ -83,7 +89,8 @@ function normalizeMessages(messages) {
       };
     })
     .filter(
-      (message) => message.content
+      (message) =>
+        message.content
     );
 }
 
@@ -94,28 +101,40 @@ function makeSystemPrompt() {
     "Отвечай точно, понятно и по делу.",
     "Не утверждай, что выполнил действие, если оно реально не было выполнено.",
     "Не придумывай ссылки, файлы, результаты инструментов или факты.",
-    "Если для выполнения действия требуется разрешение пользователя, сначала попроси подтверждение.",
-    "Если информации недостаточно, честно скажи об этом."
+    "Если для действия требуется разрешение пользователя, сначала попроси подтверждение.",
+    "Если информации недостаточно, честно сообщи об этом."
   ].join(" ");
 }
 
-async function getUserSettings(env, userId) {
-  if (!userId || !env.getUserSettings) {
+async function getUserSettings(
+  env,
+  userId
+) {
+  if (
+    !userId ||
+    typeof env.getUserSettings !==
+      "function"
+  ) {
     return {};
   }
 
   try {
     return (
-      (await env.getUserSettings(userId)) ||
-      {}
+      (await env.getUserSettings(
+        userId
+      )) || {}
     );
   } catch {
     return {};
   }
 }
 
-function extractApiKey(settings, provider) {
-  const keys = settings?.apiKeys;
+function extractApiKey(
+  settings,
+  provider
+) {
+  const keys =
+    settings?.apiKeys;
 
   if (
     !keys ||
@@ -124,33 +143,43 @@ function extractApiKey(settings, provider) {
     return null;
   }
 
-  const value = keys[provider];
+  const value =
+    keys[provider];
 
   return value
-    ? String(value).trim() || null
+    ? String(value).trim() ||
+        null
     : null;
 }
 
-async function cloudflareChat(env, messages) {
+async function cloudflareChat(
+  env,
+  messages
+) {
   if (!env.AI) {
     throw new Error(
-      "Cloudflare AI не подключён."
+      "Cloudflare AI не подключён к Worker."
     );
   }
 
-  const result = await env.AI.run(
+  const model =
     env.NEURO_AI_MODEL ||
-      DEFAULT_CLOUDFLARE_MODEL,
-    {
-      messages: [
-        {
-          role: "system",
-          content: makeSystemPrompt()
-        },
-        ...messages
-      ]
-    }
-  );
+    DEFAULT_CLOUDFLARE_MODEL;
+
+  const result =
+    await env.AI.run(
+      model,
+      {
+        messages: [
+          {
+            role: "system",
+            content:
+              makeSystemPrompt()
+          },
+          ...messages
+        ]
+      }
+    );
 
   const text =
     result?.response ||
@@ -177,29 +206,37 @@ async function openAIChat(
     );
   }
 
-  const response = await fetch(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "content-type":
-          "application/json",
-        authorization:
-          `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: makeSystemPrompt()
-          },
-          ...messages
-        ],
-        temperature: 0.7
-      })
-    }
-  );
+  const response =
+    await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+
+        headers: {
+          "content-type":
+            "application/json",
+
+          authorization:
+            `Bearer ${apiKey}`
+        },
+
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+
+          messages: [
+            {
+              role: "system",
+              content:
+                makeSystemPrompt()
+            },
+
+            ...messages
+          ],
+
+          temperature: 0.7
+        })
+      }
+    );
 
   const data =
     await response.json();
@@ -212,11 +249,13 @@ async function openAIChat(
   }
 
   const text =
-    data?.choices?.[0]?.message?.content;
+    data?.choices?.[0]
+      ?.message
+      ?.content;
 
   if (!text) {
     throw new Error(
-      "OpenAI не вернул ответ."
+      "OpenAI не вернул текст ответа."
     );
   }
 
@@ -233,41 +272,52 @@ async function geminiChat(
     );
   }
 
-  const contents = messages.map(
-    (message) => ({
-      role:
-        message.role === "assistant"
-          ? "model"
-          : "user",
-      parts: [
-        {
-          text: message.content
-        }
-      ]
-    })
-  );
+  const contents =
+    messages.map(
+      (message) => ({
+        role:
+          message.role ===
+          "assistant"
+            ? "model"
+            : "user",
 
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
-    {
-      method: "POST",
-      headers: {
-        "content-type":
-          "application/json",
-        "x-goog-api-key": apiKey
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text: makeSystemPrompt()
-            }
-          ]
-        },
-        contents
+        parts: [
+          {
+            text:
+              message.content
+          }
+        ]
       })
-    }
-  );
+    );
+
+  const response =
+    await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+
+        headers: {
+          "content-type":
+            "application/json",
+
+          "x-goog-api-key":
+            apiKey
+        },
+
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  makeSystemPrompt()
+              }
+            ]
+          },
+
+          contents
+        })
+      }
+    );
 
   const data =
     await response.json();
@@ -292,7 +342,7 @@ async function geminiChat(
 
   if (!text) {
     throw new Error(
-      "Gemini не вернул ответ."
+      "Gemini не вернул текст ответа."
     );
   }
 
@@ -309,29 +359,38 @@ async function xaiChat(
     );
   }
 
-  const response = await fetch(
-    "https://api.x.ai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "content-type":
-          "application/json",
-        authorization:
-          `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "grok-4.3",
-        messages: [
-          {
-            role: "system",
-            content: makeSystemPrompt()
-          },
-          ...messages
-        ],
-        temperature: 0.7
-      })
-    }
-  );
+  const response =
+    await fetch(
+      "https://api.x.ai/v1/chat/completions",
+      {
+        method: "POST",
+
+        headers: {
+          "content-type":
+            "application/json",
+
+          authorization:
+            `Bearer ${apiKey}`
+        },
+
+        body: JSON.stringify({
+          model:
+            DEFAULT_XAI_MODEL,
+
+          messages: [
+            {
+              role: "system",
+              content:
+                makeSystemPrompt()
+            },
+
+            ...messages
+          ],
+
+          temperature: 0.7
+        })
+      }
+    );
 
   const data =
     await response.json();
@@ -350,7 +409,7 @@ async function xaiChat(
 
   if (!text) {
     throw new Error(
-      "Grok не вернул ответ."
+      "Grok не вернул текст ответа."
     );
   }
 
@@ -367,7 +426,7 @@ async function aliceChat(
   }
 
   throw new Error(
-    "Для Алисы пока требуется совместимый API endpoint Яндекса."
+    "API Алисы не подключён: нужен совместимый API endpoint Яндекса."
   );
 }
 
@@ -383,7 +442,9 @@ export async function chat({
   const normalizedMessages =
     normalizeMessages(messages);
 
-  if (!normalizedMessages.length) {
+  if (
+    !normalizedMessages.length
+  ) {
     throw new Error(
       "Сообщение для AI не найдено."
     );
@@ -396,58 +457,91 @@ export async function chat({
     );
 
   const provider =
-    MODELS[selectedModel].provider;
+    MODELS[selectedModel]
+      .provider;
 
   let text;
 
-  if (provider === "cloudflare") {
-    text = await cloudflareChat(
-      env,
-      normalizedMessages
+  try {
+    switch (provider) {
+      case "cloudflare":
+        text =
+          await cloudflareChat(
+            env,
+            normalizedMessages
+          );
+        break;
+
+      case "openai":
+        text =
+          await openAIChat(
+            extractApiKey(
+              settings,
+              "openai"
+            ),
+            normalizedMessages
+          );
+        break;
+
+      case "google":
+        text =
+          await geminiChat(
+            extractApiKey(
+              settings,
+              "google"
+            ),
+            normalizedMessages
+          );
+        break;
+
+      case "xai":
+        text =
+          await xaiChat(
+            extractApiKey(
+              settings,
+              "xai"
+            ),
+            normalizedMessages
+          );
+        break;
+
+      case "alice":
+        text =
+          await aliceChat(
+            extractApiKey(
+              settings,
+              "alice"
+            )
+          );
+        break;
+
+      default:
+        throw new Error(
+          "Неизвестный AI-провайдер."
+        );
+    }
+  } catch (error) {
+    console.error(
+      `[AI:${selectedModel}]`,
+      error
     );
-  } else if (provider === "openai") {
-    text = await openAIChat(
-      extractApiKey(
-        settings,
-        "openai"
-      ),
-      normalizedMessages
-    );
-  } else if (provider === "google") {
-    text = await geminiChat(
-      extractApiKey(
-        settings,
-        "google"
-      ),
-      normalizedMessages
-    );
-  } else if (provider === "xai") {
-    text = await xaiChat(
-      extractApiKey(
-        settings,
-        "xai"
-      ),
-      normalizedMessages
-    );
-  } else if (provider === "alice") {
-    text = await aliceChat(
-      extractApiKey(
-        settings,
-        "alice"
-      ),
-      normalizedMessages
-    );
-  } else {
+
     throw new Error(
-      "Неизвестный AI-провайдер."
+      error?.message ||
+      "AI не смог обработать запрос."
     );
   }
 
   return {
-    model: selectedModel,
+    model:
+      selectedModel,
+
     modelName:
-      MODELS[selectedModel].name,
+      MODELS[selectedModel]
+        .name,
+
     provider,
+
     message: text
   };
 }
@@ -484,38 +578,50 @@ export async function generateImage({
       }
     );
 
-  if (!result?.image) {
+  const image =
+    result?.image ||
+    result?.result?.image;
+
+  if (!image) {
     throw new Error(
       "Генератор изображения не вернул изображение."
     );
   }
 
+  const dataURI =
+    String(image).startsWith(
+      "data:image/"
+    )
+      ? String(image)
+      : `data:image/jpeg;base64,${image}`;
+
   return {
     model,
-    dataURI:
-      `data:image/jpeg;charset=utf-8;base64,${result.image}`
+    dataURI
   };
 }
 
 export async function generateVideo() {
   throw new Error(
-    "Видеопровайдер ещё не подключён."
+    "Генератор видео ещё не подключён к реальному API."
   );
 }
 
 export async function generateMusic() {
   throw new Error(
-    "Музыкальный провайдер ещё не подключён."
+    "Генератор музыки ещё не подключён к реальному API."
   );
 }
 
 export async function generate3D() {
   throw new Error(
-    "3D-провайдер ещё не подключён."
+    "Генератор 3D-моделей ещё не подключён к реальному API."
   );
 }
 
-export function getAIStatus(env) {
+export function getAIStatus(
+  env
+) {
   return {
     ok: true,
 
@@ -524,17 +630,24 @@ export function getAIStatus(env) {
         .map((model) => ({
           id: model.id,
           name: model.name,
-          provider: model.provider,
+          provider:
+            model.provider,
+
           available:
-            model.provider === "cloudflare"
+            model.provider ===
+            "cloudflare"
               ? Boolean(env.AI)
               : true
         })),
 
     generation: {
-      image: Boolean(env.AI),
+      image:
+        Boolean(env.AI),
+
       video: false,
+
       music: false,
+
       "3d": false
     }
   };
