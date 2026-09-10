@@ -30,7 +30,7 @@
     type="image/svg+xml"
     href="site-icon.svg"
   >
-  <!-- Иконка для iPhone / iPad -->
+  <!-- Иконка при добавлении на экран iPhone/iPad -->
   <link
     rel="apple-touch-icon"
     href="site-icon.svg"
@@ -40,7 +40,7 @@
     rel="manifest"
     href="site.webmanifest"
   >
-  <!-- Основные стили -->
+  <!-- Стили -->
   <link
     rel="stylesheet"
     href="style.css"
@@ -61,18 +61,14 @@
           type="button"
           aria-label="Новый чат"
           title="Новый чат"
-        >
-          +
-        </button>
+        >+</button>
         <button
           id="closeSidebarButton"
           class="icon-button sidebar__close"
           type="button"
           aria-label="Закрыть меню"
           title="Закрыть меню"
-        >
-          ×
-        </button>
+        >×</button>
       </div>
       <nav
         class="chat-list"
@@ -114,10 +110,7 @@
           type="button"
           aria-label="Открыть меню"
           title="Открыть меню"
-        >
-          ☰
-        </button>
-        <!-- Название уже есть, поэтому отдельный логотип здесь НЕ нужен -->
+        >☰</button>
         <div
           class="brand"
           aria-label="Нейро-чат"
@@ -145,7 +138,6 @@
             Задайте вопрос, загрузите файл или выберите модель.
           </p>
         </div>
-        <!-- Поле ввода -->
         <form
           id="composerForm"
           class="composer composer--home"
@@ -158,15 +150,12 @@
               type="button"
               aria-label="Прикрепить файл"
               title="Прикрепить файл"
-            >
-              +
-            </button>
+            >+</button>
             <input
               id="fileInput"
               type="file"
               hidden
             >
-            <!-- Выбор модели -->
             <button
               id="modelButton"
               class="model-button"
@@ -174,12 +163,8 @@
               aria-haspopup="listbox"
               aria-expanded="false"
             >
-              <span id="selectedModelLabel">
-                Нейро
-              </span>
-              <span aria-hidden="true">
-                ⌄
-              </span>
+              <span id="selectedModelLabel">Нейро</span>
+              <span aria-hidden="true">⌄</span>
             </button>
             <div
               id="modelMenu"
@@ -250,18 +235,14 @@
               type="button"
               aria-label="Голосовой ввод"
               title="Голосовой ввод"
-            >
-              🎙
-            </button>
+            >🎙</button>
             <button
               id="sendButton"
               class="send-button"
               type="submit"
               aria-label="Отправить сообщение"
               title="Отправить"
-            >
-              ↑
-            </button>
+            >↑</button>
           </div>
         </form>
       </section>
@@ -290,9 +271,7 @@
               type="button"
               aria-label="Прикрепить файл"
               title="Прикрепить файл"
-            >
-              +
-            </button>
+            >+</button>
             <input
               id="chatFileInput"
               type="file"
@@ -305,12 +284,8 @@
               aria-haspopup="listbox"
               aria-expanded="false"
             >
-              <span id="chatSelectedModelLabel">
-                Нейро
-              </span>
-              <span aria-hidden="true">
-                ⌄
-              </span>
+              <span id="chatSelectedModelLabel">Нейро</span>
+              <span aria-hidden="true">⌄</span>
             </button>
           </div>
           <textarea
@@ -328,18 +303,14 @@
               type="button"
               aria-label="Голосовой ввод"
               title="Голосовой ввод"
-            >
-              🎙
-            </button>
+            >🎙</button>
             <button
               id="chatSendButton"
               class="send-button"
               type="submit"
               aria-label="Отправить сообщение"
               title="Отправить"
-            >
-              ↑
-            </button>
+            >↑</button>
           </div>
         </form>
       </section>
@@ -366,12 +337,8 @@
         type="button"
         data-close-modal="authModal"
         aria-label="Закрыть"
-      >
-        ×
-      </button>
-      <h2 id="authTitle">
-        Войти в Нейро-чат
-      </h2>
+      >×</button>
+      <h2 id="authTitle">Войти в Нейро-чат</h2>
       <p id="authDescription">
         Введите имя пользователя и пароль.
       </p>
@@ -480,12 +447,8 @@
         type="button"
         data-close-modal="settingsModal"
         aria-label="Закрыть"
-      >
-        ×
-      </button>
-      <h2 id="settingsTitle">
-        Настройки
-      </h2>
+      >×</button>
+      <h2 id="settingsTitle">Настройки</h2>
       <div class="settings-list">
         <button
           id="temporaryChatButton"
@@ -493,12 +456,8 @@
           type="button"
           aria-pressed="false"
         >
-          <span>
-            Временный чат
-          </span>
-          <span id="temporaryChatState">
-            Выключен
-          </span>
+          <span>Временный чат</span>
+          <span id="temporaryChatState">Выключен</span>
         </button>
       </div>
     </section>
@@ -524,12 +483,8 @@
         type="button"
         data-close-modal="profileModal"
         aria-label="Закрыть"
-      >
-        ×
-      </button>
-      <h2 id="profileTitle">
-        Профиль
-      </h2>
+      >×</button>
+      <h2 id="profileTitle">Профиль</h2>
       <p id="profileUsername">
         Вы не вошли.
       </p>
@@ -550,6 +505,7 @@
     aria-live="polite"
     hidden
   ></div>
+  <!-- JavaScript -->
   <script
     src="script.js"
     defer
