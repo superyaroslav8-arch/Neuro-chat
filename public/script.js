@@ -8,65 +8,140 @@ const state = {
   temporary: false,
   model: "neuro",
   registerMode: false,
-  files: []
+  files: [],
+  initialized: false,
+  authChecked: false,
+  sending: false
 };
 
-const api = async (url, options = {}) => {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
-  });
 
-  let data;
+/* =========================
+   API
+   ========================= */
 
-  try {
-    data = await response.json();
-  } catch {
-    data = {
-      ok: false,
-      error: "Сервер вернул некорректный ответ."
-    };
+async function api(url, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+
+  const headers = {
+    ...(options.headers || {})
+  };
+
+  /*
+   * Content-Type нужен только для запросов,
+   * в которых реально отправляется JSON.
+   * Это также предотвращает лишние проблемы
+   * с GET-запросами.
+   */
+  if (options.body !== undefined && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
   }
 
-  if (!response.ok) {
+  const request = {
+    ...options,
+    method,
+    credentials: "same-origin",
+    headers
+  };
+
+  let response;
+
+  try {
+    response = await fetch(url, request);
+  } catch {
     throw new Error(
-      data.error || `Ошибка сервера: ${response.status}`
+      "Не удалось подключиться к серверу."
     );
   }
 
-  return data;
-};
+  const text = await response.text();
 
-document.addEventListener("DOMContentLoaded", init);
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.error ||
+      data?.message ||
+      (
+        response.status === 405
+          ? "Сервер не разрешает этот метод запроса."
+          : `Ошибка сервера: ${response.status}`
+      );
+
+    throw new Error(message);
+  }
+
+  return data || {};
+}
+
+
+/* =========================
+   START
+   ========================= */
+
+document.addEventListener(
+  "DOMContentLoaded",
+  init
+);
 
 async function init() {
-  bindEvents();
+  if (state.initialized) {
+    return;
+  }
 
+  state.initialized = true;
+
+  bindEvents();
   autoResize();
 
   try {
     const result = await api("/api/auth/me");
 
-    if (result.authenticated) {
+    state.authChecked = true;
+
+    if (result.authenticated && result.user) {
       state.user = result.user;
+
       hide($("authModal"));
+
       await loadChats();
     } else {
+      state.user = null;
+
       show($("authModal"));
     }
+
   } catch (error) {
+    /*
+     * Если /api/auth/me временно недоступен,
+     * авторизацию не зацикливаем.
+     */
+    state.authChecked = true;
+
     showAuthError(
-      "Сервер временно недоступен. Можно продолжить без аккаунта."
+      "Сервер авторизации временно недоступен."
     );
   }
 }
 
+
+/* =========================
+   EVENTS
+   ========================= */
+
 function bindEvents() {
-  $("authForm").addEventListener("submit", handleAuth);
+
+  $("authForm").addEventListener(
+    "submit",
+    handleAuth
+  );
 
   $("authSwitch").addEventListener(
     "click",
@@ -100,7 +175,9 @@ function bindEvents() {
 
   $("attachBtn").addEventListener(
     "click",
-    () => $("fileInput").click()
+    () => {
+      $("fileInput").click();
+    }
   );
 
   $("fileInput").addEventListener(
@@ -115,12 +192,19 @@ function bindEvents() {
 
   $("settingsBtn").addEventListener(
     "click",
-    () => show($("settingsModal"))
+    () => {
+      $("temporarySetting").checked =
+        state.temporary;
+
+      show($("settingsModal"));
+    }
   );
 
   $("toolsBtn").addEventListener(
     "click",
-    () => show($("toolsModal"))
+    () => {
+      show($("toolsModal"));
+    }
   );
 
   $("logoutBtn").addEventListener(
@@ -135,8 +219,11 @@ function bindEvents() {
 
   $("temporarySetting").addEventListener(
     "change",
-    e => {
-      state.temporary = e.target.checked;
+    event => {
+      state.temporary =
+        Boolean(event.target.checked);
+
+      updateTemporaryButton();
     }
   );
 
@@ -152,12 +239,26 @@ function bindEvents() {
 
   $("menuBtn").addEventListener(
     "click",
-    () => $("sidebar").classList.toggle("open")
+    () => {
+      $("sidebar").classList.toggle("open");
+    }
   );
 
   $("modelBtn").addEventListener(
     "click",
-    () => $("modelMenu").classList.toggle("hidden")
+    event => {
+      event.stopPropagation();
+
+      const menu = $("modelMenu");
+
+      const isHidden =
+        menu.classList.toggle("hidden");
+
+      $("modelBtn").setAttribute(
+        "aria-expanded",
+        String(!isHidden)
+      );
+    }
   );
 
   document.addEventListener(
@@ -167,49 +268,85 @@ function bindEvents() {
 
   document.querySelectorAll(".quick-card").forEach(
     button => {
-      button.addEventListener("click", () => {
-        if (button.dataset.tool) {
-          useTool(button.dataset.tool);
-          return;
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          if (button.dataset.tool) {
+            useTool(button.dataset.tool);
+            return;
+          }
+
+          $("messageInput").value =
+            button.dataset.prompt || "";
+
+          autoResize();
+
+          $("messageInput").focus();
         }
-
-        $("messageInput").value =
-          button.dataset.prompt || "";
-
-        autoResize();
-        $("messageInput").focus();
-      });
+      );
     }
   );
 
   document.querySelectorAll("[data-close]").forEach(
     button => {
-      button.addEventListener("click", () => {
-        hide($(button.dataset.close));
-      });
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          const target =
+            $(button.dataset.close);
+
+          if (target) {
+            hide(target);
+          }
+        }
+      );
     }
   );
 
   document.querySelectorAll("[data-tool]").forEach(
     button => {
-      button.addEventListener("click", () => {
-        useTool(button.dataset.tool);
-      });
+
+      button.addEventListener(
+        "click",
+        () => {
+          useTool(button.dataset.tool);
+        }
+      );
     }
   );
 
   document.querySelectorAll("[data-model]").forEach(
     button => {
-      button.addEventListener("click", () => {
-        state.model = button.dataset.model;
-        $("modelMenu").classList.add("hidden");
 
-        toast(
-          state.model === "neuro"
-            ? "Выбран Нейро AI"
-            : "Выбран автономный режим"
-        );
-      });
+      button.addEventListener(
+        "click",
+        () => {
+
+          state.model =
+            button.dataset.model;
+
+          $("modelMenu").classList.add(
+            "hidden"
+          );
+
+          $("modelBtn").setAttribute(
+            "aria-expanded",
+            "false"
+          );
+
+          updateModelName();
+
+          toast(
+            state.model === "neuro"
+              ? "Выбран Нейро AI"
+              : "Выбран автономный режим"
+          );
+        }
+      );
     }
   );
 
@@ -219,31 +356,65 @@ function bindEvents() {
   );
 }
 
+
+/* =========================
+   AUTH
+   ========================= */
+
 async function handleAuth(event) {
   event.preventDefault();
 
-  const username = $("usernameInput").value.trim();
-  const password = $("passwordInput").value;
+  if ($("authSubmit").disabled) {
+    return;
+  }
+
+  const username =
+    $("usernameInput").value.trim();
+
+  const password =
+    $("passwordInput").value;
+
+  if (!username || !password) {
+    showAuthError(
+      "Заполни логин и пароль."
+    );
+
+    return;
+  }
 
   $("authSubmit").disabled = true;
+
   showAuthError("");
 
   try {
-    const endpoint = state.registerMode
-      ? "/api/auth/register"
-      : "/api/auth/login";
+    const endpoint =
+      state.registerMode
+        ? "/api/auth/register"
+        : "/api/auth/login";
 
-    const result = await api(endpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        username,
-        password
-      })
-    });
+    const result = await api(
+      endpoint,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          username,
+          password
+        })
+      }
+    );
+
+    if (!result.user) {
+      throw new Error(
+        "Сервер не вернул данные пользователя."
+      );
+    }
 
     state.user = result.user;
+    state.chatId = null;
 
     hide($("authModal"));
+
+    clearMessages();
 
     await loadChats();
 
@@ -254,14 +425,21 @@ async function handleAuth(event) {
     );
 
   } catch (error) {
-    showAuthError(error.message);
+
+    showAuthError(
+      error.message ||
+      "Не удалось выполнить авторизацию."
+    );
+
   } finally {
     $("authSubmit").disabled = false;
   }
 }
 
+
 function switchAuthMode() {
-  state.registerMode = !state.registerMode;
+  state.registerMode =
+    !state.registerMode;
 
   $("authTitle").textContent =
     state.registerMode
@@ -291,82 +469,157 @@ function switchAuthMode() {
   showAuthError("");
 }
 
+
 function enterGuest() {
   state.user = {
     id: null,
     username: "guest"
   };
 
+  state.chatId = null;
+
   hide($("authModal"));
 
   clearMessages();
 
+  $("messageInput").focus();
+
   toast("Гостевой режим включён");
 }
 
+
 async function logout() {
   try {
-    await api("/api/auth/logout", {
-      method: "POST"
-    });
-  } catch {}
+    await api(
+      "/api/auth/logout",
+      {
+        method: "POST"
+      }
+    );
+  } catch {
+    /*
+     * Даже если сервер не ответил,
+     * локальное состояние всё равно очищаем.
+     */
+  }
 
   state.user = null;
   state.chatId = null;
+  state.files = [];
+
+  clearMessages();
+
+  $("chatList").innerHTML = "";
 
   show($("authModal"));
+
+  showAuthError("");
 
   toast("Вы вышли из аккаунта");
 }
 
+
+/* =========================
+   CHATS
+   ========================= */
+
 async function loadChats() {
-  if (!state.user || !state.user.id) {
+  if (!state.user?.id) {
     return;
   }
 
   try {
-    const result = await api("/api/chats");
+    const result =
+      await api("/api/chats");
 
-    renderChatList(result.chats || []);
+    const chats =
+      Array.isArray(result.chats)
+        ? result.chats
+        : [];
 
-    if (!state.chatId && result.chats?.length) {
-      await openChat(result.chats[0].id);
-    } else if (!result.chats?.length) {
+    renderChatList(chats);
+
+    if (!state.chatId && chats.length) {
+      await openChat(chats[0].id);
+      return;
+    }
+
+    if (!chats.length) {
+      state.chatId = null;
       clearMessages();
     }
+
   } catch (error) {
     toast(error.message);
   }
 }
 
+
 function renderChatList(chats) {
   const list = $("chatList");
+
   list.innerHTML = "";
 
   chats.forEach(chat => {
-    const item = document.createElement("div");
+
+    const item =
+      document.createElement("div");
 
     item.className =
       "chat-item" +
-      (chat.id === state.chatId ? " active" : "");
+      (
+        chat.id === state.chatId
+          ? " active"
+          : ""
+      );
 
-    item.innerHTML = `
-      <span>💬</span>
-      <span class="chat-item-title"></span>
-      <button
-        class="chat-delete"
-        type="button"
-        title="Удалить"
-      >×</button>
-    `;
+    const icon =
+      document.createElement("span");
 
-    item.querySelector(".chat-item-title").textContent =
-      chat.title;
+    icon.textContent = "💬";
+
+    const title =
+      document.createElement("span");
+
+    title.className =
+      "chat-item-title";
+
+    title.textContent =
+      chat.title ||
+      "Новый чат";
+
+    const deleteButton =
+      document.createElement("button");
+
+    deleteButton.className =
+      "chat-delete";
+
+    deleteButton.type =
+      "button";
+
+    deleteButton.title =
+      "Удалить";
+
+    deleteButton.setAttribute(
+      "aria-label",
+      "Удалить чат"
+    );
+
+    deleteButton.textContent = "×";
+
+    item.appendChild(icon);
+    item.appendChild(title);
+    item.appendChild(deleteButton);
 
     item.addEventListener(
       "click",
       event => {
-        if (event.target.closest(".chat-delete")) {
+
+        if (
+          event.target.closest(
+            ".chat-delete"
+          )
+        ) {
           return;
         }
 
@@ -374,22 +627,38 @@ function renderChatList(chats) {
       }
     );
 
-    item.querySelector(".chat-delete").addEventListener(
+    deleteButton.addEventListener(
       "click",
       async event => {
+
         event.stopPropagation();
 
-        try {
-          await api(`/api/chats/${chat.id}`, {
-            method: "DELETE"
-          });
+        if (
+          !confirm(
+            "Удалить этот чат?"
+          )
+        ) {
+          return;
+        }
 
-          if (state.chatId === chat.id) {
+        try {
+
+          await api(
+            `/api/chats/${encodeURIComponent(chat.id)}`,
+            {
+              method: "DELETE"
+            }
+          );
+
+          if (
+            state.chatId === chat.id
+          ) {
             state.chatId = null;
             clearMessages();
           }
 
           await loadChats();
+
         } catch (error) {
           toast(error.message);
         }
@@ -400,132 +669,226 @@ function renderChatList(chats) {
   });
 }
 
+
 async function openChat(chatId) {
+  if (!chatId) {
+    return;
+  }
+
   try {
-    const result = await api(
-      `/api/chats/${chatId}`
-    );
+
+    const result =
+      await api(
+        `/api/chats/${encodeURIComponent(chatId)}`
+      );
 
     state.chatId = chatId;
 
-    renderMessages(result.messages || []);
+    renderMessages(
+      Array.isArray(result.messages)
+        ? result.messages
+        : []
+    );
 
-    $("sidebar").classList.remove("open");
+    $("sidebar").classList.remove(
+      "open"
+    );
 
-    await loadChats();
+    renderChatList(
+      Array.isArray(result.chats)
+        ? result.chats
+        : getCurrentRenderedChats()
+    );
+
   } catch (error) {
     toast(error.message);
   }
 }
 
+
+function getCurrentRenderedChats() {
+  return [];
+}
+
+
 async function newChat() {
   if (!state.user?.id) {
+
     state.chatId = null;
+
     clearMessages();
+
+    $("messageInput").focus();
+
     return;
   }
 
   try {
-    const result = await api("/api/chats", {
-      method: "POST",
-      body: JSON.stringify({
-        title: "Новый чат",
-        temporary: state.temporary
-      })
-    });
 
-    state.chatId = result.chat.id;
+    const result =
+      await api(
+        "/api/chats",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: "Новый чат",
+            temporary: state.temporary
+          })
+        }
+      );
+
+    if (!result.chat?.id) {
+      throw new Error(
+        "Сервер не вернул идентификатор чата."
+      );
+    }
+
+    state.chatId =
+      result.chat.id;
 
     clearMessages();
 
     await loadChats();
 
     $("messageInput").focus();
+
   } catch (error) {
     toast(error.message);
   }
 }
 
-async function sendMessage() {
-  const input = $("messageInput");
-  const message = input.value.trim();
 
-  if (!message) return;
+/* =========================
+   MESSAGES
+   ========================= */
+
+async function sendMessage() {
+  if (state.sending) {
+    return;
+  }
+
+  const input =
+    $("messageInput");
+
+  const message =
+    input.value.trim();
+
+  if (!message) {
+    return;
+  }
+
+  state.sending = true;
 
   input.value = "";
+
   autoResize();
 
   hide($("welcome"));
 
-  addMessage("user", message);
-
-  const loading = addMessage(
-    "assistant",
-    "Нейро-чат думает…"
+  addMessage(
+    "user",
+    message
   );
+
+  const loading =
+    addMessage(
+      "assistant",
+      "Нейро-чат думает…"
+    );
 
   $("sendBtn").disabled = true;
 
   try {
+
     if (!state.user?.id) {
-      const answer =
-        "Гостевой режим активен. Войдите в аккаунт, " +
-        "чтобы сохранять историю чатов.";
 
       loading.remove();
 
-      addMessage("assistant", answer);
+      addMessage(
+        "assistant",
+        "Гостевой режим активен. " +
+        "Чтобы сохранять историю чатов, войди в аккаунт."
+      );
 
       return;
     }
 
-    const result = await api("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({
-        chatId: state.chatId,
-        message,
-        temporary: state.temporary,
-        model: state.model
-      })
-    });
+    const result =
+      await api(
+        "/api/chat",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            chatId: state.chatId,
+            message,
+            temporary: state.temporary,
+            model: state.model
+          })
+        }
+      );
 
-    state.chatId = result.chatId;
+    if (result.chatId) {
+      state.chatId =
+        result.chatId;
+    }
 
     loading.remove();
 
     addMessage(
       "assistant",
-      result.answer || "Пустой ответ."
+      result.answer ||
+      "Сервер не вернул текст ответа."
     );
 
     await loadChats();
 
   } catch (error) {
+
     loading.remove();
 
     addMessage(
       "assistant",
-      "Ошибка: " + error.message
+      "Ошибка: " +
+      (
+        error.message ||
+        "Не удалось получить ответ."
+      )
     );
+
   } finally {
+
+    state.sending = false;
+
     $("sendBtn").disabled = false;
   }
 }
 
+
 function addMessage(role, content) {
-  const row = document.createElement("div");
+  const row =
+    document.createElement("div");
 
   row.className =
     "message-row " +
-    (role === "user" ? "user" : "assistant");
+    (
+      role === "user"
+        ? "user"
+        : "assistant"
+    );
 
-  const message = document.createElement("div");
+  const message =
+    document.createElement("div");
 
   message.className =
     "message " +
-    (role === "user" ? "user" : "assistant");
+    (
+      role === "user"
+        ? "user"
+        : "assistant"
+    );
 
-  message.textContent = content;
+  message.textContent =
+    String(content ?? "");
 
   row.appendChild(message);
 
@@ -535,6 +898,7 @@ function addMessage(role, content) {
 
   return row;
 }
+
 
 function renderMessages(messages) {
   clearMessages();
@@ -547,20 +911,31 @@ function renderMessages(messages) {
   hide($("welcome"));
 
   messages.forEach(message => {
+
     addMessage(
-      message.role,
-      message.content
+      message.role === "user"
+        ? "user"
+        : "assistant",
+      message.content || ""
     );
   });
 }
 
+
 function clearMessages() {
   $("messages")
     .querySelectorAll(".message-row")
-    .forEach(element => element.remove());
+    .forEach(
+      element => element.remove()
+    );
 
   show($("welcome"));
 }
+
+
+/* =========================
+   CLEAR CHAT
+   ========================= */
 
 async function clearCurrentChat() {
   if (!state.chatId) {
@@ -568,14 +943,22 @@ async function clearCurrentChat() {
     return;
   }
 
-  if (!confirm("Очистить текущий чат?")) {
+  if (
+    !confirm(
+      "Очистить текущий чат?"
+    )
+  ) {
     return;
   }
 
   try {
-    await api(`/api/chats/${state.chatId}`, {
-      method: "DELETE"
-    });
+
+    await api(
+      `/api/chats/${encodeURIComponent(state.chatId)}`,
+      {
+        method: "DELETE"
+      }
+    );
 
     state.chatId = null;
 
@@ -588,16 +971,19 @@ async function clearCurrentChat() {
   }
 }
 
+
+/* =========================
+   SETTINGS
+   ========================= */
+
 function toggleTemporary() {
-  state.temporary = !state.temporary;
+  state.temporary =
+    !state.temporary;
 
   $("temporarySetting").checked =
     state.temporary;
 
-  $("temporaryBtn").style.color =
-    state.temporary
-      ? "#79a5ff"
-      : "";
+  updateTemporaryButton();
 
   toast(
     state.temporary
@@ -606,89 +992,161 @@ function toggleTemporary() {
   );
 }
 
+
+function updateTemporaryButton() {
+  const button =
+    $("temporaryBtn");
+
+  if (state.temporary) {
+    button.style.color = "#fff";
+    button.style.borderColor =
+      "rgba(255,255,255,.25)";
+  } else {
+    button.style.color = "";
+    button.style.borderColor = "";
+  }
+}
+
+
 function saveSettings() {
   state.temporary =
     $("temporarySetting").checked;
+
+  updateTemporaryButton();
 
   hide($("settingsModal"));
 
   toast("Настройки сохранены");
 }
 
+
+function updateModelName() {
+  $("modelName").textContent =
+    state.model === "neuro"
+      ? "Нейро AI"
+      : "Автономный режим";
+}
+
+
+/* =========================
+   TOOLS
+   ========================= */
+
 async function useTool(tool) {
   hide($("toolsModal"));
 
   if (!state.user?.id) {
-    toast("Войдите в аккаунт, чтобы использовать инструменты.");
+    toast(
+      "Войдите в аккаунт, чтобы использовать инструменты."
+    );
+
     return;
   }
 
   try {
-    const result = await api("/api/tools", {
-      method: "POST",
-      body: JSON.stringify({
-        tool
-      })
-    });
+
+    const result =
+      await api(
+        "/api/tools",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            tool
+          })
+        }
+      );
 
     $("messageInput").value =
       result.message || "";
 
     autoResize();
+
     $("messageInput").focus();
 
     toast("Инструмент выбран");
+
   } catch (error) {
     toast(error.message);
   }
 }
 
+
+/* =========================
+   FILES
+   ========================= */
+
 function handleFiles(event) {
-  state.files = Array.from(
-    event.target.files || []
-  );
+  state.files =
+    Array.from(
+      event.target.files || []
+    );
 
   if (!state.files.length) {
     return;
   }
 
-  $("attachmentPreview").innerHTML = "";
+  const preview =
+    $("attachmentPreview");
+
+  preview.innerHTML = "";
 
   state.files.forEach(file => {
-    const item = document.createElement("div");
 
-    item.className = "attachment";
+    const item =
+      document.createElement("div");
+
+    item.className =
+      "attachment";
 
     item.textContent =
       `📎 ${file.name} (${formatBytes(file.size)})`;
 
-    $("attachmentPreview").appendChild(item);
+    preview.appendChild(item);
   });
 
-  $("fileInfo").innerHTML =
-    state.files
-      .map(
-        file =>
-          `<p>📎 ${escapeHTML(file.name)}</p>`
-      )
-      .join("");
+  const info =
+    $("fileInfo");
+
+  info.innerHTML = "";
+
+  state.files.forEach(file => {
+
+    const paragraph =
+      document.createElement("p");
+
+    paragraph.textContent =
+      `📎 ${file.name}`;
+
+    info.appendChild(paragraph);
+  });
 
   show($("fileModal"));
 }
 
+
 function confirmFiles() {
   hide($("fileModal"));
 
-  if (state.files.length) {
-    $("messageInput").value =
-      "Я добавил файл: " +
-      state.files.map(file => file.name).join(", ") +
-      ". Помоги мне с ним.";
-
-    autoResize();
-    $("messageInput").focus();
+  if (!state.files.length) {
+    return;
   }
+
+  $("messageInput").value =
+    "Я добавил файл: " +
+    state.files
+      .map(file => file.name)
+      .join(", ") +
+    ". Помоги мне с ним.";
+
+  autoResize();
+
+  $("messageInput").focus();
 }
+
+
+/* =========================
+   VOICE
+   ========================= */
 
 function startVoice() {
   const SpeechRecognition =
@@ -699,45 +1157,86 @@ function startVoice() {
     toast(
       "Голосовой ввод не поддерживается этим браузером."
     );
+
     return;
   }
 
   const recognition =
     new SpeechRecognition();
 
-  recognition.lang = "ru-RU";
-  recognition.interimResults = true;
+  recognition.lang =
+    "ru-RU";
+
+  recognition.interimResults =
+    true;
+
+  recognition.continuous =
+    false;
 
   recognition.onstart = () => {
-    $("voiceBtn").style.color = "#79a5ff";
+    $("voiceBtn").style.color =
+      "#fff";
+
     toast("Слушаю…");
   };
 
-  recognition.onresult = event => {
-    let text = "";
+  recognition.onresult =
+    event => {
 
-    for (
-      let i = event.resultIndex;
-      i < event.results.length;
-      i++
-    ) {
-      text += event.results[i][0].transcript;
-    }
+      let text = "";
 
-    $("messageInput").value = text;
-    autoResize();
-  };
+      for (
+        let i = event.resultIndex;
+        i < event.results.length;
+        i++
+      ) {
+        text +=
+          event.results[i][0].transcript;
+      }
 
-  recognition.onerror = () => {
-    toast("Не удалось распознать голос.");
-  };
+      $("messageInput").value =
+        text;
+
+      autoResize();
+    };
+
+  recognition.onerror =
+    event => {
+
+      if (
+        event.error ===
+        "not-allowed"
+      ) {
+        toast(
+          "Разреши браузеру доступ к микрофону."
+        );
+
+        return;
+      }
+
+      toast(
+        "Не удалось распознать голос."
+      );
+    };
 
   recognition.onend = () => {
-    $("voiceBtn").style.color = "";
+    $("voiceBtn").style.color =
+      "";
   };
 
-  recognition.start();
+  try {
+    recognition.start();
+  } catch {
+    toast(
+      "Голосовой ввод уже запущен."
+    );
+  }
 }
+
+
+/* =========================
+   INPUT
+   ========================= */
 
 function handleInputKeydown(event) {
   if (
@@ -745,77 +1244,157 @@ function handleInputKeydown(event) {
     !event.shiftKey
   ) {
     event.preventDefault();
+
     sendMessage();
   }
 }
 
-function autoResize() {
-  const input = $("messageInput");
 
-  input.style.height = "auto";
+function autoResize() {
+  const input =
+    $("messageInput");
+
+  if (!input) {
+    return;
+  }
 
   input.style.height =
-    Math.min(input.scrollHeight, 180) + "px";
+    "auto";
+
+  input.style.height =
+    Math.min(
+      input.scrollHeight,
+      180
+    ) + "px";
 }
+
+
+/* =========================
+   DOCUMENT
+   ========================= */
 
 function handleDocumentClick(event) {
+  const selector =
+    document.querySelector(
+      ".model-selector"
+    );
+
   if (
-    !event.target.closest(".model-selector")
+    selector &&
+    !selector.contains(event.target)
   ) {
-    $("modelMenu").classList.add("hidden");
+    $("modelMenu").classList.add(
+      "hidden"
+    );
+
+    $("modelBtn").setAttribute(
+      "aria-expanded",
+      "false"
+    );
   }
 }
+
+
+/* =========================
+   UI
+   ========================= */
 
 function show(element) {
-  element.classList.remove("hidden");
-}
-
-function hide(element) {
-  element.classList.add("hidden");
-}
-
-function showAuthError(message) {
-  $("authError").textContent = message || "";
-}
-
-function scrollMessages() {
-  requestAnimationFrame(() => {
-    $("messages").scrollTop =
-      $("messages").scrollHeight;
-  });
-}
-
-function toast(message) {
-  const element = $("toast");
-
-  element.textContent = message;
-  element.classList.add("show");
-
-  clearTimeout(toast.timer);
-
-  toast.timer = setTimeout(() => {
-    element.classList.remove("show");
-  }, 2600);
-}
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return bytes + " Б";
-
-  if (bytes < 1024 * 1024) {
-    return (bytes / 1024).toFixed(1) + " КБ";
+  if (!element) {
+    return;
   }
 
-  return (
-    (bytes / 1024 / 1024).toFixed(1) +
-    " МБ"
+  element.classList.remove(
+    "hidden"
   );
 }
 
-function escapeHTML(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+
+function hide(element) {
+  if (!element) {
+    return;
+  }
+
+  element.classList.add(
+    "hidden"
+  );
+}
+
+
+function showAuthError(message) {
+  $("authError").textContent =
+    message || "";
+}
+
+
+function scrollMessages() {
+  requestAnimationFrame(
+    () => {
+      const messages =
+        $("messages");
+
+      messages.scrollTop =
+        messages.scrollHeight;
+    }
+  );
+}
+
+
+function toast(message) {
+  const element =
+    $("toast");
+
+  if (!element) {
+    return;
+  }
+
+  element.textContent =
+    String(message || "");
+
+  element.classList.add(
+    "show"
+  );
+
+  clearTimeout(
+    toast.timer
+  );
+
+  toast.timer =
+    setTimeout(
+      () => {
+        element.classList.remove(
+          "show"
+        );
+      },
+      2600
+    );
+}
+
+
+function formatBytes(bytes) {
+  const size =
+    Number(bytes) || 0;
+
+  if (size < 1024) {
+    return size + " Б";
+  }
+
+  if (size < 1024 * 1024) {
+    return (
+      (size / 1024).toFixed(1) +
+      " КБ"
+    );
+  }
+
+  if (size < 1024 * 1024 * 1024) {
+    return (
+      (size / 1024 / 1024).toFixed(1) +
+      " МБ"
+    );
+  }
+
+  return (
+    (size / 1024 / 1024 / 1024).toFixed(1) +
+    " ГБ"
+  );
 }
