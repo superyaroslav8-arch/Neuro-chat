@@ -46,26 +46,14 @@ function json(data, status = 200) {
   });
 }
 
-function fail(message, status = 400) {
-  return json(
-    {
-      ok: false,
-      error: message
-    },
-    status
-  );
-}
-
 function normalizeModel(model) {
   const value = String(model || "neuro")
     .trim()
     .toLowerCase();
 
-  if (MODELS[value]) {
-    return value;
-  }
-
-  return "neuro";
+  return MODELS[value]
+    ? value
+    : "neuro";
 }
 
 function normalizeMessages(messages) {
@@ -94,17 +82,9 @@ function normalizeMessages(messages) {
         content
       };
     })
-    .filter((message) => message.content);
-}
-
-function getLastUserMessage(messages) {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].role === "user") {
-      return messages[i].content;
-    }
-  }
-
-  return "";
+    .filter(
+      (message) => message.content
+    );
 }
 
 function makeSystemPrompt() {
@@ -119,14 +99,6 @@ function makeSystemPrompt() {
   ].join(" ");
 }
 
-async function readJson(request) {
-  try {
-    return await request.json();
-  } catch {
-    return {};
-  }
-}
-
 async function getUserSettings(env, userId) {
   if (!userId || !env.getUserSettings) {
     return {};
@@ -134,7 +106,8 @@ async function getUserSettings(env, userId) {
 
   try {
     return (
-      (await env.getUserSettings(userId)) || {}
+      (await env.getUserSettings(userId)) ||
+      {}
     );
   } catch {
     return {};
@@ -142,47 +115,42 @@ async function getUserSettings(env, userId) {
 }
 
 function extractApiKey(settings, provider) {
-  if (!settings || typeof settings !== "object") {
+  const keys = settings?.apiKeys;
+
+  if (
+    !keys ||
+    typeof keys !== "object"
+  ) {
     return null;
   }
 
-  const keys = settings.apiKeys;
+  const value = keys[provider];
 
-  if (!keys || typeof keys !== "object") {
-    return null;
-  }
-
-  const key = keys[provider];
-
-  if (!key) {
-    return null;
-  }
-
-  return String(key).trim() || null;
+  return value
+    ? String(value).trim() || null
+    : null;
 }
 
 async function cloudflareChat(env, messages) {
   if (!env.AI) {
     throw new Error(
-      "Cloudflare AI не подключён к Worker."
+      "Cloudflare AI не подключён."
     );
   }
 
-  const model =
+  const result = await env.AI.run(
     env.NEURO_AI_MODEL ||
-    DEFAULT_CLOUDFLARE_MODEL;
-
-  const prompt = [
+      DEFAULT_CLOUDFLARE_MODEL,
     {
-      role: "system",
-      content: makeSystemPrompt()
-    },
-    ...messages
-  ];
-
-  const result = await env.AI.run(model, {
-    messages: prompt
-  });
+      messages: [
+        {
+          role: "system",
+          content: makeSystemPrompt()
+        },
+        ...messages
+      ]
+    }
+  );
 
   const text =
     result?.response ||
@@ -199,7 +167,10 @@ async function cloudflareChat(env, messages) {
   return String(text).trim();
 }
 
-async function openAIChat(apiKey, messages) {
+async function openAIChat(
+  apiKey,
+  messages
+) {
   if (!apiKey) {
     throw new Error(
       "Добавьте API-ключ OpenAI в настройках."
@@ -211,8 +182,10 @@ async function openAIChat(apiKey, messages) {
     {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`
+        "content-type":
+          "application/json",
+        authorization:
+          `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
@@ -228,7 +201,8 @@ async function openAIChat(apiKey, messages) {
     }
   );
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (!response.ok) {
     throw new Error(
@@ -242,38 +216,44 @@ async function openAIChat(apiKey, messages) {
 
   if (!text) {
     throw new Error(
-      "OpenAI не вернул текст ответа."
+      "OpenAI не вернул ответ."
     );
   }
 
   return String(text).trim();
 }
 
-async function geminiChat(apiKey, messages) {
+async function geminiChat(
+  apiKey,
+  messages
+) {
   if (!apiKey) {
     throw new Error(
       "Добавьте API-ключ Gemini в настройках."
     );
   }
 
-  const contents = messages.map((message) => ({
-    role:
-      message.role === "assistant"
-        ? "model"
-        : "user",
-    parts: [
-      {
-        text: message.content
-      }
-    ]
-  }));
+  const contents = messages.map(
+    (message) => ({
+      role:
+        message.role === "assistant"
+          ? "model"
+          : "user",
+      parts: [
+        {
+          text: message.content
+        }
+      ]
+    })
+  );
 
   const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
     {
       method: "POST",
       headers: {
-        "content-type": "application/json",
+        "content-type":
+          "application/json",
         "x-goog-api-key": apiKey
       },
       body: JSON.stringify({
@@ -289,7 +269,8 @@ async function geminiChat(apiKey, messages) {
     }
   );
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (!response.ok) {
     throw new Error(
@@ -299,21 +280,29 @@ async function geminiChat(apiKey, messages) {
   }
 
   const text =
-    data?.candidates?.[0]?.content?.parts
-      ?.map((part) => part?.text || "")
+    data?.candidates?.[0]
+      ?.content
+      ?.parts
+      ?.map(
+        (part) =>
+          part?.text || ""
+      )
       .join("")
       .trim();
 
   if (!text) {
     throw new Error(
-      "Gemini не вернул текст ответа."
+      "Gemini не вернул ответ."
     );
   }
 
   return text;
 }
 
-async function xaiChat(apiKey, messages) {
+async function xaiChat(
+  apiKey,
+  messages
+) {
   if (!apiKey) {
     throw new Error(
       "Добавьте API-ключ Grok в настройках."
@@ -325,11 +314,13 @@ async function xaiChat(apiKey, messages) {
     {
       method: "POST",
       headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`
+        "content-type":
+          "application/json",
+        authorization:
+          `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "grok-3-mini",
+        model: "grok-4.3",
         messages: [
           {
             role: "system",
@@ -342,7 +333,8 @@ async function xaiChat(apiKey, messages) {
     }
   );
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (!response.ok) {
     throw new Error(
@@ -352,40 +344,30 @@ async function xaiChat(apiKey, messages) {
   }
 
   const text =
-    data?.choices?.[0]?.message?.content;
+    data?.choices?.[0]
+      ?.message
+      ?.content;
 
   if (!text) {
     throw new Error(
-      "Grok не вернул текст ответа."
+      "Grok не вернул ответ."
     );
   }
 
   return String(text).trim();
 }
 
-async function aliceChat(apiKey, messages) {
+async function aliceChat(
+  apiKey
+) {
   if (!apiKey) {
     throw new Error(
-      "Для Алисы сначала подключите соответствующий API-доступ в настройках."
+      "Добавьте API-доступ Алисы в настройках."
     );
   }
 
-  /*
-   * Универсальный режим для Алисы.
-   *
-   * Конкретный API-адрес Алисы не подставляется
-   * автоматически, потому что разные продукты
-   * Яндекса используют разные API и авторизацию.
-   *
-   * Ключ сохраняется в настройках, но запрос
-   * отправляется только после подключения
-   * совместимого endpoint.
-   */
-
-  void messages;
-
   throw new Error(
-    "Для Алисы требуется подключение API Яндекса с поддерживаемым endpoint."
+    "Для Алисы пока требуется совместимый API endpoint Яндекса."
   );
 }
 
@@ -395,7 +377,9 @@ export async function chat({
   messages = [],
   userId = null
 }) {
-  const selectedModel = normalizeModel(model);
+  const selectedModel =
+    normalizeModel(model);
+
   const normalizedMessages =
     normalizeMessages(messages);
 
@@ -405,73 +389,64 @@ export async function chat({
     );
   }
 
-  const settings = await getUserSettings(
-    env,
-    userId
-  );
+  const settings =
+    await getUserSettings(
+      env,
+      userId
+    );
 
   const provider =
     MODELS[selectedModel].provider;
 
   let text;
 
-  try {
-    switch (provider) {
-      case "cloudflare":
-        text = await cloudflareChat(
-          env,
-          normalizedMessages
-        );
-        break;
-
-      case "openai":
-        text = await openAIChat(
-          extractApiKey(settings, "openai"),
-          normalizedMessages
-        );
-        break;
-
-      case "google":
-        text = await geminiChat(
-          extractApiKey(settings, "google"),
-          normalizedMessages
-        );
-        break;
-
-      case "xai":
-        text = await xaiChat(
-          extractApiKey(settings, "xai"),
-          normalizedMessages
-        );
-        break;
-
-      case "alice":
-        text = await aliceChat(
-          extractApiKey(settings, "alice"),
-          normalizedMessages
-        );
-        break;
-
-      default:
-        throw new Error(
-          "Неизвестный AI-провайдер."
-        );
-    }
-  } catch (error) {
-    console.error(
-      `[AI:${selectedModel}]`,
-      error
+  if (provider === "cloudflare") {
+    text = await cloudflareChat(
+      env,
+      normalizedMessages
     );
-
+  } else if (provider === "openai") {
+    text = await openAIChat(
+      extractApiKey(
+        settings,
+        "openai"
+      ),
+      normalizedMessages
+    );
+  } else if (provider === "google") {
+    text = await geminiChat(
+      extractApiKey(
+        settings,
+        "google"
+      ),
+      normalizedMessages
+    );
+  } else if (provider === "xai") {
+    text = await xaiChat(
+      extractApiKey(
+        settings,
+        "xai"
+      ),
+      normalizedMessages
+    );
+  } else if (provider === "alice") {
+    text = await aliceChat(
+      extractApiKey(
+        settings,
+        "alice"
+      ),
+      normalizedMessages
+    );
+  } else {
     throw new Error(
-      error?.message ||
-      "AI не смог обработать запрос."
+      "Неизвестный AI-провайдер."
     );
   }
 
   return {
     model: selectedModel,
-    modelName: MODELS[selectedModel].name,
+    modelName:
+      MODELS[selectedModel].name,
     provider,
     message: text
   };
@@ -487,7 +462,9 @@ export async function generateImage({
     );
   }
 
-  const text = String(prompt || "").trim();
+  const text =
+    String(prompt || "")
+      .trim();
 
   if (!text) {
     throw new Error(
@@ -499,31 +476,42 @@ export async function generateImage({
     env.IMAGE_AI_MODEL ||
     "@cf/black-forest-labs/flux-1-schnell";
 
-  const result = await env.AI.run(model, {
-    prompt: text
-  });
+  const result =
+    await env.AI.run(
+      model,
+      {
+        prompt: text
+      }
+    );
+
+  if (!result?.image) {
+    throw new Error(
+      "Генератор изображения не вернул изображение."
+    );
+  }
 
   return {
     model,
-    result
+    dataURI:
+      `data:image/jpeg;charset=utf-8;base64,${result.image}`
   };
 }
 
 export async function generateVideo() {
   throw new Error(
-    "Для генерации видео необходимо подключить видеопровайдер через настройки."
+    "Видеопровайдер ещё не подключён."
   );
 }
 
 export async function generateMusic() {
   throw new Error(
-    "Для генерации музыки необходимо подключить музыкальный провайдер через настройки."
+    "Музыкальный провайдер ещё не подключён."
   );
 }
 
 export async function generate3D() {
   throw new Error(
-    "Для генерации 3D-моделей необходимо подключить 3D-провайдер через настройки."
+    "3D-провайдер ещё не подключён."
   );
 }
 
@@ -531,17 +519,17 @@ export function getAIStatus(env) {
   return {
     ok: true,
 
-    models: Object.values(MODELS).map(
-      (model) => ({
-        id: model.id,
-        name: model.name,
-        provider: model.provider,
-        available:
-          model.provider === "cloudflare"
-            ? Boolean(env.AI)
-            : true
-      })
-    ),
+    models:
+      Object.values(MODELS)
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          provider: model.provider,
+          available:
+            model.provider === "cloudflare"
+              ? Boolean(env.AI)
+              : true
+        })),
 
     generation: {
       image: Boolean(env.AI),
@@ -555,6 +543,5 @@ export function getAIStatus(env) {
 export {
   MODELS,
   normalizeModel,
-  normalizeMessages,
-  getLastUserMessage
+  normalizeMessages
 };
