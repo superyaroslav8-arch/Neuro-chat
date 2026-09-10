@@ -1,30 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#000000"/>
-  <!-- Нейро-чат -->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+>
+  <!-- Чёрный фон -->
+  <rect
+    width="1024"
+    height="1024"
+    fill="#000000"
+  />
+  <!-- Футуристическая надпись -->
   <text
     x="512"
-    y="545"
+    y="548"
     text-anchor="middle"
     fill="#FFFFFF"
     font-family="Arial, Helvetica, sans-serif"
-    font-size="112"
-    font-weight="600"
-    letter-spacing="-5"
-  >Нейро-чат</text>
-  <!-- Геометрические срезы -->
-  <g
-    fill="#000000"
-    transform="translate(0,-4)"
+    font-size="108"
+    font-weight="700"
+    letter-spacing="-3"
   >
-    <!-- Н -->
-    <path d="M174 460 L190 444 L190 476 L174 492 Z"/>
-    <!-- Е -->
-    <path d="M292 460 L308 444 L308 476 L292 492 Z"/>
-    <!-- Й -->
-    <path d="M414 460 L430 444 L430 476 L414 492 Z"/>
-    <!-- Р -->
-    <path d="M580 460 L596 444 L596 476 L580 492 Z"/>
-    <!-- О -->
-    <path d="M700 460 L716 444 L716 476 L700 492 Z"/>
-  </g>
+    Нейро-чат
+  </text>
 </svg>
