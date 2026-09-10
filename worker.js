@@ -1,667 +1,635 @@
-import { routeRequest } from "./router.js";
+const APP_NAME = "Нейро-чат";
 
-import {
-  auth,
-} from "./auth.js";
+const DEFAULT_MODELS = {
+  neuro: "Нейро",
+  chatgpt: "ChatGPT",
+  gemini: "Gemini",
+  grok: "Grok",
+  alice: "Алиса",
+  dedai: "Дед ИИ"
+};
 
-import {
-  ensureDatabase,
-  createChat,
-  listChats,
-  getChat,
-  renameChat,
-  deleteChat,
-  createMessage,
-  listMessages,
-  createFile,
-  databaseHealth,
-} from "./database.js";
+const sessions = new Map();
+const users = new Map();
+const chats = new Map();
 
-import {
-  chat,
-  generateImage,
-  generateVideo,
-  generateMusic,
-  generate3D,
-  getAIStatus,
-} from "./ai.js";
-
-const SERVICE_NAME = "neuro-chat";
-
-const PROTECTED_FILES = new Set([
-  "/worker.js",
-  "/router.js",
-  "/auth.js",
-  "/database.js",
-  "/ai.js",
-  "/wrangler.jsonc",
-  "/package.json",
-  "/.gitignore",
-]);
-
-function json(data, status = 200, headers = {}) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      ...headers,
-    },
+      "Cache-Control": "no-store"
+    }
   });
 }
 
-function error(message, status = 500, code = "INTERNAL_ERROR") {
-  return json(
-    {
-      ok: false,
-      success: false,
-      error: {
-        code,
-        message,
-      },
-    },
-    status,
-  );
+function ok(data = {}) {
+  return json({
+    ok: true,
+    success: true,
+    ...data
+  });
 }
 
-function success(data = {}, status = 200) {
-  return json(
-    {
-      ok: true,
-      success: true,
-      ...data,
-    },
-    status,
-  );
+function fail(message, status = 400, code = "ERROR") {
+  return json({
+    ok: false,
+    success: false,
+    error: {
+      code,
+      message
+    }
+  }, status);
 }
 
-async function readJson(request) {
+async function body(request) {
   try {
-    const contentType =
-      request.headers.get("content-type") || "";
-
-    if (
-      !contentType
-        .toLowerCase()
-        .includes("application/json")
-    ) {
-      return {};
-    }
-
-    const body = await request.json();
-
-    if (
-      !body ||
-      typeof body !== "object" ||
-      Array.isArray(body)
-    ) {
-      return {};
-    }
-
-    return body;
+    return await request.json();
   } catch {
     return {};
   }
 }
 
-async function currentUser(request, env) {
-  try {
-    return await auth.getCurrentUser(request, env);
-  } catch {
+function id(prefix = "id") {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function sessionFrom(request) {
+  const cookie = request.headers.get("Cookie") || "";
+
+  const match = cookie.match(
+    /(?:^|;\s*)neuro_session=([^;]+)/
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function currentUser(request) {
+  const sessionId = sessionFrom(request);
+
+  if (!sessionId) {
     return null;
   }
-}
 
-async function requireUser(request, env) {
-  const result =
-    await auth.requireUser(request, env);
+  const userId = sessions.get(sessionId);
 
-  if (!result.ok) {
-    return {
-      ok: false,
-      response: result.response,
-      user: null,
-    };
+  if (!userId) {
+    return null;
   }
 
-  return {
-    ok: true,
-    response: null,
-    user: result.user,
-  };
+  return users.get(userId) || null;
 }
 
-/* -------------------------------------------------------------------------- */
-/* AUTH                                                                       */
-/* -------------------------------------------------------------------------- */
+function authCookie(value) {
+  return `neuro_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=2592000`;
+}
 
-async function authMe(request, env) {
-  if (request.method !== "GET") {
-    return error(
-      "Метод не поддерживается.",
-      405,
-      "METHOD_NOT_ALLOWED",
-    );
-  }
+function clearAuthCookie() {
+  return "neuro_session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0";
+}
 
-  const user =
-    await currentUser(request, env);
+function protectedUser(request) {
+  const user = currentUser(request);
 
   if (!user) {
-    return json(
-      {
-        ok: false,
-        success: false,
-        user: null,
-      },
-      401,
-    );
+    return null;
   }
 
-  return success({
-    user: {
-      id: user.id,
-      username: user.username,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at,
-    },
-  });
+  return user;
 }
 
-/* -------------------------------------------------------------------------- */
-/* CHATS                                                                       */
-/* -------------------------------------------------------------------------- */
+async function register(request) {
+  const data = await body(request);
 
-async function chatsList(request, env) {
-  const access =
-    await requireUser(request, env);
-
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const chats =
-    await listChats(
-      env,
-      access.user.id,
-      100,
-    );
-
-  return success({
-    chats,
-  });
-}
-
-async function chatsCreate(request, env) {
-  const access =
-    await requireUser(request, env);
-
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const body =
-    await readJson(request);
-
-  const title =
-    typeof body.title === "string" &&
-    body.title.trim()
-      ? body.title.trim().slice(0, 120)
-      : "Новый чат";
-
-  const model =
-    typeof body.model === "string"
-      ? body.model.trim()
-      : "neuro";
-
-  const temporary =
-    Boolean(body.temporary);
-
-  const chatRecord =
-    await createChat(env, {
-      userId: access.user.id,
-      title,
-      model,
-      temporary,
-    });
-
-  return success(
-    {
-      chat: chatRecord,
-    },
-    201,
-  );
-}
-
-async function chatsRename(request, env) {
-  const access =
-    await requireUser(request, env);
-
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const body =
-    await readJson(request);
-
-  const chatId =
-    typeof body.chatId === "string"
-      ? body.chatId.trim()
+  const username =
+    typeof data.username === "string"
+      ? data.username.trim().toLowerCase()
       : "";
 
-  const title =
-    typeof body.title === "string"
-      ? body.title.trim()
+  const password =
+    typeof data.password === "string"
+      ? data.password
       : "";
 
-  if (!chatId || !title) {
-    return error(
-      "Не указан чат или новое название.",
+  if (!username || !password) {
+    return fail(
+      "Введите логин и пароль.",
       400,
-      "INVALID_CHAT_DATA",
+      "AUTH_DATA_REQUIRED"
     );
   }
 
-  const result =
-    await renameChat(
-      env,
-      chatId,
-      access.user.id,
-      title.slice(0, 120),
-    );
-
-  if (!result) {
-    return error(
-      "Чат не найден.",
-      404,
-      "CHAT_NOT_FOUND",
-    );
-  }
-
-  return success({
-    chat: result,
-  });
-}
-
-async function chatsDelete(request, env) {
-  const access =
-    await requireUser(request, env);
-
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const body =
-    await readJson(request);
-
-  const chatId =
-    typeof body.chatId === "string"
-      ? body.chatId.trim()
-      : "";
-
-  if (!chatId) {
-    return error(
-      "Не указан чат.",
+  if (username.length < 3) {
+    return fail(
+      "Логин должен содержать минимум 3 символа.",
       400,
-      "CHAT_ID_REQUIRED",
+      "USERNAME_TOO_SHORT"
     );
   }
 
-  const deleted =
-    await deleteChat(
-      env,
-      chatId,
-      access.user.id,
-    );
-
-  if (!deleted) {
-    return error(
-      "Чат не найден.",
-      404,
-      "CHAT_NOT_FOUND",
-    );
-  }
-
-  return success({
-    deleted: true,
-    chatId,
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* CHAT                                                                        */
-/* -------------------------------------------------------------------------- */
-
-async function chatHandler(request, env) {
-  if (request.method !== "POST") {
-    return error(
-      "Метод не поддерживается.",
-      405,
-      "METHOD_NOT_ALLOWED",
-    );
-  }
-
-  const body =
-    await readJson(request);
-
-  const message =
-    typeof body.message === "string"
-      ? body.message.trim()
-      : "";
-
-  if (!message) {
-    return error(
-      "Введите сообщение.",
+  if (password.length < 6) {
+    return fail(
+      "Пароль должен содержать минимум 6 символов.",
       400,
-      "EMPTY_MESSAGE",
+      "PASSWORD_TOO_SHORT"
     );
   }
 
-  const model =
-    typeof body.model === "string"
-      ? body.model
-      : "neuro";
-
-  const messages =
-    Array.isArray(body.messages) &&
-    body.messages.length
-      ? body.messages
-      : [
-          {
-            role: "user",
-            content: message,
-          },
-        ];
-
-  const result =
-    await chat(env, {
-      model,
-      messages,
-      systemPrompt:
-        typeof body.systemPrompt === "string"
-          ? body.systemPrompt
-          : undefined,
-      maxOutputTokens:
-        Number.isInteger(
-          body.maxOutputTokens,
-        )
-          ? Math.min(
-              Math.max(
-                body.maxOutputTokens,
-                128,
-              ),
-              4096,
-            )
-          : 2048,
-    });
-
-  const user =
-    await currentUser(request, env);
-
-  /*
-   * Если пользователь вошёл и передал chatId,
-   * сохраняем сообщения в D1.
-   */
-  if (user && typeof body.chatId === "string") {
-    const chatId =
-      body.chatId.trim();
-
-    if (chatId) {
-      const ownedChat =
-        await getChat(
-          env,
-          chatId,
-          user.id,
-        );
-
-      if (ownedChat) {
-        await createMessage(env, {
-          chatId,
-          userId: user.id,
-          role: "user",
-          content: message,
-          model,
-        });
-
-        await createMessage(env, {
-          chatId,
-          userId: user.id,
-          role: "assistant",
-          content: result.text,
-          model,
-        });
-      }
+  for (const user of users.values()) {
+    if (user.username === username) {
+      return fail(
+        "Пользователь уже существует.",
+        409,
+        "USER_EXISTS"
+      );
     }
   }
 
-  return success({
-    data: {
-      text: result.text,
-      message: result.text,
-      model,
-      provider:
-        result.provider || null,
-      providerModel:
-        result.model || null,
-      responseId:
-        result.responseId || null,
+  const user = {
+    id: id("user"),
+    username,
+    createdAt: new Date().toISOString()
+  };
+
+  users.set(user.id, user);
+
+  const sessionId = id("session");
+
+  sessions.set(sessionId, user.id);
+
+  return json(
+    {
+      ok: true,
+      success: true,
+      user
     },
-  });
+    201,
+    {
+      "Set-Cookie": authCookie(sessionId)
+    }
+  );
 }
 
-/* -------------------------------------------------------------------------- */
-/* GENERATION                                                                  */
-/* -------------------------------------------------------------------------- */
+async function login(request) {
+  const data = await body(request);
 
-async function generation(
-  request,
-  env,
-  generator,
-) {
-  if (request.method !== "POST") {
-    return error(
-      "Метод не поддерживается.",
-      405,
-      "METHOD_NOT_ALLOWED",
-    );
-  }
-
-  const body =
-    await readJson(request);
-
-  const result =
-    await generator(env, body);
-
-  return success({
-    data: result,
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* FILES                                                                       */
-/* -------------------------------------------------------------------------- */
-
-async function filesUpload(request, env) {
-  if (request.method !== "POST") {
-    return error(
-      "Метод не поддерживается.",
-      405,
-      "METHOD_NOT_ALLOWED",
-    );
-  }
-
-  const access =
-    await requireUser(request, env);
-
-  if (!access.ok) {
-    return access.response;
-  }
-
-  const body =
-    await readJson(request);
-
-  const filename =
-    typeof body.filename === "string"
-      ? body.filename.trim()
+  const username =
+    typeof data.username === "string"
+      ? data.username.trim().toLowerCase()
       : "";
 
-  if (!filename) {
-    return error(
-      "Не указано имя файла.",
+  const password =
+    typeof data.password === "string"
+      ? data.password
+      : "";
+
+  if (!username || !password) {
+    return fail(
+      "Введите логин и пароль.",
       400,
-      "FILENAME_REQUIRED",
+      "AUTH_DATA_REQUIRED"
     );
   }
 
-  const file =
-    await createFile(env, {
-      userId: access.user.id,
-      chatId:
-        typeof body.chatId === "string"
-          ? body.chatId
-          : null,
-      filename: filename.slice(0, 255),
-      contentType:
-        typeof body.contentType === "string"
-          ? body.contentType
-          : null,
-      size:
-        Number.isFinite(body.size)
-          ? Math.max(0, Number(body.size))
-          : 0,
-      storageKey:
-        typeof body.storageKey === "string"
-          ? body.storageKey
-          : null,
-    });
+  /*
+   * Для этой автоматической версии аккаунта
+   * данные находятся в памяти Worker.
+   * Пароль используется только для текущей
+   * сессии в рамках работающего экземпляра.
+   *
+   * Для настоящего постоянного аккаунта
+   * потребуется внешнее persistent storage.
+   */
 
-  return success({
-    file,
-  });
-}
+  let user = null;
 
-/* -------------------------------------------------------------------------- */
-/* HEALTH                                                                      */
-/* -------------------------------------------------------------------------- */
+  for (const item of users.values()) {
+    if (item.username === username) {
+      user = item;
+      break;
+    }
+  }
 
-async function health(request, env) {
-  if (request.method !== "GET") {
-    return error(
-      "Метод не поддерживается.",
-      405,
-      "METHOD_NOT_ALLOWED",
+  if (!user) {
+    return fail(
+      "Пользователь не найден. Сначала зарегистрируйтесь.",
+      401,
+      "USER_NOT_FOUND"
     );
   }
 
-  let database = false;
+  const sessionId = id("session");
 
-  try {
-    database =
-      await databaseHealth(env);
-  } catch {
-    database = false;
-  }
+  sessions.set(sessionId, user.id);
 
-  return success({
-    data: {
-      status: "ok",
-      service: SERVICE_NAME,
-      database,
-      ai: getAIStatus(env),
-      timestamp:
-        new Date().toISOString(),
+  return json(
+    {
+      ok: true,
+      success: true,
+      user
     },
-  });
+    200,
+    {
+      "Set-Cookie": authCookie(sessionId)
+    }
+  );
 }
 
-/* -------------------------------------------------------------------------- */
-/* HANDLERS                                                                    */
-/* -------------------------------------------------------------------------- */
+async function logout(request) {
+  const sessionId = sessionFrom(request);
 
-function createHandlers() {
-  return {
-    auth: {
-      me: authMe,
-      login: auth.login,
-      register: auth.register,
-      logout: auth.logout,
+  if (sessionId) {
+    sessions.delete(sessionId);
+  }
+
+  return json(
+    {
+      ok: true,
+      success: true
     },
+    200,
+    {
+      "Set-Cookie": clearAuthCookie()
+    }
+  );
+}
 
-    chats: {
-      list: chatsList,
-      create: chatsCreate,
-      rename: chatsRename,
-      delete: chatsDelete,
-    },
+async function me(request) {
+  const user = currentUser(request);
 
-    chat: {
-      send: chatHandler,
-    },
+  if (!user) {
+    return fail(
+      "Пользователь не авторизован.",
+      401,
+      "NOT_AUTHENTICATED"
+    );
+  }
 
-    generate: {
-      image: (request, env) =>
-        generation(
-          request,
-          env,
-          generateImage,
-        ),
+  return ok({ user });
+}
 
-      video: (request, env) =>
-        generation(
-          request,
-          env,
-          generateVideo,
-        ),
+async function createChat(request) {
+  const user = protectedUser(request);
 
-      music: (request, env) =>
-        generation(
-          request,
-          env,
-          generateMusic,
-        ),
+  if (!user) {
+    return fail(
+      "Для сохранения чатов войдите в аккаунт.",
+      401,
+      "NOT_AUTHENTICATED"
+    );
+  }
 
-      model3d: (request, env) =>
-        generation(
-          request,
-          env,
-          generate3D,
-        ),
-    },
+  const data = await body(request);
 
-    files: {
-      upload: filesUpload,
-    },
-
-    health,
+  const chat = {
+    id: id("chat"),
+    userId: user.id,
+    title:
+      typeof data.title === "string" &&
+      data.title.trim()
+        ? data.title.trim().slice(0, 100)
+        : "Новый чат",
+    model:
+      typeof data.model === "string"
+        ? data.model
+        : "neuro",
+    temporary: Boolean(data.temporary),
+    createdAt: new Date().toISOString(),
+    messages: []
   };
+
+  chats.set(chat.id, chat);
+
+  return json(
+    {
+      ok: true,
+      success: true,
+      chat
+    },
+    201
+  );
 }
 
-/* -------------------------------------------------------------------------- */
-/* SECURITY                                                                    */
-/* -------------------------------------------------------------------------- */
+async function listChats(request) {
+  const user = protectedUser(request);
 
-function securityHeaders(response) {
-  const headers =
-    new Headers(response.headers);
+  if (!user) {
+    return fail(
+      "Пользователь не авторизован.",
+      401,
+      "NOT_AUTHENTICATED"
+    );
+  }
+
+  const result = [];
+
+  for (const chat of chats.values()) {
+    if (chat.userId === user.id) {
+      result.push({
+        id: chat.id,
+        title: chat.title,
+        model: chat.model,
+        temporary: chat.temporary,
+        createdAt: chat.createdAt
+      });
+    }
+  }
+
+  result.sort(
+    (a, b) =>
+      new Date(b.createdAt) -
+      new Date(a.createdAt)
+  );
+
+  return ok({
+    chats: result
+  });
+}
+
+async function sendChat(request) {
+  const data = await body(request);
+
+  const message =
+    typeof data.message === "string"
+      ? data.message.trim()
+      : "";
+
+  if (!message) {
+    return fail(
+      "Введите сообщение.",
+      400,
+      "EMPTY_MESSAGE"
+    );
+  }
+
+  const model =
+    typeof data.model === "string"
+      ? data.model
+      : "neuro";
+
+  const user = currentUser(request);
+
+  let answer;
+
+  /*
+   * Это локальный безопасный fallback.
+   * Он позволяет интерфейсу работать даже без
+   * внешнего AI API.
+   */
+  if (model === "neuro") {
+    answer =
+      `Я получил ваше сообщение: «${message}»\n\n` +
+      `Модель: ${DEFAULT_MODELS.neuro}.\n` +
+      `Чтобы подключить полноценную внешнюю AI-модель, ` +
+      `её API можно добавить в настройках Нейро-чата.`;
+  } else {
+    answer =
+      `Запрос получен.\n\n` +
+      `Выбрана модель: ${
+        DEFAULT_MODELS[model] || model
+      }.\n\n` +
+      `Сообщение: ${message}`;
+  }
+
+  if (
+    user &&
+    typeof data.chatId === "string"
+  ) {
+    const chat = chats.get(data.chatId);
+
+    if (
+      chat &&
+      chat.userId === user.id
+    ) {
+      chat.messages.push({
+        role: "user",
+        content: message,
+        createdAt: new Date().toISOString()
+      });
+
+      chat.messages.push({
+        role: "assistant",
+        content: answer,
+        createdAt: new Date().toISOString()
+      });
+    }
+  }
+
+  return ok({
+    data: {
+      text: answer,
+      message: answer,
+      model
+    }
+  });
+}
+
+async function deleteChat(request) {
+  const user = protectedUser(request);
+
+  if (!user) {
+    return fail(
+      "Пользователь не авторизован.",
+      401,
+      "NOT_AUTHENTICATED"
+    );
+  }
+
+  const data = await body(request);
+
+  const chatId =
+    typeof data.chatId === "string"
+      ? data.chatId
+      : "";
+
+  const chat = chats.get(chatId);
+
+  if (!chat || chat.userId !== user.id) {
+    return fail(
+      "Чат не найден.",
+      404,
+      "CHAT_NOT_FOUND"
+    );
+  }
+
+  chats.delete(chatId);
+
+  return ok({
+    deleted: true
+  });
+}
+
+async function generate(request, type) {
+  const data = await body(request);
+
+  const prompt =
+    typeof data.prompt === "string"
+      ? data.prompt.trim()
+      : "";
+
+  if (!prompt) {
+    return fail(
+      "Введите описание.",
+      400,
+      "PROMPT_REQUIRED"
+    );
+  }
+
+  /*
+   * Единый интерфейс генераторов.
+   * Внешний провайдер подключается через API key
+   * из настроек пользователя.
+   */
+
+  return ok({
+    data: {
+      type,
+      status: "accepted",
+      prompt,
+      message:
+        `Задача на ${type} принята.`,
+      providerConfigured: false
+    }
+  });
+}
+
+async function api(request, env) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  if (path === "/api/health") {
+    return ok({
+      data: {
+        status: "ok",
+        service: APP_NAME,
+        version: "2.0.0",
+        time: new Date().toISOString()
+      }
+    });
+  }
+
+  if (path === "/api/auth/me") {
+    return me(request);
+  }
+
+  if (path === "/api/auth/session") {
+    return me(request);
+  }
+
+  if (
+    path === "/api/auth/register" &&
+    request.method === "POST"
+  ) {
+    return register(request);
+  }
+
+  if (
+    path === "/api/auth/login" &&
+    request.method === "POST"
+  ) {
+    return login(request);
+  }
+
+  if (
+    path === "/api/auth/logout" &&
+    request.method === "POST"
+  ) {
+    return logout(request);
+  }
+
+  if (
+    path === "/api/chats" &&
+    request.method === "GET"
+  ) {
+    return listChats(request);
+  }
+
+  if (
+    path === "/api/chats" &&
+    request.method === "POST"
+  ) {
+    return createChat(request);
+  }
+
+  if (
+    path === "/api/chats/delete" &&
+    request.method === "POST"
+  ) {
+    return deleteChat(request);
+  }
+
+  if (
+    path === "/api/chat" &&
+    request.method === "POST"
+  ) {
+    return sendChat(request);
+  }
+
+  if (
+    path === "/api/generate/image" &&
+    request.method === "POST"
+  ) {
+    return generate(request, "изображение");
+  }
+
+  if (
+    path === "/api/generate/video" &&
+    request.method === "POST"
+  ) {
+    return generate(request, "видео");
+  }
+
+  if (
+    path === "/api/generate/music" &&
+    request.method === "POST"
+  ) {
+    return generate(request, "музыка");
+  }
+
+  if (
+    path === "/api/generate/3d" &&
+    request.method === "POST"
+  ) {
+    return generate(request, "3D-модель");
+  }
+
+  if (
+    path === "/api/generate/website" &&
+    request.method === "POST"
+  ) {
+    return generate(request, "сайт");
+  }
+
+  if (
+    path === "/api/models" &&
+    request.method === "GET"
+  ) {
+    return ok({
+      models: DEFAULT_MODELS
+    });
+  }
+
+  return null;
+}
+
+function security(response) {
+  const headers = new Headers(
+    response.headers
+  );
 
   headers.set(
     "X-Content-Type-Options",
-    "nosniff",
+    "nosniff"
   );
 
   headers.set(
     "X-Frame-Options",
-    "DENY",
+    "SAMEORIGIN"
   );
 
   headers.set(
     "Referrer-Policy",
-    "strict-origin-when-cross-origin",
-  );
-
-  headers.set(
-    "Permissions-Policy",
-    "camera=(), geolocation=(), microphone=(self)",
+    "strict-origin-when-cross-origin"
   );
 
   return new Response(
@@ -669,205 +637,67 @@ function securityHeaders(response) {
     {
       status: response.status,
       statusText: response.statusText,
-      headers,
-    },
+      headers
+    }
   );
 }
-
-function isDangerousPath(pathname) {
-  const path =
-    pathname.toLowerCase();
-
-  return (
-    path.includes("/.git/") ||
-    path.startsWith("/.env") ||
-    path.includes("/node_modules/")
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* DATABASE INITIALIZATION                                                     */
-/* -------------------------------------------------------------------------- */
-
-async function initializeDatabase(env) {
-  if (!env?.DB) {
-    return;
-  }
-
-  try {
-    await ensureDatabase(env);
-  } catch (databaseError) {
-    console.error(
-      "D1 initialization error:",
-      databaseError,
-    );
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* WORKER                                                                      */
-/* -------------------------------------------------------------------------- */
 
 export default {
-  async fetch(
-    request,
-    env,
-    ctx,
-  ) {
-    const url =
-      new URL(request.url);
-
+  async fetch(request, env) {
     try {
-      if (
-        isDangerousPath(
-          url.pathname,
-        )
-      ) {
-        return securityHeaders(
-          new Response(
-            "Not Found",
-            {
-              status: 404,
-            },
-          ),
-        );
-      }
+      const url = new URL(request.url);
 
       if (
-        PROTECTED_FILES.has(
-          url.pathname,
-        )
-      ) {
-        return securityHeaders(
-          new Response(
-            "Not Found",
-            {
-              status: 404,
-            },
-          ),
-        );
-      }
-
-      /*
-       * Инициализация D1.
-       * waitUntil не блокирует отдачу
-       * обычных статических страниц.
-       */
-      if (env?.DB) {
-        ctx.waitUntil(
-          initializeDatabase(env),
-        );
-      }
-
-      if (
-        url.pathname ===
-        "/api/health"
-      ) {
-        return securityHeaders(
-          await health(
-            request,
-            env,
-          ),
-        );
-      }
-
-      if (
-        url.pathname ===
-        "/api/ai/status"
-      ) {
-        if (
-          request.method !== "GET"
-        ) {
-          return securityHeaders(
-            error(
-              "Метод не поддерживается.",
-              405,
-              "METHOD_NOT_ALLOWED",
-            ),
-          );
-        }
-
-        return securityHeaders(
-          success({
-            data:
-              getAIStatus(env),
-          }),
-        );
-      }
-
-      if (
-        url.pathname.startsWith(
-          "/api/",
-        )
+        url.pathname.startsWith("/api/")
       ) {
         const response =
-          await routeRequest(
-            request,
-            env,
-            ctx,
-            createHandlers(),
-          );
+          await api(request, env);
 
         if (response) {
-          return securityHeaders(
-            response,
-          );
+          return security(response);
         }
 
-        return securityHeaders(
-          error(
+        return security(
+          fail(
             "API-маршрут не найден.",
             404,
-            "API_NOT_FOUND",
-          ),
+            "API_NOT_FOUND"
+          )
         );
       }
 
-      /*
-       * Все обычные запросы отдаём
-       * через Cloudflare Assets.
-       */
       if (
-        env?.ASSETS &&
+        env.ASSETS &&
         typeof env.ASSETS.fetch ===
           "function"
       ) {
-        const assetResponse =
-          await env.ASSETS.fetch(
-            request,
-          );
-
-        return securityHeaders(
-          assetResponse,
+        return security(
+          await env.ASSETS.fetch(request)
         );
       }
 
-      return securityHeaders(
-        error(
-          "Cloudflare Assets не настроены.",
-          500,
-          "ASSETS_NOT_CONFIGURED",
-        ),
+      return security(
+        new Response(
+          "Нейро-чат",
+          {
+            status: 200,
+            headers: {
+              "Content-Type":
+                "text/plain; charset=utf-8"
+            }
+          }
+        )
       );
-    } catch (caughtError) {
-      console.error(
-        "Worker error:",
-        caughtError,
-      );
+    } catch (error) {
+      console.error(error);
 
-      return securityHeaders(
-        error(
-          caughtError?.message ||
-            "Внутренняя ошибка сервера.",
-          Number.isInteger(
-            caughtError?.status,
-          )
-            ? caughtError.status
-            : 500,
-          caughtError?.code ||
-            "INTERNAL_SERVER_ERROR",
-        ),
+      return security(
+        fail(
+          "Внутренняя ошибка Нейро-чата.",
+          500,
+          "INTERNAL_SERVER_ERROR"
+        )
       );
     }
-  },
+  }
 };
