@@ -1,32 +1,17 @@
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 1024 1024"
->
-  <rect
-    width="1024"
-    height="1024"
-    fill="#000000"
-  />
-  <!-- Футуристическая типографика -->
-  <g
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Чистый чёрный фон -->
+  <rect width="1024" height="1024" fill="#000000"/>
+  <!-- Футуристическая надпись -->
+  <text
+    x="512"
+    y="555"
+    text-anchor="middle"
     fill="#FFFFFF"
-    font-family="Arial, Helvetica, sans-serif"
-    font-size="132"
+    font-family="Trebuchet MS, Arial, Helvetica, sans-serif"
+    font-size="142"
     font-weight="700"
-    letter-spacing="-5"
+    letter-spacing="-7"
   >
-    <text
-      x="512"
-      y="555"
-      text-anchor="middle"
-      transform="skewX(-3)"
-    >
-      Нейро-чат
-    </text>
-  </g>
-  <!-- Небольшой фирменный акцент внутри типографики -->
-  <path
-    d="M238 585 L270 585 L258 600 L226 600 Z"
-    fill="#FFFFFF"
-  />
+    Нейро-чат
+  </text>
 </svg>
