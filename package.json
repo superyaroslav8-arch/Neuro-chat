@@ -1,0 +1,15 @@
+{
+  "name": "neuro-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Нейро-чат — AI-чат с несколькими AI-провайдерами.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
