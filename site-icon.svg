@@ -2,23 +2,31 @@
   xmlns="http://www.w3.org/2000/svg"
   viewBox="0 0 1024 1024"
 >
-  <!-- Чёрный фон -->
   <rect
     width="1024"
     height="1024"
     fill="#000000"
   />
-  <!-- Футуристическая надпись -->
-  <text
-    x="512"
-    y="548"
-    text-anchor="middle"
+  <!-- Футуристическая типографика -->
+  <g
     fill="#FFFFFF"
     font-family="Arial, Helvetica, sans-serif"
-    font-size="108"
+    font-size="132"
     font-weight="700"
-    letter-spacing="-3"
+    letter-spacing="-5"
   >
-    Нейро-чат
-  </text>
+    <text
+      x="512"
+      y="555"
+      text-anchor="middle"
+      transform="skewX(-3)"
+    >
+      Нейро-чат
+    </text>
+  </g>
+  <!-- Небольшой фирменный акцент внутри типографики -->
+  <path
+    d="M238 585 L270 585 L258 600 L226 600 Z"
+    fill="#FFFFFF"
+  />
 </svg>
