@@ -1,27 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#000000"/>
-  <text
-    x="512"
-    y="535"
-    text-anchor="middle"
-    fill="#FFFFFF"
-    font-family="Inter, SF Pro Display, Segoe UI, Arial, Helvetica, sans-serif"
-    font-size="148"
-    font-weight="600"
-    letter-spacing="-4"
-  >
-    Нейро-чат
-  </text>
-  <text
-    x="512"
-    y="625"
-    text-anchor="middle"
-    fill="#FFFFFF"
-    font-family="Inter, SF Pro Display, Segoe UI, Arial, Helvetica, sans-serif"
-    font-size="42"
-    font-weight="500"
-    letter-spacing="5"
-  >
-    AI АССИСТЕНТ
-  </text>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 512 512"
+     width="512"
+     height="512">
+
+  <rect width="512" height="512" rx="112" fill="#000000"/>
+
+  <g fill="none"
+     stroke="#ffffff"
+     stroke-width="18"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+
+    <!-- Контур чат-баббла -->
+    <path d="
+      M116 116
+      C116 91 136 72 161 72
+      H351
+      C376 72 396 91 396 116
+      V286
+      C396 311 376 330 351 330
+      H246
+      L177 392
+      V330
+      H161
+      C136 330 116 311 116 286
+      Z"/>
+
+    <!-- Центральный цифровой знак -->
+    <path d="M178 188 H220"/>
+    <path d="M292 188 H334"/>
+
+    <path d="M178 244 H205"/>
+    <path d="M307 244 H334"/>
+
+    <path d="M214 162 V270"/>
+    <path d="M298 162 V270"/>
+
+    <!-- Микросхема -->
+    <rect x="214" y="174" width="84" height="92" rx="14"/>
+
+    <!-- Контакты микросхемы -->
+    <path d="M234 174 V151"/>
+    <path d="M256 174 V151"/>
+    <path d="M278 174 V151"/>
+
+    <path d="M234 266 V289"/>
+    <path d="M256 266 V289"/>
+    <path d="M278 266 V289"/>
+
+    <!-- Цифровые соединения -->
+    <path d="M178 188 H156 V166"/>
+    <path d="M334 188 H356 V166"/>
+
+    <path d="M178 244 H156 V266"/>
+    <path d="M334 244 H356 V266"/>
+
+  </g>
+
+  <!-- Точки цифровых контактов -->
+  <g fill="#ffffff">
+    <circle cx="156" cy="166" r="7"/>
+    <circle cx="356" cy="166" r="7"/>
+    <circle cx="156" cy="266" r="7"/>
+    <circle cx="356" cy="266" r="7"/>
+  </g>
+
 </svg>
