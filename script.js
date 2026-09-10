@@ -1,29 +1,35 @@
 const API = {
-  me: "/api/auth/me",
-  login: "/api/auth/login",
-  register: "/api/auth/register",
-  logout: "/api/auth/logout",
+  me: "./api/auth/me",
+  login: "./api/auth/login",
+  register: "./api/auth/register",
+  logout: "./api/auth/logout",
 
-  chats: "/api/chats",
-  chat: "/api/chat",
+  chats: "./api/chats",
+  chat: "./api/chat",
 
-  settings: "/api/settings",
-  permissions: "/api/permissions",
-  plugins: "/api/plugins",
+  settings: "./api/settings",
+  permissions: "./api/permissions",
+  plugins: "./api/plugins",
 
-  image: "/api/generate/image",
-  video: "/api/generate/video",
-  music: "/api/generate/music",
-  model3d: "/api/generate/3d"
+  image: "./api/generate/image",
+  video: "./api/generate/video",
+  music: "./api/generate/music",
+  model3d: "./api/generate/3d"
 };
 
-const MODEL_NAMES = {
+
+const MODELS = {
   neuro: "Нейро",
   chatgpt: "ChatGPT",
   gemini: "Gemini",
   grok: "Grok",
   "alice-1": "Алиса 1"
 };
+
+
+const $ = (id) =>
+  document.getElementById(id);
+
 
 const state = {
   user: null,
@@ -44,174 +50,228 @@ const state = {
   sending: false
 };
 
-const $ = (id) =>
-  document.getElementById(id);
 
-const homeScreen = $("homeScreen");
-const chatScreen = $("chatScreen");
-const messages = $("messages");
+function show(id) {
 
-function show(element) {
+  const element = $(id);
+
   if (element) {
     element.hidden = false;
   }
+
 }
 
-function hide(element) {
+
+function hide(id) {
+
+  const element = $(id);
+
   if (element) {
     element.hidden = true;
   }
+
 }
+
 
 function openModal(id) {
-  show($(id));
-  document.body.classList.add("modal-open");
+
+  show(id);
+
+  document.body.classList.add(
+    "modal-open"
+  );
+
 }
 
-function closeModal(id) {
-  hide($(id));
 
-  const openModalExists =
+function closeModal(id) {
+
+  hide(id);
+
+  const anotherModal =
     document.querySelector(
       ".modal-overlay:not([hidden])"
     );
 
-  if (!openModalExists) {
+  if (!anotherModal) {
     document.body.classList.remove(
       "modal-open"
     );
   }
+
 }
 
+
 function closeAllModals() {
+
   document
-    .querySelectorAll(".modal-overlay")
-    .forEach((modal) => {
-      modal.hidden = true;
+    .querySelectorAll(
+      ".modal-overlay"
+    )
+    .forEach((element) => {
+      element.hidden = true;
     });
 
   document.body.classList.remove(
     "modal-open"
   );
+
 }
 
-async function api(url, options = {}) {
-  const headers = new Headers(
-    options.headers || {}
-  );
+
+async function api(
+  url,
+  options = {}
+) {
+
+  const headers =
+    new Headers(
+      options.headers || {}
+    );
 
   if (
     options.body &&
     !(options.body instanceof FormData)
   ) {
+
     headers.set(
       "content-type",
       "application/json"
     );
+
   }
 
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    ...options,
-    headers
-  });
+  const response =
+    await fetch(
+      url,
+      {
+        credentials: "same-origin",
+        ...options,
+        headers
+      }
+    );
+
 
   let data = {};
 
   try {
-    data = await response.json();
+
+    data =
+      await response.json();
+
   } catch {
+
     data = {};
+
   }
 
-  if (!response.ok || data.ok === false) {
+
+  if (
+    !response.ok ||
+    data.ok === false
+  ) {
+
     throw new Error(
       data.error ||
       `Ошибка запроса: ${response.status}`
     );
+
   }
+
 
   return data;
+
 }
+
+
+/* AUTH STATE */
 
 function setAuth(user) {
-  state.user = user || null;
-  state.authenticated = Boolean(user);
-  state.guest = !user;
 
-  const accountButton =
-    $("accountButton");
+  state.user =
+    user || null;
 
-  const profileButtonText =
-    $("profileButtonText");
+  state.authenticated =
+    Boolean(user);
 
-  const profileName =
-    $("profileName");
+  state.guest =
+    !user;
 
-  const profileAuthButton =
-    $("profileAuthButton");
 
-  const logoutButton =
-    $("logoutButton");
+  $("accountButton").textContent =
+    user?.username || "Войти";
 
-  if (accountButton) {
-    accountButton.textContent =
-      user?.username || "Войти";
-  }
+  $("profileButtonText").textContent =
+    user?.username || "Профиль";
 
-  if (profileButtonText) {
-    profileButtonText.textContent =
-      user?.username || "Профиль";
-  }
+  $("profileName").textContent =
+    user?.username || "Гость";
 
-  if (profileName) {
-    profileName.textContent =
-      user?.username || "Гость";
-  }
+  $("profileAuthButton").textContent =
+    user
+      ? "Профиль подключён"
+      : "Войти";
 
-  if (profileAuthButton) {
-    profileAuthButton.textContent =
-      user
-        ? "Профиль подключён"
-        : "Войти";
-  }
+  $("logoutButton").hidden =
+    !user;
 
-  if (logoutButton) {
-    logoutButton.hidden = !user;
-  }
 }
 
+
+/* SESSION */
+
 async function loadSession() {
+
   try {
+
     const data =
       await api(API.me);
+
 
     if (
       data.authenticated &&
       data.user
     ) {
+
       setAuth(data.user);
 
       await Promise.all([
         loadChats(),
         loadSettings()
       ]);
+
     } else {
+
       setAuth(null);
+
     }
+
   } catch {
+
     setAuth(null);
+
   }
+
 }
 
+
+/* CHATS */
+
 async function loadChats() {
+
   if (!state.authenticated) {
+
     state.chats = [];
+
     renderChats();
+
     return;
+
   }
 
+
   try {
+
     const data =
       await api(API.chats);
 
@@ -221,18 +281,20 @@ async function loadChats() {
         : [];
 
     renderChats();
-  } catch (error) {
-    console.error(
-      "Ошибка загрузки чатов:",
-      error
-    );
+
+  } catch {
 
     state.chats = [];
+
     renderChats();
+
   }
+
 }
 
+
 function renderChats() {
+
   const list =
     $("chatList");
 
@@ -240,125 +302,186 @@ function renderChats() {
     return;
   }
 
+
   list.innerHTML = "";
 
-  for (const chat of state.chats) {
-    const button =
-      document.createElement("button");
 
-    button.type = "button";
-    button.className = "chat-item";
+  state.chats.forEach(
+    (chat) => {
 
-    button.textContent =
-      chat.title || "Новый чат";
+      const button =
+        document.createElement(
+          "button"
+        );
 
-    button.title =
-      chat.title || "Новый чат";
+      button.type =
+        "button";
 
-    button.addEventListener(
-      "click",
-      () => {
-        openChat(chat.id);
-      }
-    );
+      button.className =
+        "chat-item";
 
-    list.appendChild(button);
-  }
+      button.textContent =
+        chat.title ||
+        "Новый чат";
+
+      button.title =
+        chat.title ||
+        "Новый чат";
+
+
+      button.onclick =
+        () => {
+          openChat(chat.id);
+        };
+
+
+      list.appendChild(
+        button
+      );
+
+    }
+  );
+
 }
 
+
 async function createNewChat() {
-  state.currentChatId = null;
-  state.sending = false;
 
-  messages.innerHTML = "";
+  state.currentChatId =
+    null;
 
-  show(homeScreen);
-  hide(chatScreen);
+  state.sending =
+    false;
 
-  const input =
-    $("messageInput");
 
-  if (input) {
-    input.value = "";
-    input.style.height = "auto";
-    input.focus();
-  }
+  $("messages").innerHTML =
+    "";
+
+  show("homeScreen");
+  hide("chatScreen");
+
+
+  $("messageInput").value =
+    "";
+
+  $("messageInput").focus();
+
 
   if (!state.authenticated) {
     return;
   }
 
+
   try {
+
     const data =
-      await api(API.chats, {
-        method: "POST",
-        body: JSON.stringify({
-          title: "Новый чат",
-          model: state.currentModel
-        })
-      });
+      await api(
+        API.chats,
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            title: "Новый чат",
+            model: state.currentModel
+          })
+        }
+      );
+
 
     state.currentChatId =
-      data.chat?.id || null;
+      data.chat?.id ||
+      null;
+
 
     await loadChats();
-  } catch (error) {
-    console.error(
-      "Ошибка создания чата:",
-      error
-    );
+
+  } catch {
+
+    // Ничего не блокируем:
+    // новый чат всё равно доступен.
   }
+
 }
 
-async function openChat(chatId) {
+
+async function openChat(
+  chatId
+) {
+
   if (!chatId) {
     return;
   }
 
+
   state.currentChatId =
     String(chatId);
 
-  hide(homeScreen);
-  show(chatScreen);
 
-  messages.innerHTML = "";
+  hide("homeScreen");
+  show("chatScreen");
+
+
+  $("messages").innerHTML =
+    "";
+
 
   try {
+
     const data =
       await api(
-        `/api/chats/${encodeURIComponent(
+        `./api/chats/${encodeURIComponent(
           chatId
         )}/messages`
       );
 
+
     const chatMessages =
-      Array.isArray(data.messages)
+      Array.isArray(
+        data.messages
+      )
         ? data.messages
         : [];
 
-    for (const message of chatMessages) {
-      addMessage(
-        message.role,
-        message.content
-      );
-    }
 
-    scrollMessagesToBottom();
+    chatMessages.forEach(
+      (message) => {
+
+        addMessage(
+          message.role,
+          message.content
+        );
+
+      }
+    );
+
+
+    scrollBottom();
+
   } catch (error) {
+
     addMessage(
       "assistant",
       `Не удалось открыть чат: ${error.message}`
     );
+
   }
+
 }
+
+
+/* MESSAGES */
 
 function addMessage(
   role,
   text,
   options = {}
 ) {
+
   const wrapper =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
+
 
   wrapper.className =
     `message ${
@@ -367,259 +490,236 @@ function addMessage(
         : "assistant"
     }`;
 
+
   if (options.loading) {
+
+    wrapper.classList.add(
+      "loading"
+    );
+
     wrapper.dataset.loading =
       "true";
+
   }
 
-  const roleText =
-    document.createElement("div");
 
-  roleText.className =
+  const roleElement =
+    document.createElement(
+      "div"
+    );
+
+  roleElement.className =
     "message-role";
 
-  roleText.textContent =
+  roleElement.textContent =
     role === "user"
       ? "Вы"
       : "Нейро";
 
+
   const bubble =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
 
   bubble.className =
     "message-bubble";
 
-  if (
-    typeof text === "string" ||
-    typeof text === "number"
-  ) {
-    bubble.textContent =
-      String(text);
-  }
+  bubble.textContent =
+    text || "";
 
-  wrapper.appendChild(roleText);
-  wrapper.appendChild(bubble);
 
-  messages.appendChild(wrapper);
-
-  scrollMessagesToBottom();
-
-  return wrapper;
-}
-
-function addImageMessage(
-  dataURI,
-  prompt = ""
-) {
-  if (!dataURI) {
-    return null;
-  }
-
-  const wrapper =
-    document.createElement("div");
-
-  wrapper.className =
-    "message assistant";
-
-  const roleText =
-    document.createElement("div");
-
-  roleText.className =
-    "message-role";
-
-  roleText.textContent =
-    "Нейро";
-
-  const bubble =
-    document.createElement("div");
-
-  bubble.className =
-    "message-bubble";
-
-  const image =
-    document.createElement("img");
-
-  image.src = dataURI;
-
-  image.alt =
-    prompt ||
-    "Сгенерированное изображение";
-
-  image.loading = "lazy";
-
-  image.style.display =
-    "block";
-
-  image.style.width =
-    "min(100%, 768px)";
-
-  image.style.maxHeight =
-    "70vh";
-
-  image.style.objectFit =
-    "contain";
-
-  image.style.borderRadius =
-    "16px";
-
-  image.style.border =
-    "1px solid rgba(255,255,255,.1)";
-
-  image.style.marginTop =
-    "4px";
-
-  bubble.appendChild(image);
-
-  wrapper.appendChild(roleText);
-  wrapper.appendChild(bubble);
-
-  messages.appendChild(wrapper);
-
-  scrollMessagesToBottom();
-
-  return wrapper;
-}
-
-function addToolResult(
-  response,
-  prompt,
-  tool
-) {
-  if (!response) {
-    addMessage(
-      "assistant",
-      "Инструмент не вернул результат."
-    );
-
-    return;
-  }
-
-  const imageData =
-    extractImageData(response);
-
-  if (
-    tool === "image" &&
-    imageData
-  ) {
-    addImageMessage(
-      imageData,
-      prompt
-    );
-
-    return;
-  }
-
-  const message =
-    response.message ||
-    response.answer ||
-    response.response ||
-    response.result?.message ||
-    response.result?.response ||
-    "";
-
-  if (message) {
-    addMessage(
-      "assistant",
-      message
-    );
-
-    return;
-  }
-
-  addMessage(
-    "assistant",
-    "Запрос обработан."
+  wrapper.append(
+    roleElement,
+    bubble
   );
+
+
+  $("messages").appendChild(
+    wrapper
+  );
+
+
+  return wrapper;
+
 }
 
-function extractImageData(
-  response
+
+function scrollBottom() {
+
+  const messages =
+    $("messages");
+
+  messages.scrollTop =
+    messages.scrollHeight;
+
+}
+
+
+function resizeTextarea(
+  textarea
 ) {
-  const candidates = [
-    response?.dataURI,
-    response?.dataUri,
-    response?.image,
-    response?.result?.dataURI,
-    response?.result?.dataUri,
-    response?.result?.image
-  ];
 
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
+  textarea.style.height =
+    "auto";
 
-    if (
-      typeof candidate === "string"
-    ) {
+  textarea.style.height =
+    `${Math.min(
+      textarea.scrollHeight,
+      180
+    )}px`;
+
+}
+
+
+/* MODELS */
+
+function setModel(
+  model
+) {
+
+  state.currentModel =
+    MODELS[model]
+      ? model
+      : "neuro";
+
+
+  $("modelButtonText").textContent =
+    MODELS[
+      state.currentModel
+    ];
+
+  $("chatModelButtonText").textContent =
+    MODELS[
+      state.currentModel
+    ];
+
+
+  hide("modelMenu");
+
+}
+
+
+function setupModelMenus() {
+
+  $("modelButton").onclick =
+    () => {
+
+      const menu =
+        $("modelMenu");
+
+      menu.hidden =
+        !menu.hidden;
+
+    };
+
+
+  $("chatModelButton").onclick =
+    () => {
+
+      const menu =
+        $("modelMenu");
+
+      menu.hidden =
+        !menu.hidden;
+
+    };
+
+
+  document
+    .querySelectorAll(
+      "#modelMenu [data-model]"
+    )
+    .forEach(
+      (button) => {
+
+        button.onclick =
+          () => {
+
+            setModel(
+              button.dataset.model
+            );
+
+          };
+
+      }
+    );
+
+
+  document.addEventListener(
+    "click",
+    (event) => {
+
       if (
-        candidate.startsWith(
-          "data:image/"
+        !event.target.closest(
+          "#modelMenu,#modelButton,#chatModelButton"
         )
       ) {
-        return candidate;
+
+        hide("modelMenu");
+
       }
 
-      return `data:image/jpeg;base64,${candidate}`;
     }
-  }
+  );
 
-  return null;
 }
 
-function scrollMessagesToBottom() {
-  if (!messages) {
-    return;
-  }
 
-  requestAnimationFrame(() => {
-    messages.scrollTop =
-      messages.scrollHeight;
-  });
-}
+/* SEND MESSAGE */
 
 async function sendMessage(
-  input,
-  chatMode = false
+  inputId
 ) {
-  if (
-    !input ||
-    state.sending
-  ) {
+
+  if (state.sending) {
     return;
   }
 
+
+  const input =
+    $(inputId);
+
   const text =
-    String(input.value || "")
-      .trim();
+    input.value.trim();
+
 
   if (!text) {
     return;
   }
 
-  state.sending = true;
 
-  input.value = "";
-  input.style.height = "auto";
+  state.sending =
+    true;
 
-  if (!chatMode) {
-    hide(homeScreen);
-    show(chatScreen);
-  }
+
+  const sendButton =
+    inputId === "messageInput"
+      ? $("sendButton")
+      : $("chatSendButton");
+
+
+  sendButton.disabled =
+    true;
+
+
+  hide("homeScreen");
+  show("chatScreen");
+
 
   addMessage(
     "user",
     text
   );
 
-  /*
-   * Сохраняем историю ДО создания
-   * индикатора загрузки.
-   * Поэтому "Нейро думает…"
-   * никогда не попадает в AI.
-   */
-  const history =
-    collectHistory(30);
+
+  input.value =
+    "";
+
+  resizeTextarea(
+    input
+  );
+
 
   const loading =
     addMessage(
@@ -630,696 +730,297 @@ async function sendMessage(
       }
     );
 
+
+  scrollBottom();
+
+
   try {
+
+    let chatId =
+      state.currentChatId;
+
+
     if (
       state.authenticated &&
-      !state.currentChatId &&
+      !chatId &&
       !state.temporaryChat
     ) {
-      const created =
-        await api(API.chats, {
-          method: "POST",
-          body: JSON.stringify({
-            title:
-              text.slice(0, 50) ||
-              "Новый чат",
-            model:
-              state.currentModel
-          })
-        });
 
-      state.currentChatId =
+      const created =
+        await api(
+          API.chats,
+          {
+            method: "POST",
+
+            body: JSON.stringify({
+              title:
+                text.slice(0, 60),
+
+              model:
+                state.currentModel
+            })
+          }
+        );
+
+
+      chatId =
         created.chat?.id ||
         null;
 
+      state.currentChatId =
+        chatId;
+
+
       await loadChats();
+
     }
 
-    const response =
-      await api(API.chat, {
-        method: "POST",
-        body: JSON.stringify({
-          model:
-            state.currentModel,
-          messages: history
-        })
-      });
+
+    const payload = {
+
+      message: text,
+
+      model:
+        state.currentModel,
+
+      chatId,
+
+      temporaryChat:
+        state.temporaryChat
+
+    };
+
+
+    const data =
+      await api(
+        API.chat,
+        {
+          method: "POST",
+
+          body:
+            JSON.stringify(
+              payload
+            )
+        }
+      );
+
 
     loading.remove();
 
+
     const answer =
-      response.message ||
-      response.answer ||
-      response.response ||
-      "";
+      data.message?.content ||
+      data.message ||
+      "Пустой ответ.";
+
 
     addMessage(
       "assistant",
-      answer ||
-        "Ответ получен."
+      answer
     );
+
+
+    scrollBottom();
+
 
     if (
       state.authenticated &&
-      state.currentChatId &&
       !state.temporaryChat
     ) {
-      await saveMessagePair(
-        state.currentChatId,
-        text,
-        answer
-      );
 
       await loadChats();
+
     }
+
   } catch (error) {
+
     loading.remove();
+
 
     addMessage(
       "assistant",
-      `Ошибка: ${
-        error?.message ||
-        "Не удалось получить ответ."
-      }`
+      `Ошибка: ${error.message}`
     );
+
+
+    scrollBottom();
+
   } finally {
-    state.sending = false;
 
-    input.focus();
-  }
-}
+    state.sending =
+      false;
 
-function collectHistory(limit = 30) {
-  return Array.from(
-    messages.querySelectorAll(
-      ".message"
-    )
-  )
-    .filter(
-      (element) =>
-        !element.dataset.loading
-    )
-    .slice(-limit)
-    .map((element) => ({
-      role:
-        element.classList.contains(
-          "user"
-        )
-          ? "user"
-          : "assistant",
+    sendButton.disabled =
+      false;
 
-      content:
-        element.querySelector(
-          ".message-bubble"
-        )?.textContent || ""
-    }))
-    .filter(
-      (message) =>
-        message.content.trim()
-    );
-}
-
-async function saveMessagePair(
-  chatId,
-  userText,
-  assistantText
-) {
-  await api(
-    `/api/chats/${encodeURIComponent(
-      chatId
-    )}/messages`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        role: "user",
-        content: userText
-      })
-    }
-  );
-
-  if (assistantText) {
-    await api(
-      `/api/chats/${encodeURIComponent(
-        chatId
-      )}/messages`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          role: "assistant",
-          content:
-            assistantText
-        })
-      }
-    );
-  }
-}
-
-function resizeTextarea(input) {
-  if (!input) {
-    return;
   }
 
-  input.style.height = "auto";
-
-  input.style.height =
-    `${Math.min(
-      input.scrollHeight,
-      180
-    )}px`;
 }
+
+
+/* COMPOSER */
 
 function setupComposer(
-  input,
-  button,
-  chatMode
+  inputId,
+  buttonId
 ) {
-  if (!input || !button) {
-    return;
-  }
+
+  const input =
+    $(inputId);
+
+  const button =
+    $(buttonId);
+
 
   input.addEventListener(
     "input",
     () => {
-      resizeTextarea(input);
+      resizeTextarea(
+        input
+      );
     }
   );
+
 
   input.addEventListener(
     "keydown",
     (event) => {
+
       if (
         event.key === "Enter" &&
         !event.shiftKey
       ) {
+
         event.preventDefault();
 
         sendMessage(
-          input,
-          chatMode
+          inputId
         );
+
       }
+
     }
   );
 
-  button.addEventListener(
-    "click",
+
+  button.onclick =
     () => {
+
       sendMessage(
-        input,
-        chatMode
-      );
-    }
-  );
-}
-
-function setModel(model) {
-  if (
-    !MODEL_NAMES[model]
-  ) {
-    model = "neuro";
-  }
-
-  state.currentModel =
-    model;
-
-  const name =
-    getModelName(model);
-
-  const modelButtonText =
-    $("modelButtonText");
-
-  const chatModelButtonText =
-    $("chatModelButtonText");
-
-  if (modelButtonText) {
-    modelButtonText.textContent =
-      name;
-  }
-
-  if (chatModelButtonText) {
-    chatModelButtonText.textContent =
-      name;
-  }
-
-  hide($("modelMenu"));
-}
-
-function getModelName(model) {
-  return (
-    MODEL_NAMES[model] ||
-    "Нейро"
-  );
-}
-
-function toggleModelMenu() {
-  const menu =
-    $("modelMenu");
-
-  if (!menu) {
-    return;
-  }
-
-  menu.hidden =
-    !menu.hidden;
-}
-
-function openAuth(
-  mode = "login"
-) {
-  state.authMode =
-    mode;
-
-  const title =
-    $("authTitle");
-
-  const submit =
-    $("authSubmitButton");
-
-  const switchButton =
-    $("authSwitchButton");
-
-  const error =
-    $("authError");
-
-  if (title) {
-    title.textContent =
-      mode === "login"
-        ? "Войти"
-        : "Создать аккаунт";
-  }
-
-  if (submit) {
-    submit.textContent =
-      mode === "login"
-        ? "Войти"
-        : "Создать аккаунт";
-  }
-
-  if (switchButton) {
-    switchButton.textContent =
-      mode === "login"
-        ? "Создать аккаунт"
-        : "У меня уже есть аккаунт";
-  }
-
-  if (error) {
-    error.textContent = "";
-  }
-
-  openModal("authModal");
-
-  requestAnimationFrame(() => {
-    $("authUsername")?.focus();
-  });
-}
-
-async function submitAuth() {
-  const username =
-    $("authUsername")
-      ?.value
-      .trim();
-
-  const password =
-    $("authPassword")
-      ?.value || "";
-
-  const error =
-    $("authError");
-
-  if (error) {
-    error.textContent = "";
-  }
-
-  if (!username) {
-    if (error) {
-      error.textContent =
-        "Введите имя пользователя.";
-    }
-
-    return;
-  }
-
-  if (!password) {
-    if (error) {
-      error.textContent =
-        "Введите пароль.";
-    }
-
-    return;
-  }
-
-  try {
-    const data =
-      await api(
-        state.authMode === "login"
-          ? API.login
-          : API.register,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            username,
-            password
-          })
-        }
+        inputId
       );
 
-    setAuth(data.user);
-
-    closeModal(
-      "authModal"
-    );
-
-    $("authPassword").value =
-      "";
-
-    await Promise.all([
-      loadChats(),
-      loadSettings()
-    ]);
-  } catch (requestError) {
-    if (error) {
-      error.textContent =
-        requestError.message;
-    }
-  }
-}
-
-async function doLogout() {
-  try {
-    await api(
-      API.logout,
-      {
-        method: "POST"
-      }
-    );
-  } catch {
-    // Локальное состояние
-    // очищается в любом случае.
-  }
-
-  setAuth(null);
-
-  state.currentChatId =
-    null;
-
-  state.chats = [];
-
-  state.temporaryChat =
-    false;
-
-  renderChats();
-
-  closeModal(
-    "profileModal"
-  );
-
-  messages.innerHTML = "";
-
-  show(homeScreen);
-  hide(chatScreen);
-}
-
-async function loadSettings() {
-  if (!state.authenticated) {
-    return;
-  }
-
-  try {
-    const [
-      settingsData,
-      permissionsData,
-      pluginsData
-    ] = await Promise.all([
-      api(API.settings),
-      api(API.permissions),
-      api(API.plugins)
-    ]);
-
-    const settings =
-      settingsData.settings || {};
-
-    state.temporaryChat =
-      Boolean(
-        settings.temporaryChat
-      );
-
-    setChecked(
-      "temporaryChatToggle",
-      state.temporaryChat
-    );
-
-    const keys =
-      settings.apiKeys || {};
-
-    setValue(
-      "openaiKey",
-      keys.openai || ""
-    );
-
-    setValue(
-      "googleKey",
-      keys.google || ""
-    );
-
-    setValue(
-      "xaiKey",
-      keys.xai || ""
-    );
-
-    setValue(
-      "aliceKey",
-      keys.alice || ""
-    );
-
-    const permissions =
-      permissionsData.permissions ||
-      {};
-
-    setChecked(
-      "permissionFiles",
-      Boolean(
-        permissions.files
-      )
-    );
-
-    setChecked(
-      "permissionMicrophone",
-      Boolean(
-        permissions.microphone
-      )
-    );
-
-    setChecked(
-      "permissionExternal",
-      Boolean(
-        permissions.external
-      )
-    );
-
-    const plugins =
-      pluginsData.plugins || {};
-
-    setChecked(
-      "pluginGithub",
-      Boolean(
-        plugins.github
-      )
-    );
-
-    setChecked(
-      "pluginGoogle",
-      Boolean(
-        plugins.google
-      )
-    );
-
-    setChecked(
-      "pluginChatGPT",
-      Boolean(
-        plugins.chatgpt
-      )
-    );
-
-    setChecked(
-      "pluginGrok",
-      Boolean(
-        plugins.grok
-      )
-    );
-  } catch (error) {
-    console.error(
-      "Ошибка загрузки настроек:",
-      error
-    );
-  }
-}
-
-function setChecked(
-  id,
-  value
-) {
-  const element = $(id);
-
-  if (element) {
-    element.checked =
-      Boolean(value);
-  }
-}
-
-function setValue(
-  id,
-  value
-) {
-  const element = $(id);
-
-  if (element) {
-    element.value =
-      String(value ?? "");
-  }
-}
-
-async function saveAllSettings() {
-  if (!state.authenticated) {
-    openAuth();
-    return;
-  }
-
-  const settings =
-    {
-      temporaryChat:
-        Boolean(
-          $("temporaryChatToggle")
-            ?.checked
-        ),
-
-      apiKeys: {
-        openai:
-          $("openaiKey")
-            ?.value
-            .trim() || "",
-
-        google:
-          $("googleKey")
-            ?.value
-            .trim() || "",
-
-        xai:
-          $("xaiKey")
-            ?.value
-            .trim() || "",
-
-        alice:
-          $("aliceKey")
-            ?.value
-            .trim() || ""
-      }
     };
 
-  const permissions = {
-    files:
-      Boolean(
-        $("permissionFiles")
-          ?.checked
-      ),
-
-    microphone:
-      Boolean(
-        $("permissionMicrophone")
-          ?.checked
-      ),
-
-    external:
-      Boolean(
-        $("permissionExternal")
-          ?.checked
-      )
-  };
-
-  const plugins = {
-    github:
-      Boolean(
-        $("pluginGithub")
-          ?.checked
-      ),
-
-    google:
-      Boolean(
-        $("pluginGoogle")
-          ?.checked
-      ),
-
-    chatgpt:
-      Boolean(
-        $("pluginChatGPT")
-          ?.checked
-      ),
-
-    grok:
-      Boolean(
-        $("pluginGrok")
-          ?.checked
-      )
-  };
-
-  await api(
-    API.settings,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        settings
-      })
-    }
-  );
-
-  await api(
-    API.permissions,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        permissions
-      })
-    }
-  );
-
-  await api(
-    API.plugins,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        plugins
-      })
-    }
-  );
-
-  state.temporaryChat =
-    settings.temporaryChat;
 }
 
-function setupVoice(
-  button,
-  input
-) {
-  if (!button || !input) {
-    return;
-  }
 
-  button.addEventListener(
-    "click",
+/* FILES */
+
+function setupFiles(
+  buttonId,
+  inputId
+) {
+
+  const button =
+    $(buttonId);
+
+  const input =
+    $(inputId);
+
+
+  button.onclick =
     () => {
+
+      input.click();
+
+    };
+
+
+  input.onchange =
+    () => {
+
+      const files =
+        [
+          ...input.files
+        ];
+
+
+      if (!files.length) {
+        return;
+      }
+
+
+      const target =
+        button
+          .closest(
+            ".composer"
+          )
+          .querySelector(
+            "textarea"
+          );
+
+
+      const names =
+        files
+          .map(
+            (file) =>
+              file.name
+          )
+          .join(", ");
+
+
+      target.value +=
+        target.value
+          ? `\n\n[Файлы: ${names}]`
+          : `[Файлы: ${names}]`;
+
+
+      resizeTextarea(
+        target
+      );
+
+
+      target.focus();
+
+
+      input.value =
+        "";
+
+    };
+
+}
+
+
+/* VOICE */
+
+function setupVoice(
+  buttonId,
+  inputId
+) {
+
+  $(buttonId).onclick =
+    () => {
+
       const Recognition =
         window.SpeechRecognition ||
         window.webkitSpeechRecognition;
 
+
       if (!Recognition) {
+
         alert(
           "Голосовой ввод не поддерживается этим браузером."
         );
 
         return;
+
       }
+
 
       const recognition =
         new Recognition();
+
 
       recognition.lang =
         "ru-RU";
@@ -1330,106 +1031,560 @@ function setupVoice(
       recognition.continuous =
         false;
 
+
       recognition.onresult =
         (event) => {
-          const transcript =
-            event
-              ?.results?.[0]?.[0]
-              ?.transcript || "";
 
-          if (!transcript) {
+          const text =
+            event
+              .results?.[0]?.[0]
+              ?.transcript ||
+            "";
+
+
+          if (!text) {
             return;
           }
 
-          input.value =
-            input.value
-              ? `${input.value} ${transcript}`
-              : transcript;
 
-          resizeTextarea(input);
+          const input =
+            $(inputId);
+
+
+          input.value +=
+            input.value
+              ? ` ${text}`
+              : text;
+
+
+          resizeTextarea(
+            input
+          );
+
 
           input.focus();
+
         };
 
-      recognition.onerror =
-        (event) => {
-          console.error(
-            "SpeechRecognition:",
-            event.error
-          );
-        };
 
       try {
+
         recognition.start();
-      } catch (error) {
-        console.error(
-          "Не удалось запустить микрофон:",
-          error
-        );
+
+      } catch {
+
+        // Браузер не дал повторно
+        // запустить распознавание.
       }
-    }
-  );
+
+    };
+
 }
 
-function setupFiles(
-  button,
-  input
+
+/* AUTH */
+
+function openAuth(
+  mode = "login"
 ) {
-  if (!button || !input) {
+
+  state.authMode =
+    mode;
+
+
+  $("authTitle").textContent =
+    mode === "login"
+      ? "Войти"
+      : "Создать аккаунт";
+
+
+  $("authSubmitButton").textContent =
+    mode === "login"
+      ? "Войти"
+      : "Зарегистрироваться";
+
+
+  $("authSwitchButton").textContent =
+    mode === "login"
+      ? "Создать аккаунт"
+      : "У меня уже есть аккаунт";
+
+
+  $("authPasswordConfirm").hidden =
+    mode === "login";
+
+
+  $("authError").textContent =
+    "";
+
+
+  openModal(
+    "authModal"
+  );
+
+
+  $("authUsername").focus();
+
+}
+
+
+async function submitAuth() {
+
+  const username =
+    $("authUsername")
+      .value
+      .trim();
+
+
+  const password =
+    $("authPassword")
+      .value;
+
+
+  const confirm =
+    $("authPasswordConfirm")
+      .value;
+
+
+  $("authError").textContent =
+    "";
+
+
+  if (
+    !username ||
+    !password
+  ) {
+
+    $("authError").textContent =
+      "Введите имя пользователя и пароль.";
+
     return;
+
   }
 
-  button.addEventListener(
-    "click",
-    () => {
-      input.click();
-    }
-  );
 
-  input.addEventListener(
-    "change",
-    () => {
-      const files =
-        Array.from(
-          input.files || []
-        );
+  if (
+    state.authMode ===
+      "register" &&
+    password !== confirm
+  ) {
 
-      if (!files.length) {
-        return;
-      }
+    $("authError").textContent =
+      "Пароли не совпадают.";
 
-      const names =
-        files
-          .map(
-            (file) =>
-              file.name
-          )
-          .join(", ");
+    return;
 
-      const target =
-        button
-          .closest(".composer")
-          ?.querySelector(
-            "textarea"
-          );
+  }
 
-      if (target) {
-        target.value +=
-          target.value
-            ? `\n\n[Файлы: ${names}]`
-            : `[Файлы: ${names}]`;
 
-        resizeTextarea(target);
-        target.focus();
-      }
+  const button =
+    $("authSubmitButton");
 
-      input.value = "";
-    }
-  );
+
+  button.disabled =
+    true;
+
+
+  try {
+
+    const data =
+      await api(
+        state.authMode ===
+          "login"
+          ? API.login
+          : API.register,
+        {
+          method: "POST",
+
+          body:
+            JSON.stringify({
+              username,
+              password
+            })
+        }
+      );
+
+
+    setAuth(
+      data.user
+    );
+
+
+    closeModal(
+      "authModal"
+    );
+
+
+    await loadChats();
+
+    await loadSettings();
+
+  } catch (error) {
+
+    $("authError").textContent =
+      error.message;
+
+  } finally {
+
+    button.disabled =
+      false;
+
+  }
+
 }
 
-const toolInfo = {
+
+async function logout() {
+
+  try {
+
+    await api(
+      API.logout,
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({})
+      }
+    );
+
+  } catch {
+    // Сбрасываем интерфейс даже
+    // если сервер недоступен.
+  }
+
+
+  setAuth(
+    null
+  );
+
+
+  state.chats =
+    [];
+
+
+  renderChats();
+
+
+  closeAllModals();
+
+}
+
+
+/* SETTINGS */
+
+function setChecked(
+  id,
+  value
+) {
+
+  const element =
+    $(id);
+
+  if (element) {
+
+    element.checked =
+      Boolean(value);
+
+  }
+
+}
+
+
+function setValue(
+  id,
+  value
+) {
+
+  const element =
+    $(id);
+
+  if (element) {
+
+    element.value =
+      String(
+        value ?? ""
+      );
+
+  }
+
+}
+
+
+async function loadSettings() {
+
+  if (
+    !state.authenticated
+  ) {
+
+    return;
+
+  }
+
+
+  try {
+
+    const [
+      settingsData,
+      permissionsData,
+      pluginsData
+    ] =
+      await Promise.all([
+        api(API.settings),
+        api(API.permissions),
+        api(API.plugins)
+      ]);
+
+
+    const settings =
+      settingsData.settings ||
+      {};
+
+
+    const keys =
+      settings.apiKeys ||
+      {};
+
+
+    state.temporaryChat =
+      Boolean(
+        settings.temporaryChat
+      );
+
+
+    setChecked(
+      "temporaryChatToggle",
+      state.temporaryChat
+    );
+
+
+    setValue(
+      "openaiKey",
+      keys.openai
+    );
+
+    setValue(
+      "googleKey",
+      keys.google
+    );
+
+    setValue(
+      "xaiKey",
+      keys.xai
+    );
+
+    setValue(
+      "aliceKey",
+      keys.alice
+    );
+
+
+    const permissions =
+      permissionsData.permissions ||
+      {};
+
+
+    setChecked(
+      "permissionFiles",
+      permissions.files
+    );
+
+    setChecked(
+      "permissionMicrophone",
+      permissions.microphone
+    );
+
+    setChecked(
+      "permissionExternal",
+      permissions.external
+    );
+
+
+    const plugins =
+      pluginsData.plugins ||
+      {};
+
+
+    setChecked(
+      "pluginGithub",
+      plugins.github
+    );
+
+    setChecked(
+      "pluginGoogle",
+      plugins.google
+    );
+
+    setChecked(
+      "pluginChatGPT",
+      plugins.chatgpt
+    );
+
+    setChecked(
+      "pluginGrok",
+      plugins.grok
+    );
+
+  } catch {
+    // Настройки не должны ломать UI.
+  }
+
+}
+
+
+async function saveSettings() {
+
+  if (
+    !state.authenticated
+  ) {
+
+    openAuth();
+
+    return;
+
+  }
+
+
+  const settings = {
+
+    temporaryChat:
+      $("temporaryChatToggle")
+        .checked,
+
+    apiKeys: {
+
+      openai:
+        $("openaiKey")
+          .value
+          .trim(),
+
+      google:
+        $("googleKey")
+          .value
+          .trim(),
+
+      xai:
+        $("xaiKey")
+          .value
+          .trim(),
+
+      alice:
+        $("aliceKey")
+          .value
+          .trim()
+
+    }
+
+  };
+
+
+  const permissions = {
+
+    files:
+      $("permissionFiles")
+        .checked,
+
+    microphone:
+      $("permissionMicrophone")
+        .checked,
+
+    external:
+      $("permissionExternal")
+        .checked
+
+  };
+
+
+  const plugins = {
+
+    github:
+      $("pluginGithub")
+        .checked,
+
+    google:
+      $("pluginGoogle")
+        .checked,
+
+    chatgpt:
+      $("pluginChatGPT")
+        .checked,
+
+    grok:
+      $("pluginGrok")
+        .checked
+
+  };
+
+
+  $("settingsError").textContent =
+    "";
+
+
+  try {
+
+    await api(
+      API.settings,
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            settings
+          })
+      }
+    );
+
+
+    await api(
+      API.permissions,
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            permissions
+          })
+      }
+    );
+
+
+    await api(
+      API.plugins,
+      {
+        method: "POST",
+
+        body:
+          JSON.stringify({
+            plugins
+          })
+      }
+    );
+
+
+    state.temporaryChat =
+      settings.temporaryChat;
+
+
+    closeModal(
+      "settingsModal"
+    );
+
+  } catch (error) {
+
+    $("settingsError").textContent =
+      error.message;
+
+  }
+
+}
+
+
+/* TOOLS */
+
+const TOOLS = {
+
   image: {
+
     title:
       "Создание изображения",
 
@@ -1438,9 +1593,12 @@ const toolInfo = {
 
     endpoint:
       API.image
+
   },
 
+
   video: {
+
     title:
       "Создание видео",
 
@@ -1449,9 +1607,12 @@ const toolInfo = {
 
     endpoint:
       API.video
+
   },
 
+
   music: {
+
     title:
       "Создание музыки",
 
@@ -1460,9 +1621,12 @@ const toolInfo = {
 
     endpoint:
       API.music
+
   },
 
+
   "3d": {
+
     title:
       "Создание 3D-модели",
 
@@ -1471,9 +1635,12 @@ const toolInfo = {
 
     endpoint:
       API.model3d
+
   },
 
+
   website: {
+
     title:
       "Создание сайта",
 
@@ -1482,488 +1649,537 @@ const toolInfo = {
 
     endpoint:
       API.chat
+
   }
+
 };
 
-function openTool(tool) {
+
+function openTool(
+  tool
+) {
+
   const info =
-    toolInfo[tool];
+    TOOLS[tool];
+
 
   if (!info) {
     return;
   }
 
+
   state.selectedTool =
     tool;
+
 
   $("toolTitle").textContent =
     info.title;
 
+
   $("toolDescription").textContent =
     info.description;
+
 
   $("toolPrompt").value =
     "";
 
+
   $("toolError").textContent =
     "";
+
 
   openModal(
     "toolModal"
   );
 
-  requestAnimationFrame(() => {
-    $("toolPrompt")
-      ?.focus();
-  });
+
+  $("toolPrompt").focus();
+
 }
 
+
 async function runTool() {
-  const tool =
-    state.selectedTool;
 
   const info =
-    toolInfo[tool];
+    TOOLS[
+      state.selectedTool
+    ];
 
-  if (!info) {
-    return;
-  }
 
   const prompt =
     $("toolPrompt")
-      ?.value
+      .value
       .trim();
 
-  const errorElement =
-    $("toolError");
 
-  if (!prompt) {
-    if (errorElement) {
-      errorElement.textContent =
-        "Введите описание.";
-    }
+  if (
+    !info ||
+    !prompt
+  ) {
 
     return;
+
   }
 
-  if (errorElement) {
-    errorElement.textContent =
-      "Выполняю…";
-  }
+
+  $("toolError").textContent =
+    "";
+
+
+  const button =
+    $("toolRunButton");
+
+
+  button.disabled =
+    true;
+
+
+  button.textContent =
+    "Выполняется…";
+
 
   try {
-    if (tool === "website") {
-      closeModal(
-        "toolModal"
-      );
 
-      hide(homeScreen);
-      show(chatScreen);
+    let data;
 
-      const websiteInput = {
-        value:
-          `Создай сайт по этому описанию:\n${prompt}`,
-        style: {
-          height: "auto"
-        }
-      };
 
-      await sendMessage(
-        websiteInput,
-        true
-      );
+    if (
+      state.selectedTool ===
+      "website"
+    ) {
 
-      return;
+      data =
+        await api(
+          info.endpoint,
+          {
+            method: "POST",
+
+            body:
+              JSON.stringify({
+                message:
+                  prompt,
+
+                model:
+                  "neuro",
+
+                chatId:
+                  null,
+
+                temporaryChat:
+                  true
+              })
+          }
+        );
+
+    } else {
+
+      data =
+        await api(
+          info.endpoint,
+          {
+            method: "POST",
+
+            body:
+              JSON.stringify({
+                prompt
+              })
+          }
+        );
+
     }
 
-    const response =
-      await api(
-        info.endpoint,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            prompt
-          })
-        }
-      );
 
     closeModal(
       "toolModal"
     );
 
-    hide(homeScreen);
-    show(chatScreen);
 
-    addToolResult(
-      response,
-      prompt,
-      tool
+    hide(
+      "homeScreen"
     );
-  } catch (error) {
-    if (errorElement) {
-      errorElement.textContent =
-        error.message ||
-        "Не удалось выполнить действие.";
+
+    show(
+      "chatScreen"
+    );
+
+
+    if (
+      data.dataURI
+    ) {
+
+      const message =
+        addMessage(
+          "assistant",
+          "Изображение создано."
+        );
+
+
+      const image =
+        document.createElement(
+          "img"
+        );
+
+
+      image.src =
+        data.dataURI;
+
+
+      image.className =
+        "generated-image";
+
+
+      message
+        .querySelector(
+          ".message-bubble"
+        )
+        .appendChild(
+          image
+        );
+
+    } else {
+
+      addMessage(
+        "assistant",
+        data.message?.content ||
+        data.message ||
+        "Запрос выполнен."
+      );
+
     }
+
+
+    scrollBottom();
+
+  } catch (error) {
+
+    $("toolError").textContent =
+      error.message;
+
+  } finally {
+
+    button.disabled =
+      false;
+
+    button.textContent =
+      "Запустить";
+
   }
+
 }
 
+
+/* UI */
+
 function setupUI() {
-  $("newChatButton")
-    ?.addEventListener(
-      "click",
-      createNewChat
-    );
 
-  $("settingsButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        if (!state.authenticated) {
-          openAuth();
-          return;
-        }
+  $("openSidebarButton").onclick =
+    () => {
 
-        openModal(
-          "settingsModal"
-        );
+      document.body.classList.add(
+        "sidebar-open"
+      );
+
+    };
+
+
+  $("closeSidebarButton").onclick =
+    () => {
+
+      document.body.classList.remove(
+        "sidebar-open"
+      );
+
+    };
+
+
+  $("newChatButton").onclick =
+    () => {
+
+      document.body.classList.remove(
+        "sidebar-open"
+      );
+
+      createNewChat();
+
+    };
+
+
+  $("settingsButton").onclick =
+    () => {
+
+      if (
+        !state.authenticated
+      ) {
+
+        openAuth();
+
+        return;
+
       }
-    );
 
-  $("profileButton")
-    ?.addEventListener(
-      "click",
-      () => {
+      openModal(
+        "settingsModal"
+      );
+
+    };
+
+
+  $("profileButton").onclick =
+    () => {
+
+      openModal(
+        "profileModal"
+      );
+
+    };
+
+
+  $("accountButton").onclick =
+    () => {
+
+      if (
+        state.authenticated
+      ) {
+
         openModal(
           "profileModal"
         );
+
+      } else {
+
+        openAuth();
+
       }
-    );
 
-  $("accountButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        if (state.authenticated) {
-          openModal(
-            "profileModal"
-          );
-        } else {
-          openAuth();
-        }
-      }
-    );
+    };
 
-  $("profileAuthButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        if (!state.authenticated) {
-          closeModal(
-            "profileModal"
-          );
 
-          openAuth();
-        }
-      }
-    );
+  $("profileAuthButton").onclick =
+    () => {
 
-  $("logoutButton")
-    ?.addEventListener(
-      "click",
-      doLogout
-    );
-
-  $("authSubmitButton")
-    ?.addEventListener(
-      "click",
-      submitAuth
-    );
-
-  $("authSwitchButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        openAuth(
-          state.authMode ===
-            "login"
-            ? "register"
-            : "login"
-        );
-      }
-    );
-
-  $("continueGuestButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        closeModal(
-          "authModal"
-        );
-      }
-    );
-
-  $("authPassword")
-    ?.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key === "Enter"
-        ) {
-          event.preventDefault();
-          submitAuth();
-        }
-      }
-    );
-
-  $("modelButton")
-    ?.addEventListener(
-      "click",
-      toggleModelMenu
-    );
-
-  $("chatModelButton")
-    ?.addEventListener(
-      "click",
-      toggleModelMenu
-    );
-
-  document
-    .querySelectorAll(
-      "#modelMenu button"
-    )
-    .forEach((button) => {
-      button.addEventListener(
-        "click",
-        () => {
-          setModel(
-            button.dataset.model
-          );
-        }
+      closeModal(
+        "profileModal"
       );
-    });
+
+      if (
+        !state.authenticated
+      ) {
+
+        openAuth();
+
+      }
+
+    };
+
+
+  $("logoutButton").onclick =
+    logout;
+
+
+  $("authSubmitButton").onclick =
+    submitAuth;
+
+
+  $("authSwitchButton").onclick =
+    () => {
+
+      openAuth(
+        state.authMode ===
+          "login"
+          ? "register"
+          : "login"
+      );
+
+    };
+
+
+  $("continueGuestButton").onclick =
+    () => {
+
+      closeModal(
+        "authModal"
+      );
+
+    };
+
+
+  $("saveSettingsButton").onclick =
+    saveSettings;
+
+
+  $("temporaryChatToggle").onchange =
+    (event) => {
+
+      state.temporaryChat =
+        event.target.checked;
+
+    };
+
+
+  $("toolRunButton").onclick =
+    runTool;
+
 
   document
     .querySelectorAll(
       "[data-close]"
     )
-    .forEach((button) => {
-      button.addEventListener(
-        "click",
-        () => {
-          closeModal(
-            button.dataset.close
-          );
-        }
-      );
-    });
+    .forEach(
+      (button) => {
+
+        button.onclick =
+          () => {
+
+            closeModal(
+              button.dataset.close
+            );
+
+          };
+
+      }
+    );
+
 
   document
     .querySelectorAll(
       ".modal-overlay"
     )
-    .forEach((overlay) => {
-      overlay.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target ===
-            overlay
-          ) {
-            closeModal(
-              overlay.id
-            );
+    .forEach(
+      (modal) => {
+
+        modal.addEventListener(
+          "click",
+          (event) => {
+
+            if (
+              event.target ===
+              modal
+            ) {
+
+              closeModal(
+                modal.id
+              );
+
+            }
+
           }
-        }
-      );
-    });
+        );
+
+      }
+    );
+
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+
+      if (
+        event.key ===
+        "Escape"
+      ) {
+
+        closeAllModals();
+
+      }
+
+    }
+  );
+
 
   document
     .querySelectorAll(
       ".tool-button"
     )
-    .forEach((button) => {
-      button.addEventListener(
-        "click",
-        () => {
-          openTool(
-            button.dataset.tool
-          );
-        }
-      );
-    });
+    .forEach(
+      (button) => {
 
-  $("toolRunButton")
-    ?.addEventListener(
-      "click",
-      runTool
-    );
+        button.onclick =
+          () => {
 
-  $("toolPrompt")
-    ?.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key === "Enter" &&
-          (event.metaKey ||
-            event.ctrlKey)
-        ) {
-          event.preventDefault();
-          runTool();
-        }
+            openTool(
+              button.dataset.tool
+            );
+
+          };
+
       }
     );
 
-  $("saveSettingsButton")
-    ?.addEventListener(
-      "click",
-      async () => {
-        const button =
-          $("saveSettingsButton");
-
-        if (button) {
-          button.disabled = true;
-          button.textContent =
-            "Сохранение…";
-        }
-
-        try {
-          await saveAllSettings();
-
-          closeModal(
-            "settingsModal"
-          );
-        } catch (error) {
-          alert(
-            error.message ||
-            "Не удалось сохранить настройки."
-          );
-        } finally {
-          if (button) {
-            button.disabled =
-              false;
-
-            button.textContent =
-              "Сохранить настройки";
-          }
-        }
-      }
-    );
-
-  $("openSidebarButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        $("sidebar")
-          ?.classList
-          .add("open");
-      }
-    );
-
-  $("closeSidebarButton")
-    ?.addEventListener(
-      "click",
-      () => {
-        $("sidebar")
-          ?.classList
-          .remove("open");
-      }
-    );
-
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (
-        event.key === "Escape"
-      ) {
-        closeAllModals();
-
-        $("modelMenu").hidden =
-          true;
-
-        $("sidebar")
-          ?.classList
-          .remove("open");
-      }
-    }
-  );
-
-  document.addEventListener(
-    "click",
-    (event) => {
-      const menu =
-        $("modelMenu");
-
-      if (
-        menu &&
-        !menu.hidden &&
-        !event.target.closest(
-          "#modelMenu"
-        ) &&
-        !event.target.closest(
-          "#modelButton"
-        ) &&
-        !event.target.closest(
-          "#chatModelButton"
-        )
-      ) {
-        menu.hidden = true;
-      }
-    }
-  );
 }
 
-function initialize() {
-  setupComposer(
-    $("messageInput"),
-    $("sendButton"),
-    false
-  );
 
-  setupComposer(
-    $("chatMessageInput"),
-    $("chatSendButton"),
-    true
-  );
+/* INIT */
 
-  setupVoice(
-    $("voiceButton"),
-    $("messageInput")
-  );
-
-  setupVoice(
-    $("chatVoiceButton"),
-    $("chatMessageInput")
-  );
-
-  setupFiles(
-    $("attachButton"),
-    $("fileInput")
-  );
-
-  setupFiles(
-    $("chatAttachButton"),
-    $("chatFileInput")
-  );
+async function init() {
 
   setupUI();
 
-  setModel("neuro");
+  setupModelMenus();
 
-  loadSession();
+
+  setupComposer(
+    "messageInput",
+    "sendButton"
+  );
+
+
+  setupComposer(
+    "chatMessageInput",
+    "chatSendButton"
+  );
+
+
+  setupFiles(
+    "attachButton",
+    "fileInput"
+  );
+
+
+  setupFiles(
+    "chatAttachButton",
+    "chatFileInput"
+  );
+
+
+  setupVoice(
+    "voiceButton",
+    "messageInput"
+  );
+
+
+  setupVoice(
+    "chatVoiceButton",
+    "chatMessageInput"
+  );
+
+
+  setModel(
+    "neuro"
+  );
+
+
+  setAuth(
+    null
+  );
+
+
+  await loadSession();
+
 }
+
 
 if (
   document.readyState ===
   "loading"
 ) {
+
   document.addEventListener(
     "DOMContentLoaded",
-    initialize,
-    {
-      once: true
-    }
+    init
   );
+
 } else {
-  initialize();
+
+  init();
+
 }
