@@ -2,8 +2,8 @@
   "name": "neuro-chat",
   "version": "2.0.0",
   "private": true,
-  "description": "Нейро-чат — AI-чат с несколькими AI-провайдерами.",
   "type": "module",
+  "description": "Нейро-чат — AI чат на Cloudflare Workers.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
