@@ -1,451 +1,464 @@
-/**
- * Нейро-чат
- * router.js
- *
- * Центральная маршрутизация API.
- *
- * ВАЖНО:
- * - Этот файл не отвечает за HTML.
- * - Все API-ошибки возвращаются в JSON.
- * - Методы проверяются до передачи запроса обработчику.
- * - Следующие модули (#5–#8) подключаются через переданный объект handlers.
- */
+import {
+  auth
+} from "./auth.js";
 
-/**
- * Создаёт JSON-ответ.
- *
- * @param {unknown} data
- * @param {number} status
- * @param {HeadersInit} extraHeaders
- * @returns {Response}
- */
-export function jsonResponse(data, status = 200, extraHeaders = {}) {
-  const headers = new Headers({
-    "Content-Type": "application/json; charset=UTF-8",
-    "Cache-Control": "no-store",
-    ...extraHeaders,
-  });
-
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store"
+    }
   });
 }
 
-/**
- * Создаёт стандартный API-ответ с ошибкой.
- *
- * @param {string} message
- * @param {number} status
- * @param {string} [code]
- * @param {unknown} [details]
- * @returns {Response}
- */
-export function errorResponse(
-  message,
-  status = 500,
-  code = "INTERNAL_ERROR",
-  details = undefined,
-) {
-  const body = {
-    ok: false,
-    error: {
-      code,
-      message,
-    },
-  };
-
-  if (details !== undefined) {
-    body.error.details = details;
-  }
-
-  return jsonResponse(body, status);
-}
-
-/**
- * Создаёт стандартный успешный API-ответ.
- *
- * @param {unknown} data
- * @param {number} status
- * @returns {Response}
- */
-export function successResponse(data = {}, status = 200) {
-  return jsonResponse(
+function error(message, status = 400) {
+  return json(
     {
-      ok: true,
-      ...data,
+      ok: false,
+      error: message
     },
-    status,
+    status
   );
 }
 
-/**
- * Проверяет, является ли запрос API-запросом.
- *
- * @param {URL} url
- * @returns {boolean}
- */
-export function isApiRequest(url) {
-  return url.pathname === "/api" || url.pathname.startsWith("/api/");
-}
-
-/**
- * Нормализует HTTP-метод.
- *
- * @param {Request} request
- * @returns {string}
- */
-function getMethod(request) {
-  return request.method.toUpperCase();
-}
-
-/**
- * Безопасно получает путь.
- *
- * @param {Request} request
- * @returns {string}
- */
-function getPath(request) {
+async function readJson(request) {
   try {
-    return new URL(request.url).pathname;
+    return await request.json();
   } catch {
-    return "";
+    return {};
   }
 }
 
-/**
- * Проверяет разрешённый HTTP-метод.
- *
- * @param {Request} request
- * @param {string[]} methods
- * @returns {Response|null}
- */
-function checkMethod(request, methods) {
-  const method = getMethod(request);
+function withCors(response) {
+  const headers = new Headers(response.headers);
 
-  if (methods.includes(method)) {
-    return null;
-  }
-
-  return errorResponse(
-    `Метод ${method} не поддерживается для этого API-маршрута.`,
-    405,
-    "METHOD_NOT_ALLOWED",
-    {
-      allowedMethods: methods,
-    },
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  headers.set(
+    "access-control-allow-headers",
+    "Content-Type, Authorization"
   );
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
-/**
- * Вызывает обработчик и преобразует неожиданные ошибки
- * в нормальный JSON-ответ.
- *
- * @param {Function} handler
- * @param {Request} request
- * @param {object} env
- * @param {object} ctx
- * @returns {Promise<Response>}
- */
-async function executeHandler(handler, request, env, ctx) {
-  try {
-    const result = await handler(request, env, ctx);
+function notFound() {
+  return error("API-маршрут не найден.", 404);
+}
 
-    if (result instanceof Response) {
-      return result;
+function methodNotAllowed() {
+  return error("Метод запроса не поддерживается.", 405);
+}
+
+function serviceUnavailable() {
+  return error("Сервис временно недоступен.", 503);
+}
+
+function normalizePath(pathname) {
+  if (!pathname) {
+    return "/";
+  }
+
+  const normalized = pathname.replace(/\/+/g, "/");
+
+  if (normalized.length > 1 && normalized.endsWith("/")) {
+    return normalized.slice(0, -1);
+  }
+
+  return normalized;
+}
+
+function getChatIdFromPath(pathname) {
+  const match = pathname.match(
+    /^\/api\/chats\/([^/]+)(?:\/messages)?$/
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function isMessagesPath(pathname) {
+  return /^\/api\/chats\/[^/]+\/messages$/.test(pathname);
+}
+
+function isChatPath(pathname) {
+  return /^\/api\/chats\/[^/]+$/.test(pathname);
+}
+
+function getHandler(handlers, ...names) {
+  let current = handlers;
+
+  for (const name of names) {
+    if (!current) {
+      return null;
     }
 
-    return successResponse(
-      result && typeof result === "object"
-        ? result
-        : { data: result },
-    );
-  } catch (error) {
-    console.error("API handler error:", error);
+    current = current[name];
+  }
 
-    const message =
-      error instanceof Error && error.message
-        ? error.message
-        : "Внутренняя ошибка сервера.";
+  return typeof current === "function" ? current : null;
+}
 
-    return errorResponse(
-      message,
-      500,
-      "INTERNAL_ERROR",
+async function call(handler, request, env, ...args) {
+  if (!handler) {
+    return serviceUnavailable();
+  }
+
+  try {
+    const response = await handler(request, env, ...args);
+
+    if (response instanceof Response) {
+      return response;
+    }
+
+    return json(response);
+  } catch (err) {
+    console.error(err);
+
+    return error(
+      err?.message || "Внутренняя ошибка сервера.",
+      500
     );
   }
 }
 
-/**
- * Возвращает обработчик маршрута.
- *
- * Все обработчики будут реализованы в следующих файлах:
- *
- * #5 database.js
- * #6 auth.js
- * #7 ai.js
- * #8 worker.js
- *
- * @param {string} path
- * @param {string} method
- * @param {object} handlers
- * @returns {{ handler: Function, methods: string[] }|null}
- */
-function resolveRoute(path, method, handlers) {
-  const routes = [
-    /*
-     * AUTH
-     */
+export async function routeRequest(request, env, handlers = {}) {
+  const url = new URL(request.url);
+  const pathname = normalizePath(url.pathname);
+  const method = request.method.toUpperCase();
 
-    {
-      path: "/api/auth/me",
-      methods: ["GET"],
-      handler: handlers.auth?.me,
-    },
+  if (method === "OPTIONS") {
+    return withCors(
+      new Response(null, {
+        status: 204
+      })
+    );
+  }
 
-    {
-      path: "/api/auth/login",
-      methods: ["POST"],
-      handler: handlers.auth?.login,
-    },
-
-    {
-      path: "/api/auth/register",
-      methods: ["POST"],
-      handler: handlers.auth?.register,
-    },
-
-    {
-      path: "/api/auth/logout",
-      methods: ["POST"],
-      handler: handlers.auth?.logout,
-    },
-
-    /*
-     * CHATS
-     */
-
-    {
-      path: "/api/chats",
-      methods: ["GET", "POST"],
-      handler:
-        method === "GET"
-          ? handlers.chats?.list
-          : handlers.chats?.create,
-    },
-
-    {
-      path: "/api/chat",
-      methods: ["POST"],
-      handler: handlers.chat?.send,
-    },
-
-    {
-      path: "/api/chat/delete",
-      methods: ["POST", "DELETE"],
-      handler: handlers.chats?.delete,
-    },
-
-    {
-      path: "/api/chat/rename",
-      methods: ["POST", "PATCH"],
-      handler: handlers.chats?.rename,
-    },
-
-    /*
-     * GENERATION
-     */
-
-    {
-      path: "/api/generate/image",
-      methods: ["POST"],
-      handler: handlers.generate?.image,
-    },
-
-    {
-      path: "/api/generate/video",
-      methods: ["POST"],
-      handler: handlers.generate?.video,
-    },
-
-    {
-      path: "/api/generate/music",
-      methods: ["POST"],
-      handler: handlers.generate?.music,
-    },
-
-    {
-      path: "/api/generate/3d",
-      methods: ["POST"],
-      handler: handlers.generate?.model3d,
-    },
-
-    /*
-     * FILES
-     */
-
-    {
-      path: "/api/files/upload",
-      methods: ["POST"],
-      handler: handlers.files?.upload,
-    },
-
-    /*
-     * HEALTH
-     */
-
-    {
-      path: "/api/health",
-      methods: ["GET"],
-      handler: handlers.health,
-    },
-  ];
-
-  const route = routes.find((item) => item.path === path);
-
-  if (!route) {
+  if (!pathname.startsWith("/api/")) {
     return null;
   }
 
   /*
-   * Маршрут известен, но конкретный обработчик ещё не подключён.
-   *
-   * Это предотвращает падение Worker из-за undefined-функции.
+   * HEALTH
    */
-  if (typeof route.handler !== "function") {
-    return {
-      handler: async () =>
-        errorResponse(
-          "Этот API-маршрут ещё не подключён на сервере.",
-          503,
-          "SERVICE_NOT_READY",
-        ),
-      methods: route.methods,
-    };
-  }
+  if (pathname === "/api/health") {
+    if (method !== "GET") {
+      return withCors(methodNotAllowed());
+    }
 
-  return {
-    handler: route.handler,
-    methods: route.methods,
-  };
-}
-
-/**
- * Основная функция маршрутизации API.
- *
- * @param {Request} request
- * @param {object} env
- * @param {object} ctx
- * @param {object} handlers
- * @returns {Promise<Response>}
- */
-export async function routeApi(request, env, ctx, handlers = {}) {
-  const path = getPath(request);
-
-  if (!path) {
-    return errorResponse(
-      "Некорректный URL запроса.",
-      400,
-      "INVALID_URL",
-    );
-  }
-
-  const method = getMethod(request);
-
-  const route = resolveRoute(path, method, handlers);
-
-  /*
-   * API-маршрут не существует.
-   */
-  if (!route) {
-    return errorResponse(
-      "API-маршрут не найден.",
-      404,
-      "NOT_FOUND",
-      {
-        path,
-        method,
-      },
+    return withCors(
+      await call(
+        getHandler(handlers, "health"),
+        request,
+        env
+      )
     );
   }
 
   /*
-   * Проверяем HTTP-метод.
+   * AUTH
    */
-  const methodError = checkMethod(request, route.methods);
+  if (pathname === "/api/auth/me") {
+    if (method !== "GET") {
+      return withCors(methodNotAllowed());
+    }
 
-  if (methodError) {
-    methodError.headers.set(
-      "Allow",
-      route.methods.join(", "),
-    );
-
-    return methodError;
-  }
-
-  /*
-   * Передаём запрос реальному обработчику.
-   */
-  return executeHandler(
-    route.handler,
-    request,
-    env,
-    ctx,
-  );
-}
-
-/**
- * Главная точка маршрутизации.
- *
- * worker.js сможет использовать:
- *
- * const response = await routeRequest(
- *   request,
- *   env,
- *   ctx,
- *   handlers
- * );
- *
- * @param {Request} request
- * @param {object} env
- * @param {object} ctx
- * @param {object} handlers
- * @returns {Promise<Response|null>}
- */
-export async function routeRequest(
-  request,
-  env,
-  ctx,
-  handlers = {},
-) {
-  let url;
-
-  try {
-    url = new URL(request.url);
-  } catch {
-    return errorResponse(
-      "Некорректный URL.",
-      400,
-      "INVALID_URL",
+    return withCors(
+      await call(
+        getHandler(handlers, "auth", "me") ||
+          auth.me,
+        request,
+        env
+      )
     );
   }
 
+  if (pathname === "/api/auth/register") {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "auth", "register") ||
+          auth.register,
+        request,
+        env
+      )
+    );
+  }
+
+  if (pathname === "/api/auth/login") {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "auth", "login") ||
+          auth.login,
+        request,
+        env
+      )
+    );
+  }
+
+  if (pathname === "/api/auth/logout") {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "auth", "logout") ||
+          auth.logout,
+        request,
+        env
+      )
+    );
+  }
+
   /*
-   * Всё, что начинается с /api/,
-   * обрабатывается нашим API-роутером.
+   * CHATS
    */
-  if (isApiRequest(url)) {
-    return routeApi(
-      request,
-      env,
-      ctx,
+  if (pathname === "/api/chats") {
+    if (method !== "GET" && method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
       handlers,
+      "chats",
+      method === "GET" ? "list" : "create"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env
+      )
     );
   }
 
   /*
-   * Не API — worker.js должен самостоятельно
-   * передать запрос обработчику статических файлов.
+   * CHAT MESSAGES
+   *
+   * GET  /api/chats/:id/messages
+   * POST /api/chats/:id/messages
    */
-  return null;
+  if (isMessagesPath(pathname)) {
+    const chatId = getChatIdFromPath(pathname);
+
+    if (method !== "GET" && method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
+      handlers,
+      "chats",
+      method === "GET" ? "messages" : "sendMessage"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env,
+        chatId
+      )
+    );
+  }
+
+  /*
+   * SINGLE CHAT
+   *
+   * DELETE /api/chats/:id
+   */
+  if (isChatPath(pathname)) {
+    const chatId = getChatIdFromPath(pathname);
+
+    if (method !== "DELETE" && method !== "PATCH") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
+      handlers,
+      "chats",
+      method === "DELETE" ? "delete" : "rename"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env,
+        chatId
+      )
+    );
+  }
+
+  /*
+   * MAIN AI CHAT
+   */
+  if (pathname === "/api/chat") {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "chat", "send"),
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * GENERATION
+   */
+  const generationRoutes = {
+    "/api/generate/image": "image",
+    "/api/generate/video": "video",
+    "/api/generate/music": "music",
+    "/api/generate/3d": "3d"
+  };
+
+  if (generationRoutes[pathname]) {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(
+          handlers,
+          "generate",
+          generationRoutes[pathname]
+        ),
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * FILES
+   */
+  if (pathname === "/api/files/upload") {
+    if (method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "files", "upload"),
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * SETTINGS
+   */
+  if (pathname === "/api/settings") {
+    if (method !== "GET" && method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
+      handlers,
+      "settings",
+      method === "GET" ? "get" : "save"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * PERMISSIONS
+   */
+  if (pathname === "/api/permissions") {
+    if (method !== "GET" && method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
+      handlers,
+      "permissions",
+      method === "GET" ? "get" : "save"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * PLUGINS
+   */
+  if (pathname === "/api/plugins") {
+    if (method !== "GET" && method !== "POST") {
+      return withCors(methodNotAllowed());
+    }
+
+    const handler = getHandler(
+      handlers,
+      "plugins",
+      method === "GET" ? "get" : "save"
+    );
+
+    return withCors(
+      await call(
+        handler,
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * AI STATUS
+   */
+  if (pathname === "/api/ai/status") {
+    if (method !== "GET") {
+      return withCors(methodNotAllowed());
+    }
+
+    return withCors(
+      await call(
+        getHandler(handlers, "ai", "status"),
+        request,
+        env
+      )
+    );
+  }
+
+  /*
+   * UNKNOWN API
+   */
+  return withCors(notFound());
 }
+
+export {
+  json,
+  error,
+  readJson
+};
