@@ -2,7 +2,6 @@
   "$schema": "node_modules/wrangler/config-schema.json",
 
   "name": "neuro-chat",
-
   "main": "worker.js",
 
   "compatibility_date": "2026-09-10",
@@ -10,18 +9,6 @@
   "workers_dev": true,
 
   "assets": {
-    "directory": "./"
-  },
-
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "neuro-chat-db",
-      "database_id": "PASTE_YOUR_D1_DATABASE_ID_HERE"
-    }
-  ],
-
-  "ai": {
-    "binding": "AI"
+    "directory": "."
   }
 }
