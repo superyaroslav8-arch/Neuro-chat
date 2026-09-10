@@ -2,21 +2,58 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
   <meta name="theme-color" content="#000000">
-  <meta name="description" content="Нейро-чат — универсальный AI-чат с выбором модели.">
+  <meta
+    name="description"
+    content="Нейро-чат — универсальный AI-чат с выбором модели."
+  >
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
+  <meta
+    name="apple-mobile-web-app-status-bar-style"
+    content="black"
+  >
+  <meta
+    name="apple-mobile-web-app-title"
+    content="Нейро-чат"
+  >
   <title>Нейро-чат</title>
-
-  <link rel="stylesheet" href="style.css">
-  <link rel="manifest" href="site.webmanifest">
+  <!-- Иконка сайта -->
+  <link
+    rel="icon"
+    type="image/svg+xml"
+    href="site-icon.svg"
+  >
+  <!-- Иконка для iPhone / iPad -->
+  <link
+    rel="apple-touch-icon"
+    href="site-icon.svg"
+  >
+  <!-- PWA -->
+  <link
+    rel="manifest"
+    href="site.webmanifest"
+  >
+  <!-- Основные стили -->
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
 </head>
-
 <body>
   <div id="app" class="app">
-
     <!-- Боковая панель -->
-    <aside id="sidebar" class="sidebar" aria-label="Боковая панель">
-
+    <aside
+      id="sidebar"
+      class="sidebar"
+      aria-label="Боковая панель"
+    >
       <div class="sidebar__top">
         <button
           id="newChatButton"
@@ -27,7 +64,6 @@
         >
           +
         </button>
-
         <button
           id="closeSidebarButton"
           class="icon-button sidebar__close"
@@ -38,8 +74,10 @@
           ×
         </button>
       </div>
-
-      <nav class="chat-list" aria-label="История чатов">
+      <nav
+        class="chat-list"
+        aria-label="История чатов"
+      >
         <button
           id="historyEmpty"
           class="history-empty"
@@ -49,7 +87,6 @@
           Чатов пока нет
         </button>
       </nav>
-
       <div class="sidebar__bottom">
         <button
           id="settingsButton"
@@ -58,7 +95,6 @@
         >
           Настройки
         </button>
-
         <button
           id="profileButton"
           class="sidebar-action"
@@ -67,15 +103,11 @@
           Профиль
         </button>
       </div>
-
     </aside>
-
     <!-- Основная область -->
     <main class="main-content">
-
       <!-- Верхняя панель -->
       <header class="topbar">
-
         <button
           id="openSidebarButton"
           class="icon-button topbar__menu"
@@ -85,14 +117,13 @@
         >
           ☰
         </button>
-
+        <!-- Название уже есть, поэтому отдельный логотип здесь НЕ нужен -->
         <div
           class="brand"
           aria-label="Нейро-чат"
         >
           Нейро-чат
         </div>
-
         <button
           id="accountButton"
           class="account-button"
@@ -101,33 +132,26 @@
         >
           Войти
         </button>
-
       </header>
-
       <!-- Главный экран -->
       <section
         id="homeScreen"
         class="home-screen"
         aria-label="Главный экран"
       >
-
         <div class="home-content">
           <h1>Нейро-чат</h1>
-
           <p>
             Задайте вопрос, загрузите файл или выберите модель.
           </p>
         </div>
-
-        <!-- Поле ввода на главном экране -->
+        <!-- Поле ввода -->
         <form
           id="composerForm"
           class="composer composer--home"
           autocomplete="off"
         >
-
           <div class="composer__tools">
-
             <button
               id="attachButton"
               class="composer-button"
@@ -137,13 +161,11 @@
             >
               +
             </button>
-
             <input
               id="fileInput"
               type="file"
               hidden
             >
-
             <!-- Выбор модели -->
             <button
               id="modelButton"
@@ -155,12 +177,10 @@
               <span id="selectedModelLabel">
                 Нейро
               </span>
-
               <span aria-hidden="true">
                 ⌄
               </span>
             </button>
-
             <div
               id="modelMenu"
               class="model-menu"
@@ -168,7 +188,6 @@
               aria-label="Выбор модели"
               hidden
             >
-
               <button
                 class="model-option is-selected"
                 type="button"
@@ -178,7 +197,6 @@
               >
                 Нейро
               </button>
-
               <button
                 class="model-option"
                 type="button"
@@ -188,7 +206,6 @@
               >
                 ChatGPT
               </button>
-
               <button
                 class="model-option"
                 type="button"
@@ -198,7 +215,6 @@
               >
                 Gemini
               </button>
-
               <button
                 class="model-option"
                 type="button"
@@ -208,7 +224,6 @@
               >
                 Grok
               </button>
-
               <button
                 class="model-option"
                 type="button"
@@ -218,11 +233,8 @@
               >
                 Алиса 1
               </button>
-
             </div>
-
           </div>
-
           <textarea
             id="messageInput"
             name="message"
@@ -231,9 +243,7 @@
             placeholder="Сообщение для Нейро-чат..."
             aria-label="Сообщение"
           ></textarea>
-
           <div class="composer__actions">
-
             <button
               id="voiceButton"
               class="composer-button"
@@ -243,7 +253,6 @@
             >
               🎙
             </button>
-
             <button
               id="sendButton"
               class="send-button"
@@ -253,13 +262,9 @@
             >
               ↑
             </button>
-
           </div>
-
         </form>
-
       </section>
-
       <!-- Экран чата -->
       <section
         id="chatScreen"
@@ -267,22 +272,18 @@
         aria-label="Чат"
         hidden
       >
-
         <div
           id="messages"
           class="messages"
           aria-live="polite"
           aria-relevant="additions text"
         ></div>
-
         <form
           id="chatComposerForm"
           class="composer composer--chat"
           autocomplete="off"
         >
-
           <div class="composer__tools">
-
             <button
               id="chatAttachButton"
               class="composer-button"
@@ -292,13 +293,11 @@
             >
               +
             </button>
-
             <input
               id="chatFileInput"
               type="file"
               hidden
             >
-
             <button
               id="chatModelButton"
               class="model-button"
@@ -309,14 +308,11 @@
               <span id="chatSelectedModelLabel">
                 Нейро
               </span>
-
               <span aria-hidden="true">
                 ⌄
               </span>
             </button>
-
           </div>
-
           <textarea
             id="chatMessageInput"
             name="message"
@@ -325,9 +321,7 @@
             placeholder="Сообщение..."
             aria-label="Сообщение"
           ></textarea>
-
           <div class="composer__actions">
-
             <button
               id="chatVoiceButton"
               class="composer-button"
@@ -337,7 +331,6 @@
             >
               🎙
             </button>
-
             <button
               id="chatSendButton"
               class="send-button"
@@ -347,36 +340,27 @@
             >
               ↑
             </button>
-
           </div>
-
         </form>
-
       </section>
-
     </main>
-
   </div>
-
   <!-- Авторизация -->
   <div
     id="authModal"
     class="modal"
     hidden
   >
-
     <div
       class="modal__backdrop"
       data-close-modal="authModal"
     ></div>
-
     <section
       class="modal__card"
       role="dialog"
       aria-modal="true"
       aria-labelledby="authTitle"
     >
-
       <button
         class="modal__close"
         type="button"
@@ -385,21 +369,17 @@
       >
         ×
       </button>
-
       <h2 id="authTitle">
         Войти в Нейро-чат
       </h2>
-
       <p id="authDescription">
         Введите имя пользователя и пароль.
       </p>
-
       <div
         class="auth-tabs"
         role="tablist"
         aria-label="Авторизация"
       >
-
         <button
           id="loginTab"
           class="auth-tab is-active"
@@ -409,7 +389,6 @@
         >
           Войти
         </button>
-
         <button
           id="registerTab"
           class="auth-tab"
@@ -419,18 +398,14 @@
         >
           Регистрация
         </button>
-
       </div>
-
       <form
         id="authForm"
         autocomplete="on"
       >
-
         <label for="usernameInput">
           Имя пользователя
         </label>
-
         <input
           id="usernameInput"
           name="username"
@@ -440,11 +415,9 @@
           maxlength="32"
           required
         >
-
         <label for="passwordInput">
           Пароль
         </label>
-
         <input
           id="passwordInput"
           name="password"
@@ -454,16 +427,13 @@
           maxlength="128"
           required
         >
-
         <div
           id="confirmPasswordGroup"
           hidden
         >
-
           <label for="confirmPasswordInput">
             Повторите пароль
           </label>
-
           <input
             id="confirmPasswordInput"
             name="confirmPassword"
@@ -472,16 +442,13 @@
             minlength="6"
             maxlength="128"
           >
-
         </div>
-
         <p
           id="authError"
           class="form-error"
           role="alert"
           hidden
         ></p>
-
         <button
           id="authSubmitButton"
           class="primary-button"
@@ -489,32 +456,25 @@
         >
           Войти
         </button>
-
       </form>
-
     </section>
-
   </div>
-
   <!-- Настройки -->
   <div
     id="settingsModal"
     class="modal"
     hidden
   >
-
     <div
       class="modal__backdrop"
       data-close-modal="settingsModal"
     ></div>
-
     <section
       class="modal__card"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settingsTitle"
     >
-
       <button
         class="modal__close"
         type="button"
@@ -523,13 +483,10 @@
       >
         ×
       </button>
-
       <h2 id="settingsTitle">
         Настройки
       </h2>
-
       <div class="settings-list">
-
         <button
           id="temporaryChatButton"
           class="settings-item"
@@ -539,37 +496,29 @@
           <span>
             Временный чат
           </span>
-
           <span id="temporaryChatState">
             Выключен
           </span>
         </button>
-
       </div>
-
     </section>
-
   </div>
-
   <!-- Профиль -->
   <div
     id="profileModal"
     class="modal"
     hidden
   >
-
     <div
       class="modal__backdrop"
       data-close-modal="profileModal"
     ></div>
-
     <section
       class="modal__card"
       role="dialog"
       aria-modal="true"
       aria-labelledby="profileTitle"
     >
-
       <button
         class="modal__close"
         type="button"
@@ -578,15 +527,12 @@
       >
         ×
       </button>
-
       <h2 id="profileTitle">
         Профиль
       </h2>
-
       <p id="profileUsername">
         Вы не вошли.
       </p>
-
       <button
         id="logoutButton"
         class="secondary-button"
@@ -594,11 +540,8 @@
       >
         Выйти
       </button>
-
     </section>
-
   </div>
-
   <!-- Уведомления -->
   <div
     id="toast"
@@ -607,7 +550,9 @@
     aria-live="polite"
     hidden
   ></div>
-
-  <script src="script.js" defer></script>
+  <script
+    src="script.js"
+    defer
+  ></script>
 </body>
 </html>
