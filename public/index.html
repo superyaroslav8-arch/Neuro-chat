@@ -2,12 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1,viewport-fit=cover"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <meta name="theme-color" content="#050816">
+  <meta name="theme-color" content="#050505">
   <meta
     name="description"
     content="Нейро-чат — современный AI-помощник"
@@ -21,7 +18,6 @@
 </head>
 
 <body>
-
 <div id="app">
 
   <aside class="sidebar" id="sidebar">
@@ -30,10 +26,10 @@
       <img
         src="./site-icon.svg"
         class="brand-logo"
-        alt="Нейро-чат"
+        alt="Логотип Нейро-чата"
       >
 
-      <div>
+      <div class="brand-copy">
         <div class="brand-title">Нейро-чат</div>
         <div class="brand-subtitle">AI-помощник</div>
       </div>
@@ -44,8 +40,8 @@
       id="newChatBtn"
       type="button"
     >
-      <span>＋</span>
-      Новый чат
+      <span class="button-icon">＋</span>
+      <span>Новый чат</span>
     </button>
 
     <div class="sidebar-title">Чаты</div>
@@ -54,31 +50,19 @@
 
     <div class="sidebar-bottom">
 
-      <button
-        class="side-btn"
-        id="toolsBtn"
-        type="button"
-      >
-        <span>✦</span>
-        Инструменты
+      <button class="side-btn" id="toolsBtn" type="button">
+        <span class="side-icon">✦</span>
+        <span>Инструменты</span>
       </button>
 
-      <button
-        class="side-btn"
-        id="settingsBtn"
-        type="button"
-      >
-        <span>⚙</span>
-        Настройки
+      <button class="side-btn" id="settingsBtn" type="button">
+        <span class="side-icon">⚙</span>
+        <span>Настройки</span>
       </button>
 
-      <button
-        class="side-btn danger"
-        id="logoutBtn"
-        type="button"
-      >
-        <span>↪</span>
-        Выйти
+      <button class="side-btn danger" id="logoutBtn" type="button">
+        <span class="side-icon">↪</span>
+        <span>Выйти</span>
       </button>
 
     </div>
@@ -92,44 +76,47 @@
         id="menuBtn"
         class="icon-btn mobile-only"
         type="button"
-        aria-label="Меню"
+        aria-label="Открыть меню"
       >
         ☰
       </button>
 
       <div class="model-selector">
+
         <button
           id="modelBtn"
           class="model-btn"
           type="button"
+          aria-expanded="false"
         >
           <span class="status-dot"></span>
-          Нейро AI
-          <span>⌄</span>
+          <span id="modelName">Нейро AI</span>
+          <span class="model-arrow">⌄</span>
         </button>
 
-        <div
-          id="modelMenu"
-          class="dropdown hidden"
-        >
+        <div id="modelMenu" class="dropdown hidden">
+
           <button type="button" data-model="neuro">
-            <b>Нейро AI</b>
-            <small>Cloudflare AI</small>
+            <span class="model-option-title">Нейро AI</span>
+            <span class="model-option-description">Cloudflare AI</span>
           </button>
 
           <button type="button" data-model="local">
-            <b>Автономный режим</b>
-            <small>Без внешнего API</small>
+            <span class="model-option-title">Автономный режим</span>
+            <span class="model-option-description">Без внешнего API</span>
           </button>
+
         </div>
       </div>
 
       <div class="top-actions">
+
         <button
           id="temporaryBtn"
           class="icon-btn"
           type="button"
           title="Временный чат"
+          aria-label="Временный чат"
         >
           ◇
         </button>
@@ -139,30 +126,30 @@
           class="icon-btn"
           type="button"
           title="Очистить чат"
+          aria-label="Очистить чат"
         >
           ⌫
         </button>
+
       </div>
 
     </header>
 
-    <section
-      id="messages"
-      class="messages"
-      aria-live="polite"
-    >
+    <section id="messages" class="messages" aria-live="polite">
 
       <div id="welcome" class="welcome">
 
         <div class="welcome-logo">
-          <img src="./site-icon.svg" alt="">
+          <img src="./site-icon.svg" alt="Нейро-чат">
         </div>
+
+        <div class="welcome-label">Нейро-чат</div>
 
         <h1>Чем могу помочь?</h1>
 
         <p>
           Задавай вопросы, создавай идеи, работай с кодом
-          и используй инструменты Нейро-чата.
+          и используй возможности Нейро-чата.
         </p>
 
         <div class="quick-grid">
@@ -172,7 +159,7 @@
             class="quick-card"
             data-prompt="Придумай идею для проекта"
           >
-            <span>✦</span>
+            <span class="quick-icon">✦</span>
             <b>Идея проекта</b>
             <small>Помоги придумать что-нибудь новое</small>
           </button>
@@ -182,7 +169,7 @@
             class="quick-card"
             data-prompt="Помоги мне написать код"
           >
-            <span>&lt;/&gt;</span>
+            <span class="quick-icon code-icon">&lt;/&gt;</span>
             <b>Написать код</b>
             <small>Создание и исправление кода</small>
           </button>
@@ -192,7 +179,7 @@
             class="quick-card"
             data-prompt="Объясни сложную тему простыми словами"
           >
-            <span>?</span>
+            <span class="quick-icon">?</span>
             <b>Объяснить</b>
             <small>Разберём сложную тему</small>
           </button>
@@ -202,7 +189,7 @@
             class="quick-card"
             data-tool="website"
           >
-            <span>▣</span>
+            <span class="quick-icon">▣</span>
             <b>Создать сайт</b>
             <small>HTML, CSS и JavaScript</small>
           </button>
@@ -230,6 +217,7 @@
           class="composer-btn"
           type="button"
           title="Добавить файл"
+          aria-label="Добавить файл"
         >
           ＋
         </button>
@@ -239,6 +227,7 @@
           rows="1"
           maxlength="12000"
           placeholder="Сообщение Нейро-чату..."
+          autocomplete="off"
         ></textarea>
 
         <button
@@ -246,6 +235,7 @@
           class="composer-btn"
           type="button"
           title="Голосовой ввод"
+          aria-label="Голосовой ввод"
         >
           ◉
         </button>
@@ -255,6 +245,7 @@
           class="send-btn"
           type="button"
           title="Отправить"
+          aria-label="Отправить"
         >
           ↑
         </button>
@@ -271,18 +262,17 @@
 </div>
 
 
-<!-- AUTH -->
+<!-- АВТОРИЗАЦИЯ -->
 
-<div
-  id="authModal"
-  class="modal-overlay"
->
+<div id="authModal" class="modal-overlay">
 
   <div class="modal auth-modal">
 
     <div class="auth-logo">
-      <img src="./site-icon.svg" alt="">
+      <img src="./site-icon.svg" alt="Нейро-чат">
     </div>
+
+    <div class="auth-brand">Нейро-чат</div>
 
     <h2 id="authTitle">Вход в Нейро-чат</h2>
 
@@ -297,6 +287,7 @@
         type="text"
         autocomplete="username"
         placeholder="Логин"
+        maxlength="100"
         required
       >
 
@@ -305,13 +296,11 @@
         type="password"
         autocomplete="current-password"
         placeholder="Пароль"
+        maxlength="200"
         required
       >
 
-      <div
-        id="authError"
-        class="form-error"
-      ></div>
+      <div id="authError" class="form-error" role="alert"></div>
 
       <button
         id="authSubmit"
@@ -323,19 +312,11 @@
 
     </form>
 
-    <button
-      id="authSwitch"
-      class="text-btn"
-      type="button"
-    >
+    <button id="authSwitch" class="text-btn" type="button">
       Создать аккаунт
     </button>
 
-    <button
-      id="guestBtn"
-      class="secondary-btn"
-      type="button"
-    >
+    <button id="guestBtn" class="secondary-btn" type="button">
       Продолжить без аккаунта
     </button>
 
@@ -343,12 +324,9 @@
 </div>
 
 
-<!-- SETTINGS -->
+<!-- НАСТРОЙКИ -->
 
-<div
-  id="settingsModal"
-  class="modal-overlay hidden"
->
+<div id="settingsModal" class="modal-overlay hidden">
 
   <div class="modal">
 
@@ -356,6 +334,7 @@
       class="modal-close"
       data-close="settingsModal"
       type="button"
+      aria-label="Закрыть"
     >
       ×
     </button>
@@ -368,29 +347,19 @@
         <small>Не сохранять историю чата</small>
       </span>
 
-      <input
-        id="temporarySetting"
-        type="checkbox"
-      >
+      <input id="temporarySetting" type="checkbox">
     </label>
 
     <label class="setting-row">
       <span>
-        <b>Показывать расширенные функции</b>
+        <b>Расширенные функции</b>
         <small>Инструменты создания контента</small>
       </span>
 
-      <input
-        id="advancedSetting"
-        type="checkbox"
-        checked
-      >
+      <input id="advancedSetting" type="checkbox" checked>
     </label>
 
-    <div
-      id="settingsError"
-      class="form-error"
-    ></div>
+    <div id="settingsError" class="form-error"></div>
 
     <button
       id="saveSettingsBtn"
@@ -404,12 +373,9 @@
 </div>
 
 
-<!-- TOOLS -->
+<!-- ИНСТРУМЕНТЫ -->
 
-<div
-  id="toolsModal"
-  class="modal-overlay hidden"
->
+<div id="toolsModal" class="modal-overlay hidden">
 
   <div class="modal tools-modal">
 
@@ -417,11 +383,16 @@
       class="modal-close"
       data-close="toolsModal"
       type="button"
+      aria-label="Закрыть"
     >
       ×
     </button>
 
     <h2>Инструменты</h2>
+
+    <p class="modal-description">
+      Выбери функцию, с которой хочешь работать.
+    </p>
 
     <div class="tools-grid">
 
@@ -467,12 +438,9 @@
 </div>
 
 
-<!-- FILES -->
+<!-- ФАЙЛ -->
 
-<div
-  id="fileModal"
-  class="modal-overlay hidden"
->
+<div id="fileModal" class="modal-overlay hidden">
 
   <div class="modal">
 
@@ -480,13 +448,14 @@
       class="modal-close"
       data-close="fileModal"
       type="button"
+      aria-label="Закрыть"
     >
       ×
     </button>
 
     <h2>Файл добавлен</h2>
 
-    <div id="fileInfo"></div>
+    <div id="fileInfo" class="file-info"></div>
 
     <button
       id="fileConfirmBtn"
@@ -500,7 +469,7 @@
 </div>
 
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status"></div>
 
 <script src="./script.js" defer></script>
 
