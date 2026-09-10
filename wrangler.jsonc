@@ -3,12 +3,33 @@
 
   "name": "neuro-chat",
   "main": "worker.js",
-
   "compatibility_date": "2026-09-10",
 
   "workers_dev": true,
 
   "assets": {
-    "directory": "."
+    "directory": "./"
+  },
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STATE",
+        "class_name": "NeuroState"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "NeuroState"
+      ]
+    }
+  ],
+
+  "ai": {
+    "binding": "AI"
   }
 }
