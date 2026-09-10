@@ -1,0 +1,26 @@
+<!-- src/assets/logo.svg -->
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Фон (круг) -->
+  <circle cx="50" cy="50" r="45" stroke="white" stroke-width="2"/>
+  
+  <!-- Речевой пузырь -->
+  <path d="M20 50C20 33.4315 33.4315 20 50 20C66.5685 20 80 33.4315 80 50C80 66.5685 66.5685 80 50 80C42.5 80 35.5 77.5 30 73.5L20 50Z" fill="black" stroke="white" stroke-width="2"/>
+  
+  <!-- Точки внутри пузыря -->
+  <circle cx="45" cy="50" r="3" fill="white"/>
+  <circle cx="50" cy="50" r="3" fill="white"/>
+  <circle cx="55" cy="50" r="3" fill="white"/>
+  
+  <!-- Линии схемы (справа) -->
+  <path d="M80 45H88" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M88 45L92 49" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M80 50H88" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M88 50L92 54" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M80 55H88" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M88 55L92 59" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Орбита и точки (слева сверху) -->
+  <path d="M20 30A30 30 0 1 1 50 0" stroke="white" stroke-width="2" fill="none" stroke-dasharray="5 5"/>
+  <circle cx="20" cy="30" r="3" fill="white"/>
+  <circle cx="35" cy="15" r="3" fill="white"/>
+</svg>
