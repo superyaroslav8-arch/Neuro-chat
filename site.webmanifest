@@ -1,7 +1,7 @@
 {
   "name": "Нейро-чат",
   "short_name": "Нейро-чат",
-  "description": "Нейро-чат — универсальный AI-помощник.",
+  "description": "Нейро-чат — AI-помощник.",
   "lang": "ru",
   "dir": "ltr",
   "start_url": "/",
@@ -13,7 +13,7 @@
   "icons": [
     {
       "src": "/site-icon.svg",
-      "sizes": "any",
+      "sizes": "1024x1024",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
