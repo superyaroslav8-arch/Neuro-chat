@@ -1,1505 +1,1494 @@
-/* =========================================================
-   NEURO CHAT
-   script.js
-   ========================================================= */
-
-"use strict";
-
-/* =========================================================
-   CONFIG
-   ========================================================= */
-
-const API = {
-  session: "/api/auth/session",
-  login: "/api/auth/login",
-  register: "/api/auth/register",
-  logout: "/api/auth/logout",
-  chat: "/api/chat"
-};
-
-const STORAGE_KEYS = {
-  chats: "neuro_chats",
-  temporary: "neuro_temporary_chats",
-  animations: "neuro_animations"
-};
-
-/* =========================================================
-   STATE
-   ========================================================= */
-
-const state = {
-  user: null,
-  messages: [],
-  chats: [],
-  currentChatId: null,
-  isGenerating: false,
-  selectedTool: null,
-  temporaryChats: false,
-  animationsEnabled: true
-};
-
-/* =========================================================
-   DOM
-   ========================================================= */
-
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
-
-const authScreen = $("#authScreen");
-const authForm = $("#authForm");
-const usernameInput = $("#username");
-const passwordInput = $("#password");
-const loginButton = $("#loginButton");
-const registerButton = $("#registerButton");
-const authError = $("#authError");
-
-const app = $("#app");
-
-const sidebar = $("#sidebar");
-const sidebarOverlay = $("#sidebarOverlay");
-const openSidebarButton = $("#openSidebarButton");
-const closeSidebarButton = $("#closeSidebarButton");
-
-const newChatButton = $("#newChatButton");
-const chatHistory = $("#chatHistory");
-
-const settingsButton = $("#settingsButton");
-const logoutButton = $("#logoutButton");
-
-const profileButton = $("#profileButton");
-const profileInitial = $("#profileInitial");
-
-const profileModal = $("#profileModal");
-const profileBigAvatar = $("#profileBigAvatar");
-const profileName = $("#profileName");
-const profileUsername = $("#profileUsername");
-const profileLogoutButton = $("#profileLogoutButton");
-
-const settingsModal = $("#settingsModal");
-const temporaryChats = $("#temporaryChats");
-const animationsEnabled = $("#animationsEnabled");
-
-const welcomeScreen = $("#welcomeScreen");
-const messagesContainer = $("#messages");
-
-const messageInput = $("#messageInput");
-const sendButton = $("#sendButton");
-
-const attachButton = $("#attachButton");
-const fileInput = $("#fileInput");
-const voiceButton = $("#voiceButton");
-
-const typingIndicator = $("#typingIndicator");
-
-const toolModal = $("#toolModal");
-const toolModalTitle = $("#toolModalTitle");
-const toolModalDescription = $("#toolModalDescription");
-const toolPrompt = $("#toolPrompt");
-const toolRunButton = $("#toolRunButton");
-const toolStatus = $("#toolStatus");
-
-const toastContainer = $("#toastContainer");
-
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
-
-document.addEventListener("DOMContentLoaded", init);
-
-async function init() {
-  loadLocalSettings();
-  applyAnimationSetting();
-
-  setupAuth();
-  setupNavigation();
-  setupChat();
-  setupTools();
-  setupModals();
-  setupFiles();
-  setupVoice();
-
-  await restoreSession();
-}
-
-/* =========================================================
-   AUTHENTICATION
-   ========================================================= */
-
-function setupAuth() {
-  authForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-
-    if (!username || !password) {
-      showAuthError("Введите логин и пароль.");
-      return;
-    }
-
-    await login(username, password);
-  });
-
-  registerButton?.addEventListener("click", async () => {
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-
-    if (!username || !password) {
-      showAuthError("Для регистрации сначала введите логин и пароль.");
-      return;
-    }
-
-    await register(username, password);
-  });
-
-  logoutButton?.addEventListener("click", logout);
-  profileLogoutButton?.addEventListener("click", logout);
-}
-
-async function restoreSession() {
-  try {
-    const response = await apiRequest(API.session, {
-      method: "GET"
-    });
-
-    if (!response.ok) {
-      showAuthScreen();
-      return;
-    }
-
-    const data = await readJson(response);
-
-    if (data?.authenticated && data.user) {
-      state.user = data.user;
-      showApp();
-      return;
-    }
-
-    showAuthScreen();
-  } catch (error) {
-    /*
-      Если сервер временно недоступен,
-      не зацикливаем окно авторизации.
-    */
-    console.error("Session restore error:", error);
-
-    showAuthScreen();
-  }
-}
-
-async function login(username, password) {
-  setAuthLoading(true);
-  hideAuthError();
-
-  try {
-    const response = await apiRequest(API.login, {
-      method: "POST",
-      body: {
-        username,
-        password
-      }
-    });
-
-    const data = await readJson(response);
-
-    if (!response.ok) {
-      throw new Error(
-        getServerError(data, "Не удалось выполнить вход.")
-      );
-    }
-
-    if (!data?.user) {
-      throw new Error("Сервер не вернул данные пользователя.");
-    }
-
-    state.user = data.user;
-
-    showApp();
-
-    usernameInput.value = "";
-    passwordInput.value = "";
-
-    showToast("Вы успешно вошли в Neuro Chat.");
-  } catch (error) {
-    console.error("Login error:", error);
-    showAuthError(cleanErrorMessage(error));
-  } finally {
-    setAuthLoading(false);
-  }
-}
-
-async function register(username, password) {
-  setAuthLoading(true);
-  hideAuthError();
-
-  try {
-    const response = await apiRequest(API.register, {
-      method: "POST",
-      body: {
-        username,
-        password
-      }
-    });
-
-    const data = await readJson(response);
-
-    if (!response.ok) {
-      throw new Error(
-        getServerError(data, "Не удалось создать аккаунт.")
-      );
-    }
-
-    if (!data?.user) {
-      throw new Error("Сервер не вернул данные пользователя.");
-    }
-
-    state.user = data.user;
-
-    showApp();
-
-    usernameInput.value = "";
-    passwordInput.value = "";
-
-    showToast("Аккаунт создан.");
-  } catch (error) {
-    console.error("Registration error:", error);
-    showAuthError(cleanErrorMessage(error));
-  } finally {
-    setAuthLoading(false);
-  }
-}
-
-async function logout() {
-  try {
-    await apiRequest(API.logout, {
-      method: "POST"
-    });
-  } catch (error) {
-    console.error("Logout error:", error);
-  }
-
-  state.user = null;
-  state.messages = [];
-  state.currentChatId = null;
-
-  closeAllModals();
-  closeSidebar();
-
-  showAuthScreen();
-}
-
-/* =========================================================
-   AUTH UI
-   ========================================================= */
-
-function showApp() {
-  if (!state.user) {
-    showAuthScreen();
-    return;
-  }
-
-  authScreen.hidden = true;
-  app.hidden = false;
-
-  updateProfile();
-
-  loadChats();
-
-  if (state.chats.length > 0) {
-    openChat(state.chats[0].id);
-  } else {
-    createNewChat(false);
-  }
-}
-
-function showAuthScreen() {
-  app.hidden = true;
-  authScreen.hidden = false;
-
-  hideAuthError();
-
-  setTimeout(() => {
-    usernameInput?.focus();
-  }, 50);
-}
-
-function setAuthLoading(loading) {
-  loginButton.disabled = loading;
-  registerButton.disabled = loading;
-
-  loginButton.textContent = loading
-    ? "Проверка..."
-    : "Войти";
-
-  registerButton.textContent = loading
-    ? "Подождите..."
-    : "Создать аккаунт";
-}
-
-function showAuthError(message) {
-  if (!authError) return;
-
-  authError.textContent = message;
-  authError.hidden = false;
-}
-
-function hideAuthError() {
-  if (!authError) return;
-
-  authError.textContent = "";
-  authError.hidden = true;
-}
-
-/* =========================================================
-   API
-   ========================================================= */
-
-async function apiRequest(url, options = {}) {
-  const config = {
-    method: options.method || "GET",
-    credentials: "same-origin",
-    headers: {
-      Accept: "application/json"
-    }
+(() => {
+  "use strict";
+
+  /*
+   * Нейро-чат
+   * Основной клиентский JavaScript.
+   *
+   * Совместим с Cloudflare Worker API:
+   *   POST /api/auth/register
+   *   POST /api/auth/login
+   *   GET  /api/auth/me
+   *   POST /api/auth/logout
+   *   POST /api/chat
+   *   POST /api/generate/image
+   *   POST /api/generate/video
+   */
+
+  const API = {
+    session: "/api/auth/me",
+    login: "/api/auth/login",
+    register: "/api/auth/register",
+    logout: "/api/auth/logout",
+    chat: "/api/chat",
+    image: "/api/generate/image",
+    video: "/api/generate/video"
   };
 
-  if (options.body !== undefined) {
-    config.headers["Content-Type"] = "application/json";
-    config.body = JSON.stringify(options.body);
+  const state = {
+    user: null,
+    authenticated: false,
+    currentChatId: null,
+    chats: [],
+    messages: [],
+    busy: false,
+    authMode: "login",
+    temporaryChats: false,
+    animationsEnabled: true,
+    attachedFile: null,
+    mediaRecorder: null,
+    audioChunks: [],
+    recording: false
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  const elements = {
+    authScreen: $("authScreen"),
+    authForm: $("authForm"),
+    username: $("username"),
+    password: $("password"),
+    loginButton: $("loginButton"),
+    registerButton: $("registerButton"),
+    authError: $("authError"),
+
+    app: $("app"),
+    sidebar: $("sidebar"),
+    sidebarOverlay: $("sidebarOverlay"),
+    openSidebarButton: $("openSidebarButton"),
+    closeSidebarButton: $("closeSidebarButton"),
+    newChatButton: $("newChatButton"),
+    chatHistory: $("chatHistory"),
+
+    settingsButton: $("settingsButton"),
+    logoutButton: $("logoutButton"),
+    profileButton: $("profileButton"),
+    profileInitial: $("profileInitial"),
+
+    profileModal: $("profileModal"),
+    profileBigAvatar: $("profileBigAvatar"),
+    profileName: $("profileName"),
+    profileUsername: $("profileUsername"),
+    profileLogoutButton: $("profileLogoutButton"),
+
+    settingsModal: $("settingsModal"),
+    temporaryChats: $("temporaryChats"),
+    animationsEnabled: $("animationsEnabled"),
+
+    welcomeScreen: $("welcomeScreen"),
+    messages: $("messages"),
+    messageInput: $("messageInput"),
+    sendButton: $("sendButton"),
+    attachButton: $("attachButton"),
+    fileInput: $("fileInput"),
+    voiceButton: $("voiceButton"),
+    typingIndicator: $("typingIndicator"),
+
+    toolModal: $("toolModal"),
+    toolModalTitle: $("toolModalTitle"),
+    toolModalDescription: $("toolModalDescription"),
+    toolPrompt: $("toolPrompt"),
+    toolRunButton: $("toolRunButton"),
+    toolStatus: $("toolStatus"),
+
+    toastContainer: $("toastContainer")
+  };
+
+  /* ---------------------------------------------------------
+     Utilities
+  --------------------------------------------------------- */
+
+  function safeText(value) {
+    return String(value ?? "");
   }
 
-  const controller = new AbortController();
-
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, options.timeout || 30000);
-
-  config.signal = controller.signal;
-
-  try {
-    return await fetch(url, config);
-  } finally {
-    clearTimeout(timeout);
+  function escapeHtml(value) {
+    return safeText(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
-}
 
-async function readJson(response) {
-  const contentType =
-    response.headers.get("content-type") || "";
+  function getInitial(value) {
+    const text = safeText(value).trim();
 
-  if (!contentType.includes("application/json")) {
+    if (!text) {
+      return "Н";
+    }
+
+    return text.charAt(0).toUpperCase();
+  }
+
+  function generateChatId() {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
+      return crypto.randomUUID();
+    }
+
+    return `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function showElement(element) {
+    if (!element) return;
+    element.hidden = false;
+    element.style.removeProperty("display");
+  }
+
+  function hideElement(element) {
+    if (!element) return;
+    element.hidden = true;
+  }
+
+  function setAuthError(message = "") {
+    if (!elements.authError) return;
+
+    elements.authError.textContent = message;
+    elements.authError.hidden = !message;
+  }
+
+  function setBusy(value) {
+    state.busy = Boolean(value);
+
+    if (elements.sendButton) {
+      elements.sendButton.disabled = state.busy;
+    }
+
+    if (elements.messageInput) {
+      elements.messageInput.disabled = state.busy;
+    }
+
+    if (elements.typingIndicator) {
+      elements.typingIndicator.hidden = !state.busy;
+    }
+  }
+
+  function scrollMessagesToBottom() {
+    if (!elements.messages) return;
+
+    requestAnimationFrame(() => {
+      elements.messages.scrollTop = elements.messages.scrollHeight;
+    });
+  }
+
+  function showToast(message, type = "info") {
+    if (!elements.toastContainer) {
+      return;
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = safeText(message);
+
+    elements.toastContainer.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.classList.add("show");
+    });
+
+    setTimeout(() => {
+      toast.classList.remove("show");
+
+      setTimeout(() => {
+        toast.remove();
+      }, 250);
+    }, 3000);
+  }
+
+  async function readResponse(response) {
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        return await response.json();
+      } catch {
+        return {};
+      }
+    }
+
     const text = await response.text();
 
-    return {
-      ok: response.ok,
-      message: text
-    };
-  }
-
-  try {
-    return await response.json();
-  } catch {
-    return {
-      ok: false,
-      message: "Сервер вернул повреждённый JSON-ответ."
-    };
-  }
-}
-
-function getServerError(data, fallback) {
-  if (!data) return fallback;
-
-  return (
-    data.error ||
-    data.message ||
-    data.details ||
-    fallback
-  );
-}
-
-function cleanErrorMessage(error) {
-  if (!error) {
-    return "Произошла неизвестная ошибка.";
-  }
-
-  if (error.name === "AbortError") {
-    return "Сервер слишком долго не отвечает. Попробуйте ещё раз.";
-  }
-
-  const message = String(error.message || error);
-
-  /*
-    Не показываем пользователю внутренние технические
-    адреса, stack trace и прочую серверную информацию.
-  */
-
-  if (
-    /failed to fetch/i.test(message) ||
-    /networkerror/i.test(message) ||
-    /network error/i.test(message)
-  ) {
-    return "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.";
-  }
-
-  if (
-    /ECONNREFUSED/i.test(message) ||
-    /ECONNRESET/i.test(message) ||
-    /ENOTFOUND/i.test(message)
-  ) {
-    return "Сервер временно недоступен. Попробуйте ещё раз.";
-  }
-
-  return message
-    .replace(/https?:\/\/[^\s]+/gi, "")
-    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "")
-    .trim() || "Произошла ошибка.";
-}
-
-/* =========================================================
-   NAVIGATION
-   ========================================================= */
-
-function setupNavigation() {
-  openSidebarButton?.addEventListener("click", openSidebar);
-  closeSidebarButton?.addEventListener("click", closeSidebar);
-
-  sidebarOverlay?.addEventListener("click", closeSidebar);
-
-  newChatButton?.addEventListener("click", () => {
-    createNewChat(true);
-    closeSidebar();
-  });
-
-  settingsButton?.addEventListener("click", () => {
-    openModal(settingsModal);
-    closeSidebar();
-  });
-
-  profileButton?.addEventListener("click", () => {
-    updateProfile();
-    openModal(profileModal);
-  });
-}
-
-function openSidebar() {
-  sidebar?.classList.add("open");
-
-  if (sidebarOverlay) {
-    sidebarOverlay.hidden = false;
-  }
-}
-
-function closeSidebar() {
-  sidebar?.classList.remove("open");
-
-  if (sidebarOverlay) {
-    sidebarOverlay.hidden = true;
-  }
-}
-
-/* =========================================================
-   CHAT
-   ========================================================= */
-
-function setupChat() {
-  sendButton?.addEventListener("click", sendMessage);
-
-  messageInput?.addEventListener("input", () => {
-    autoResizeTextarea();
-    updateSendButton();
-  });
-
-  messageInput?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-
-      if (!state.isGenerating) {
-        sendMessage();
-      }
+    if (!text) {
+      return {};
     }
-  });
 
-  $$(".suggestion").forEach((button) => {
-    button.addEventListener("click", () => {
-      const prompt = button.dataset.prompt || "";
-
-      messageInput.value = prompt;
-
-      autoResizeTextarea();
-      updateSendButton();
-
-      sendMessage();
-    });
-  });
-}
-
-async function sendMessage() {
-  if (state.isGenerating) return;
-
-  const text = messageInput.value.trim();
-
-  if (!text) return;
-
-  addMessage("user", text);
-
-  messageInput.value = "";
-  autoResizeTextarea();
-  updateSendButton();
-
-  if (welcomeScreen) {
-    welcomeScreen.hidden = true;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        message: text
+      };
+    }
   }
 
-  state.isGenerating = true;
-  setGenerating(true);
-
-  try {
-    const response = await apiRequest(API.chat, {
-      method: "POST",
-      timeout: 120000,
-      body: {
-        message: text,
-        messages: state.messages.map((message) => ({
-          role: message.role,
-          content: message.content
-        })),
-        chatId: state.currentChatId
+  async function apiRequest(url, options = {}) {
+    const requestOptions = {
+      credentials: "same-origin",
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.headers || {})
       }
-    });
+    };
 
-    const data = await readJson(response);
+    if (
+      requestOptions.body &&
+      typeof requestOptions.body !== "string"
+    ) {
+      requestOptions.headers["Content-Type"] = "application/json";
+      requestOptions.body = JSON.stringify(requestOptions.body);
+    }
+
+    let response;
+
+    try {
+      response = await fetch(url, requestOptions);
+    } catch (error) {
+      throw new Error(
+        "Не удалось подключиться к серверу. Проверь соединение с интернетом."
+      );
+    }
+
+    const data = await readResponse(response);
 
     if (!response.ok) {
-      throw new Error(
-        getServerError(
-          data,
-          "Не удалось получить ответ от Neuro."
-        )
-      );
+      const message =
+        data?.error ||
+        data?.message ||
+        `Ошибка сервера (${response.status})`;
+
+      throw new Error(message);
     }
 
-    const answer = extractAssistantAnswer(data);
+    return data;
+  }
 
-    if (!answer) {
-      throw new Error(
-        "Сервер не вернул текст ответа."
-      );
+  /* ---------------------------------------------------------
+     Authentication
+  --------------------------------------------------------- */
+
+  async function restoreSession() {
+    try {
+      const data = await apiRequest(API.session, {
+        method: "GET"
+      });
+
+      if (data && data.user) {
+        state.user = data.user;
+        state.authenticated = true;
+        showApp();
+        return true;
+      }
+
+      state.user = null;
+      state.authenticated = false;
+      showAuth();
+
+      return false;
+    } catch (error) {
+      /*
+       * 401/403 при отсутствии сессии — нормальная ситуация.
+       * Не показываем пользователю техническую ошибку.
+       */
+      state.user = null;
+      state.authenticated = false;
+      showAuth();
+
+      return false;
+    }
+  }
+
+  async function login(event) {
+    if (event) {
+      event.preventDefault();
     }
 
-    addMessage("assistant", answer);
+    setAuthError("");
 
-    saveCurrentChat();
-  } catch (error) {
-    console.error("Chat error:", error);
+    const username = elements.username?.value.trim() || "";
+    const password = elements.password?.value || "";
 
-    addMessage(
-      "assistant",
-      cleanErrorMessage(error)
-    );
-  } finally {
-    state.isGenerating = false;
-    setGenerating(false);
-  }
-}
+    if (!username) {
+      setAuthError("Введите имя пользователя.");
+      elements.username?.focus();
+      return;
+    }
 
-function extractAssistantAnswer(data) {
-  if (!data) return "";
+    if (!password) {
+      setAuthError("Введите пароль.");
+      elements.password?.focus();
+      return;
+    }
 
-  /*
-    Поддерживаем несколько распространённых форматов
-    ответа сервера.
-  */
+    if (elements.loginButton) {
+      elements.loginButton.disabled = true;
+    }
 
-  if (typeof data.answer === "string") {
-    return data.answer;
-  }
+    try {
+      const data = await apiRequest(API.login, {
+        method: "POST",
+        body: {
+          username,
+          password
+        }
+      });
 
-  if (typeof data.response === "string") {
-    return data.response;
-  }
+      if (!data?.user) {
+        throw new Error("Сервер не вернул данные пользователя.");
+      }
 
-  if (typeof data.message === "string") {
-    return data.message;
-  }
+      state.user = data.user;
+      state.authenticated = true;
 
-  if (typeof data.content === "string") {
-    return data.content;
-  }
+      setAuthError("");
+      showApp();
 
-  if (typeof data.text === "string") {
-    return data.text;
-  }
-
-  if (data.choices?.[0]?.message?.content) {
-    return String(data.choices[0].message.content);
-  }
-
-  if (data.choices?.[0]?.text) {
-    return String(data.choices[0].text);
+      showToast("Вы успешно вошли.", "success");
+    } catch (error) {
+      setAuthError(error.message || "Не удалось выполнить вход.");
+    } finally {
+      if (elements.loginButton) {
+        elements.loginButton.disabled = false;
+      }
+    }
   }
 
-  return "";
-}
+  async function register(event) {
+    if (event) {
+      event.preventDefault();
+    }
 
-function addMessage(role, content) {
-  const message = {
-    id: crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random()}`,
-    role,
-    content,
-    createdAt: Date.now()
-  };
+    setAuthError("");
 
-  state.messages.push(message);
+    const username = elements.username?.value.trim() || "";
+    const password = elements.password?.value || "";
 
-  renderMessage(message);
-}
+    if (!username) {
+      setAuthError("Введите имя пользователя.");
+      elements.username?.focus();
+      return;
+    }
 
-function renderMessage(message) {
-  const wrapper = document.createElement("div");
+    if (password.length < 6) {
+      setAuthError("Пароль должен содержать минимум 6 символов.");
+      elements.password?.focus();
+      return;
+    }
 
-  wrapper.className =
-    `message ${message.role === "user" ? "user" : "assistant"}`;
+    if (elements.registerButton) {
+      elements.registerButton.disabled = true;
+    }
 
-  const avatar = document.createElement("div");
+    try {
+      const data = await apiRequest(API.register, {
+        method: "POST",
+        body: {
+          username,
+          password
+        }
+      });
 
-  avatar.className = "message-avatar";
-  avatar.textContent =
-    message.role === "user"
-      ? getUserInitial()
-      : "N";
+      if (!data?.user) {
+        throw new Error("Сервер не вернул данные созданного пользователя.");
+      }
 
-  const content = document.createElement("div");
+      state.user = data.user;
+      state.authenticated = true;
 
-  content.className = "message-content";
+      setAuthError("");
+      showApp();
 
-  content.innerHTML = formatMessage(message.content);
-
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(content);
-
-  messagesContainer.appendChild(wrapper);
-
-  scrollChatToBottom();
-}
-
-function formatMessage(text) {
-  if (!text) return "";
-
-  let safe = escapeHtml(String(text));
-
-  /*
-    Простое форматирование Markdown-подобного текста.
-    HTML пользователя не выполняется.
-  */
-
-  safe = safe.replace(
-    /```([\s\S]*?)```/g,
-    "<pre><code>$1</code></pre>"
-  );
-
-  safe = safe.replace(
-    /`([^`]+)`/g,
-    "<code>$1</code>"
-  );
-
-  safe = safe.replace(
-    /\*\*([^*]+)\*\*/g,
-    "<strong>$1</strong>"
-  );
-
-  safe = safe.replace(
-    /\*([^*]+)\*/g,
-    "<em>$1</em>"
-  );
-
-  safe = safe.replace(
-    /^### (.+)$/gm,
-    "<strong>$1</strong>"
-  );
-
-  safe = safe.replace(
-    /^## (.+)$/gm,
-    "<strong>$1</strong>"
-  );
-
-  safe = safe.replace(
-    /^# (.+)$/gm,
-    "<strong>$1</strong>"
-  );
-
-  safe = safe.replace(
-    /\n/g,
-    "<br>"
-  );
-
-  return safe;
-}
-
-function escapeHtml(value) {
-  const div = document.createElement("div");
-  div.textContent = value;
-
-  return div.innerHTML;
-}
-
-function setGenerating(generating) {
-  if (typingIndicator) {
-    typingIndicator.hidden = !generating;
+      showToast("Аккаунт создан.", "success");
+    } catch (error) {
+      setAuthError(error.message || "Не удалось создать аккаунт.");
+    } finally {
+      if (elements.registerButton) {
+        elements.registerButton.disabled = false;
+      }
+    }
   }
 
-  if (sendButton) {
-    sendButton.disabled = generating ||
-      !messageInput.value.trim();
-  }
+  async function logout() {
+    try {
+      await apiRequest(API.logout, {
+        method: "POST"
+      });
+    } catch {
+      /*
+       * Даже если сервер уже удалил/потерял сессию,
+       * локальное состояние всё равно должно очиститься.
+       */
+    }
 
-  if (messageInput) {
-    messageInput.disabled = generating;
-  }
-
-  if (generating) {
-    scrollChatToBottom();
-  }
-}
-
-function updateSendButton() {
-  if (!sendButton) return;
-
-  sendButton.disabled =
-    state.isGenerating ||
-    !messageInput.value.trim();
-}
-
-function scrollChatToBottom() {
-  requestAnimationFrame(() => {
-    const area = $("#chatArea");
-
-    if (!area) return;
-
-    area.scrollTo({
-      top: area.scrollHeight,
-      behavior: state.animationsEnabled
-        ? "smooth"
-        : "auto"
-    });
-  });
-}
-
-function autoResizeTextarea() {
-  if (!messageInput) return;
-
-  messageInput.style.height = "auto";
-
-  const height = Math.min(
-    messageInput.scrollHeight,
-    190
-  );
-
-  messageInput.style.height = `${height}px`;
-}
-
-/* =========================================================
-   CHAT HISTORY
-   ========================================================= */
-
-function loadChats() {
-  if (state.temporaryChats) {
+    state.user = null;
+    state.authenticated = false;
+    state.currentChatId = null;
+    state.messages = [];
     state.chats = [];
+
+    closeAllModals();
+    clearMessages();
+    showAuth();
+
+    if (elements.username) {
+      elements.username.value = "";
+    }
+
+    if (elements.password) {
+      elements.password.value = "";
+    }
+
+    showToast("Вы вышли из аккаунта.", "info");
+  }
+
+  function showAuth() {
+    hideElement(elements.app);
+    showElement(elements.authScreen);
+
+    document.body.classList.remove("app-active");
+
+    setTimeout(() => {
+      elements.username?.focus();
+    }, 50);
+  }
+
+  function showApp() {
+    hideElement(elements.authScreen);
+    showElement(elements.app);
+
+    document.body.classList.add("app-active");
+
+    updateProfileUI();
+    createNewChat(false);
+  }
+
+  /* ---------------------------------------------------------
+     Profile
+  --------------------------------------------------------- */
+
+  function updateProfileUI() {
+    if (!state.user) {
+      return;
+    }
+
+    const username =
+      state.user.username ||
+      state.user.name ||
+      "Пользователь";
+
+    const initial = getInitial(username);
+
+    if (elements.profileInitial) {
+      elements.profileInitial.textContent = initial;
+    }
+
+    if (elements.profileBigAvatar) {
+      elements.profileBigAvatar.textContent = initial;
+    }
+
+    if (elements.profileName) {
+      elements.profileName.textContent = username;
+    }
+
+    if (elements.profileUsername) {
+      elements.profileUsername.textContent =
+        state.user.username
+          ? `@${state.user.username}`
+          : "";
+    }
+  }
+
+  function openProfileModal() {
+    updateProfileUI();
+    openModal(elements.profileModal);
+  }
+
+  /* ---------------------------------------------------------
+     Chat
+  --------------------------------------------------------- */
+
+  function createNewChat(showToastMessage = true) {
+    state.currentChatId = generateChatId();
+    state.messages = [];
+
+    clearMessages();
+
+    if (elements.welcomeScreen) {
+      showElement(elements.welcomeScreen);
+    }
+
     renderChatHistory();
-    return;
+
+    if (showToastMessage) {
+      showToast("Новый чат создан.", "info");
+    }
+
+    elements.messageInput?.focus();
   }
 
-  try {
-    const raw = localStorage.getItem(
-      STORAGE_KEYS.chats
-    );
+  function clearMessages() {
+    if (!elements.messages) {
+      return;
+    }
 
-    state.chats = raw
-      ? JSON.parse(raw)
+    elements.messages.innerHTML = "";
+  }
+
+  function renderChatHistory() {
+    if (!elements.chatHistory) {
+      return;
+    }
+
+    elements.chatHistory.innerHTML = "";
+
+    if (!state.chats.length) {
+      return;
+    }
+
+    state.chats.forEach((chat) => {
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.className = "chat-history-item";
+
+      if (chat.id === state.currentChatId) {
+        button.classList.add("active");
+      }
+
+      button.textContent = chat.title || "Новый чат";
+
+      button.addEventListener("click", () => {
+        selectChat(chat.id);
+      });
+
+      elements.chatHistory.appendChild(button);
+    });
+  }
+
+  function selectChat(chatId) {
+    const chat = state.chats.find((item) => item.id === chatId);
+
+    if (!chat) {
+      return;
+    }
+
+    state.currentChatId = chat.id;
+    state.messages = Array.isArray(chat.messages)
+      ? [...chat.messages]
       : [];
-  } catch {
-    state.chats = [];
+
+    renderMessages();
+    renderChatHistory();
+
+    closeSidebar();
   }
 
-  renderChatHistory();
-}
+  function saveCurrentChat() {
+    if (state.temporaryChats) {
+      return;
+    }
 
-function saveChats() {
-  if (state.temporaryChats) return;
+    if (!state.currentChatId) {
+      return;
+    }
 
-  try {
-    localStorage.setItem(
-      STORAGE_KEYS.chats,
-      JSON.stringify(state.chats)
-    );
-  } catch (error) {
-    console.error("Chat storage error:", error);
-  }
-}
-
-function createNewChat(showMessage = true) {
-  const chat = {
-    id:
-      crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`,
-    title: "Новый чат",
-    messages: [],
-    updatedAt: Date.now()
-  };
-
-  state.chats.unshift(chat);
-  state.currentChatId = chat.id;
-  state.messages = [];
-
-  renderMessages();
-
-  if (welcomeScreen) {
-    welcomeScreen.hidden = false;
-  }
-
-  renderChatHistory();
-
-  saveChats();
-
-  if (showMessage) {
-    showToast("Новый чат создан.");
-  }
-}
-
-function openChat(id) {
-  const chat = state.chats.find(
-    (item) => item.id === id
-  );
-
-  if (!chat) return;
-
-  state.currentChatId = id;
-  state.messages = Array.isArray(chat.messages)
-    ? [...chat.messages]
-    : [];
-
-  renderMessages();
-
-  if (welcomeScreen) {
-    welcomeScreen.hidden =
-      state.messages.length > 0;
-  }
-
-  renderChatHistory();
-}
-
-function saveCurrentChat() {
-  if (!state.currentChatId || state.temporaryChats) {
-    return;
-  }
-
-  const chat = state.chats.find(
-    (item) => item.id === state.currentChatId
-  );
-
-  if (!chat) return;
-
-  chat.messages = [...state.messages];
-  chat.updatedAt = Date.now();
-
-  const firstUserMessage =
-    state.messages.find(
+    const firstUserMessage = state.messages.find(
       (message) => message.role === "user"
     );
 
-  if (
-    chat.title === "Новый чат" &&
-    firstUserMessage
-  ) {
-    chat.title =
-      firstUserMessage.content
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 42) ||
-      "Новый чат";
-  }
+    const title = firstUserMessage
+      ? safeText(firstUserMessage.content).slice(0, 40)
+      : "Новый чат";
 
-  state.chats.sort(
-    (a, b) => b.updatedAt - a.updatedAt
-  );
-
-  saveChats();
-  renderChatHistory();
-}
-
-function renderChatHistory() {
-  if (!chatHistory) return;
-
-  chatHistory.innerHTML = "";
-
-  const visibleChats =
-    state.chats.slice(0, 30);
-
-  visibleChats.forEach((chat) => {
-    const button = document.createElement("button");
-
-    button.type = "button";
-    button.className =
-      "chat-history-item";
-
-    button.textContent =
-      chat.title || "Новый чат";
-
-    button.title =
-      chat.title || "Новый чат";
-
-    button.addEventListener("click", () => {
-      openChat(chat.id);
-      closeSidebar();
-    });
-
-    chatHistory.appendChild(button);
-  });
-}
-
-function renderMessages() {
-  messagesContainer.innerHTML = "";
-
-  state.messages.forEach(renderMessage);
-
-  scrollChatToBottom();
-}
-
-/* =========================================================
-   TOOLS
-   ========================================================= */
-
-function setupTools() {
-  $$(".tool-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tool = button.dataset.tool;
-
-      openTool(tool);
-      closeSidebar();
-    });
-  });
-
-  toolRunButton?.addEventListener(
-    "click",
-    runTool
-  );
-}
-
-const TOOLS = {
-  image: {
-    title: "Создать изображение",
-    description:
-      "Опишите изображение, которое хотите создать."
-  },
-
-  video: {
-    title: "Создать видео",
-    description:
-      "Опишите сцену или видео, которое нужно создать."
-  },
-
-  music: {
-    title: "Создать музыку",
-    description:
-      "Опишите стиль, настроение и тип музыки."
-  },
-
-  model3d: {
-    title: "Создать 3D-модель",
-    description:
-      "Опишите предмет, который хотите получить как 3D-модель."
-  },
-
-  website: {
-    title: "Создать сайт",
-    description:
-      "Опишите сайт, который нужно разработать."
-  }
-};
-
-function openTool(tool) {
-  const config = TOOLS[tool];
-
-  if (!config) return;
-
-  state.selectedTool = tool;
-
-  toolModalTitle.textContent =
-    config.title;
-
-  toolModalDescription.textContent =
-    config.description;
-
-  toolPrompt.value = "";
-  toolStatus.hidden = true;
-  toolStatus.textContent = "";
-
-  openModal(toolModal);
-}
-
-async function runTool() {
-  const prompt = toolPrompt.value.trim();
-
-  if (!prompt || !state.selectedTool) {
-    showToolStatus(
-      "Сначала опишите, что нужно создать."
+    const existing = state.chats.find(
+      (chat) => chat.id === state.currentChatId
     );
 
-    return;
+    if (existing) {
+      existing.title = title;
+      existing.messages = [...state.messages];
+    } else {
+      state.chats.unshift({
+        id: state.currentChatId,
+        title,
+        messages: [...state.messages]
+      });
+    }
+
+    if (state.chats.length > 50) {
+      state.chats = state.chats.slice(0, 50);
+    }
+
+    renderChatHistory();
   }
 
-  /*
-    На этом этапе инструменты передают задачу
-    в обычный AI-чат.
+  function renderMessages() {
+    if (!elements.messages) {
+      return;
+    }
 
-    Реальное создание изображения/видео/3D
-    будет подключаться отдельными серверными
-    API-маршрутами, когда они существуют
-    на сервере.
-  */
+    clearMessages();
 
-  closeModal(toolModal);
+    if (!state.messages.length) {
+      if (elements.welcomeScreen) {
+        showElement(elements.welcomeScreen);
+      }
 
-  const toolName =
-    TOOLS[state.selectedTool]?.title ||
-    "Инструмент";
+      return;
+    }
 
-  addMessage(
-    "user",
-    `${toolName}\n\n${prompt}`
-  );
+    hideElement(elements.welcomeScreen);
 
-  state.isGenerating = true;
-  setGenerating(true);
+    state.messages.forEach((message) => {
+      appendMessage(
+        message.role,
+        message.content,
+        false
+      );
+    });
 
-  try {
-    const response = await apiRequest(API.chat, {
-      method: "POST",
-      timeout: 120000,
-      body: {
-        message: prompt,
-        tool: state.selectedTool,
-        messages: state.messages.map(
-          (message) => ({
+    scrollMessagesToBottom();
+  }
+
+  function appendMessage(role, content, scroll = true) {
+    if (!elements.messages) {
+      return null;
+    }
+
+    hideElement(elements.welcomeScreen);
+
+    const wrapper = document.createElement("div");
+    wrapper.className = `message-row message-row-${role}`;
+
+    const message = document.createElement("div");
+    message.className = `message message-${role}`;
+
+    const text = document.createElement("div");
+    text.className = "message-content";
+
+    text.textContent = safeText(content);
+
+    message.appendChild(text);
+    wrapper.appendChild(message);
+    elements.messages.appendChild(wrapper);
+
+    if (scroll) {
+      scrollMessagesToBottom();
+    }
+
+    return wrapper;
+  }
+
+  function extractAssistantAnswer(data) {
+    if (!data) {
+      return "";
+    }
+
+    if (typeof data === "string") {
+      return data;
+    }
+
+    if (typeof data.message === "string") {
+      return data.message;
+    }
+
+    if (typeof data.answer === "string") {
+      return data.answer;
+    }
+
+    if (typeof data.response === "string") {
+      return data.response;
+    }
+
+    if (typeof data.content === "string") {
+      return data.content;
+    }
+
+    if (typeof data.text === "string") {
+      return data.text;
+    }
+
+    if (data.message && typeof data.message.content === "string") {
+      return data.message.content;
+    }
+
+    if (data.choices?.[0]?.message?.content) {
+      return data.choices[0].message.content;
+    }
+
+    if (data.choices?.[0]?.text) {
+      return data.choices[0].text;
+    }
+
+    return "";
+  }
+
+  async function sendMessage() {
+    if (state.busy) {
+      return;
+    }
+
+    const input = elements.messageInput;
+
+    if (!input) {
+      return;
+    }
+
+    const content = input.value.trim();
+
+    if (!content && !state.attachedFile) {
+      return;
+    }
+
+    if (!state.authenticated) {
+      showAuth();
+      return;
+    }
+
+    if (!state.currentChatId) {
+      state.currentChatId = generateChatId();
+    }
+
+    let finalContent = content;
+
+    if (state.attachedFile) {
+      const fileName = state.attachedFile.name || "файл";
+
+      finalContent = content
+        ? `${content}\n\n[Прикреплённый файл: ${fileName}]`
+        : `[Прикреплённый файл: ${fileName}]`;
+    }
+
+    const userMessage = {
+      role: "user",
+      content: finalContent
+    };
+
+    state.messages.push(userMessage);
+    appendMessage("user", finalContent);
+
+    input.value = "";
+    state.attachedFile = null;
+
+    updateInputHeight();
+
+    setBusy(true);
+
+    try {
+      const data = await apiRequest(API.chat, {
+        method: "POST",
+        body: {
+          chatId: state.currentChatId,
+          messages: state.messages.map((message) => ({
             role: message.role,
             content: message.content
-          })
-        ),
-        chatId: state.currentChatId
+          }))
+        }
+      });
+
+      const answer = extractAssistantAnswer(data);
+
+      if (!answer) {
+        throw new Error(
+          "Сервер вернул пустой ответ."
+        );
+      }
+
+      const assistantMessage = {
+        role: "assistant",
+        content: answer
+      };
+
+      state.messages.push(assistantMessage);
+      appendMessage("assistant", answer);
+
+      saveCurrentChat();
+    } catch (error) {
+      const errorMessage =
+        error?.message ||
+        "Не удалось получить ответ от Нейро-чата.";
+
+      appendMessage(
+        "assistant",
+        `Ошибка: ${errorMessage}`
+      );
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Tools
+  --------------------------------------------------------- */
+
+  const tools = {
+    image: {
+      title: "Создание изображения",
+      description:
+        "Опишите изображение, которое нужно создать."
+    },
+
+    video: {
+      title: "Создание видео",
+      description:
+        "Опишите видео, которое нужно создать."
+    },
+
+    music: {
+      title: "Создание музыки",
+      description:
+        "Опишите стиль, настроение и содержание музыки."
+    },
+
+    model3d: {
+      title: "3D-модель",
+      description:
+        "Опишите предмет или персонажа для 3D-модели."
+    },
+
+    website: {
+      title: "Создание сайта",
+      description:
+        "Опишите сайт, который нужно создать."
+    }
+  };
+
+  let currentTool = null;
+
+  function openTool(toolName) {
+    const tool = tools[toolName];
+
+    if (!tool) {
+      showToast("Этот инструмент не найден.", "error");
+      return;
+    }
+
+    currentTool = toolName;
+
+    if (elements.toolModalTitle) {
+      elements.toolModalTitle.textContent = tool.title;
+    }
+
+    if (elements.toolModalDescription) {
+      elements.toolModalDescription.textContent =
+        tool.description;
+    }
+
+    if (elements.toolPrompt) {
+      elements.toolPrompt.value = "";
+    }
+
+    if (elements.toolStatus) {
+      elements.toolStatus.textContent = "";
+    }
+
+    openModal(elements.toolModal);
+
+    elements.toolPrompt?.focus();
+  }
+
+  async function runTool() {
+    if (!currentTool) {
+      return;
+    }
+
+    const prompt =
+      elements.toolPrompt?.value.trim() || "";
+
+    if (!prompt) {
+      if (elements.toolStatus) {
+        elements.toolStatus.textContent =
+          "Введите описание.";
+      }
+
+      return;
+    }
+
+    if (elements.toolRunButton) {
+      elements.toolRunButton.disabled = true;
+    }
+
+    if (elements.toolStatus) {
+      elements.toolStatus.textContent =
+        "Обработка запроса…";
+    }
+
+    try {
+      if (currentTool === "image") {
+        await generateImage(prompt);
+      } else if (currentTool === "video") {
+        await generateVideo(prompt);
+      } else {
+        /*
+         * Остальные инструменты пока передаются
+         * в обычный чат, чтобы кнопка не была пустой.
+         */
+        closeModal(elements.toolModal);
+
+        if (elements.messageInput) {
+          elements.messageInput.value = prompt;
+        }
+
+        await sendMessage();
+      }
+    } catch (error) {
+      if (elements.toolStatus) {
+        elements.toolStatus.textContent =
+          error.message || "Произошла ошибка.";
+      }
+    } finally {
+      if (elements.toolRunButton) {
+        elements.toolRunButton.disabled = false;
+      }
+    }
+  }
+
+  async function generateImage(prompt) {
+    const data = await apiRequest(API.image, {
+      method: "POST",
+      body: {
+        prompt
       }
     });
 
-    const data = await readJson(response);
+    const image =
+      data?.image ||
+      data?.url ||
+      data?.result;
 
-    if (!response.ok) {
+    if (!image) {
       throw new Error(
-        getServerError(
-          data,
-          "Не удалось выполнить запрос."
-        )
+        "Сервер не вернул изображение."
       );
     }
 
-    const answer =
-      extractAssistantAnswer(data);
+    closeModal(elements.toolModal);
 
-    if (!answer) {
-      throw new Error(
-        "Сервер не вернул результат."
-      );
-    }
-
-    addMessage("assistant", answer);
-
-    saveCurrentChat();
-  } catch (error) {
-    console.error("Tool error:", error);
-
-    addMessage(
+    const row = appendMessage(
       "assistant",
-      cleanErrorMessage(error)
+      "Изображение создано."
     );
-  } finally {
-    state.isGenerating = false;
-    setGenerating(false);
-  }
-}
 
-function showToolStatus(message) {
-  if (!toolStatus) return;
-
-  toolStatus.textContent = message;
-  toolStatus.hidden = false;
-}
-
-/* =========================================================
-   FILES
-   ========================================================= */
-
-function setupFiles() {
-  attachButton?.addEventListener(
-    "click",
-    () => fileInput?.click()
-  );
-
-  fileInput?.addEventListener(
-    "change",
-    () => {
-      const files = [...fileInput.files];
-
-      if (!files.length) return;
-
-      const names = files
-        .map((file) => file.name)
-        .join(", ");
-
-      messageInput.value +=
-        messageInput.value
-          ? `\n\nПрикреплены файлы: ${names}`
-          : `Прикреплены файлы: ${names}`;
-
-      autoResizeTextarea();
-      updateSendButton();
-
-      showToast(
-        `${files.length} файл(ов) выбрано.`
+    if (row) {
+      const content = row.querySelector(
+        ".message-content"
       );
 
-      /*
-        В текущем frontend файлы отображаются
-        в сообщении. Для реальной загрузки
-        бинарных файлов сервер должен предоставить
-        отдельный multipart/upload endpoint.
-      */
+      if (content) {
+        const imageElement =
+          document.createElement("img");
 
-      fileInput.value = "";
-    }
-  );
-}
+        imageElement.src = image;
+        imageElement.alt = "Созданное изображение";
+        imageElement.className = "generated-image";
+        imageElement.loading = "lazy";
 
-/* =========================================================
-   VOICE
-   ========================================================= */
-
-function setupVoice() {
-  if (!voiceButton) return;
-
-  const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    voiceButton.addEventListener(
-      "click",
-      () => {
-        showToast(
-          "Голосовой ввод не поддерживается этим браузером."
-        );
-      }
-    );
-
-    return;
-  }
-
-  const recognition =
-    new SpeechRecognition();
-
-  recognition.lang = "ru-RU";
-  recognition.interimResults = true;
-  recognition.continuous = false;
-
-  let listening = false;
-
-  voiceButton.addEventListener(
-    "click",
-    () => {
-      if (listening) {
-        recognition.stop();
-        return;
-      }
-
-      try {
-        recognition.start();
-        listening = true;
-
-        voiceButton.style.color =
-          "#ff7d89";
-      } catch (error) {
-        console.error(
-          "Speech recognition error:",
-          error
-        );
+        content.appendChild(imageElement);
       }
     }
-  );
-
-  recognition.onresult = (event) => {
-    let transcript = "";
-
-    for (
-      let i = event.resultIndex;
-      i < event.results.length;
-      i++
-    ) {
-      transcript +=
-        event.results[i][0].transcript;
-    }
-
-    messageInput.value = transcript;
-
-    autoResizeTextarea();
-    updateSendButton();
-  };
-
-  recognition.onend = () => {
-    listening = false;
-
-    voiceButton.style.color = "";
-  };
-
-  recognition.onerror = (event) => {
-    console.error(
-      "Speech recognition:",
-      event.error
-    );
-
-    listening = false;
-    voiceButton.style.color = "";
 
     showToast(
-      "Не удалось распознать голос."
+      "Изображение создано.",
+      "success"
     );
-  };
-}
+  }
 
-/* =========================================================
-   MODALS
-   ========================================================= */
+  async function generateVideo(prompt) {
+    const data = await apiRequest(API.video, {
+      method: "POST",
+      body: {
+        prompt
+      }
+    });
 
-function setupModals() {
-  $$("[data-close-modal]").forEach(
-    (element) => {
-      element.addEventListener(
-        "click",
-        () => {
-          const modal =
-            element.closest(".modal");
+    const video =
+      data?.video ||
+      data?.url ||
+      data?.result;
 
-          closeModal(modal);
+    if (!video) {
+      throw new Error(
+        "Сервер не вернул видео."
+      );
+    }
+
+    closeModal(elements.toolModal);
+
+    const row = appendMessage(
+      "assistant",
+      "Видео создано."
+    );
+
+    if (row) {
+      const content = row.querySelector(
+        ".message-content"
+      );
+
+      if (content) {
+        const videoElement =
+          document.createElement("video");
+
+        videoElement.src = video;
+        videoElement.controls = true;
+        videoElement.className = "generated-video";
+        videoElement.preload = "metadata";
+
+        content.appendChild(videoElement);
+      }
+    }
+
+    showToast(
+      "Видео создано.",
+      "success"
+    );
+  }
+
+  /* ---------------------------------------------------------
+     File upload
+  --------------------------------------------------------- */
+
+  function openFilePicker() {
+    elements.fileInput?.click();
+  }
+
+  function handleFileChange(event) {
+    const file = event?.target?.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    state.attachedFile = file;
+
+    showToast(
+      `Файл «${file.name}» прикреплён.`,
+      "success"
+    );
+
+    if (elements.messageInput) {
+      elements.messageInput.focus();
+    }
+  }
+
+  /* ---------------------------------------------------------
+     Voice
+  --------------------------------------------------------- */
+
+  async function toggleVoice() {
+    if (
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+      showToast(
+        "Голосовой ввод не поддерживается этим браузером.",
+        "error"
+      );
+
+      return;
+    }
+
+    if (state.recording) {
+      stopRecording();
+      return;
+    }
+
+    try {
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+
+      state.audioChunks = [];
+      state.mediaRecorder =
+        new MediaRecorder(stream);
+
+      state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data?.size) {
+          state.audioChunks.push(event.data);
         }
-      );
-    }
-  );
+      };
 
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.key !== "Escape") return;
+      state.mediaRecorder.onstop = () => {
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
 
-      closeAllModals();
-      closeSidebar();
-    }
-  );
-}
+        showToast(
+          "Запись завершена. Голосовой ввод готов.",
+          "success"
+        );
+      };
 
-function openModal(modal) {
-  if (!modal) return;
+      state.mediaRecorder.start();
+      state.recording = true;
 
-  modal.hidden = false;
-}
-
-function closeModal(modal) {
-  if (!modal) return;
-
-  modal.hidden = true;
-}
-
-function closeAllModals() {
-  $$(".modal").forEach(
-    (modal) => {
-      modal.hidden = true;
-    }
-  );
-}
-
-/* =========================================================
-   PROFILE
-   ========================================================= */
-
-function updateProfile() {
-  if (!state.user) return;
-
-  const username =
-    state.user.username ||
-    state.user.name ||
-    "Пользователь";
-
-  const initial =
-    username
-      .trim()
-      .charAt(0)
-      .toUpperCase() || "N";
-
-  if (profileInitial) {
-    profileInitial.textContent =
-      initial;
-  }
-
-  if (profileBigAvatar) {
-    profileBigAvatar.textContent =
-      initial;
-  }
-
-  if (profileName) {
-    profileName.textContent =
-      state.user.name ||
-      username;
-  }
-
-  if (profileUsername) {
-    profileUsername.textContent =
-      username.startsWith("@")
-        ? username
-        : `@${username}`;
-  }
-}
-
-function getUserInitial() {
-  const username =
-    state.user?.username ||
-    state.user?.name ||
-    "U";
-
-  return (
-    username
-      .trim()
-      .charAt(0)
-      .toUpperCase() || "U"
-  );
-}
-
-/* =========================================================
-   SETTINGS
-   ========================================================= */
-
-function loadLocalSettings() {
-  try {
-    state.temporaryChats =
-      localStorage.getItem(
-        STORAGE_KEYS.temporary
-      ) === "true";
-
-    const savedAnimations =
-      localStorage.getItem(
-        STORAGE_KEYS.animations
+      elements.voiceButton?.classList.add(
+        "recording"
       );
 
-    if (savedAnimations !== null) {
-      state.animationsEnabled =
-        savedAnimations !== "false";
+      showToast(
+        "Идёт запись… Нажмите ещё раз для остановки.",
+        "info"
+      );
+    } catch {
+      showToast(
+        "Не удалось получить доступ к микрофону.",
+        "error"
+      );
     }
-  } catch {
-    state.temporaryChats = false;
-    state.animationsEnabled = true;
   }
 
-  if (temporaryChats) {
-    temporaryChats.checked =
-      state.temporaryChats;
+  function stopRecording() {
+    if (
+      state.mediaRecorder &&
+      state.mediaRecorder.state !== "inactive"
+    ) {
+      state.mediaRecorder.stop();
+    }
+
+    state.recording = false;
+
+    elements.voiceButton?.classList.remove(
+      "recording"
+    );
   }
 
-  if (animationsEnabled) {
-    animationsEnabled.checked =
-      state.animationsEnabled;
+  /* ---------------------------------------------------------
+     Sidebar
+  --------------------------------------------------------- */
+
+  function openSidebar() {
+    elements.sidebar?.classList.add("open");
+    elements.sidebarOverlay?.classList.add("active");
+    document.body.classList.add("sidebar-open");
   }
 
-  temporaryChats?.addEventListener(
-    "change",
-    () => {
+  function closeSidebar() {
+    elements.sidebar?.classList.remove("open");
+    elements.sidebarOverlay?.classList.remove("active");
+    document.body.classList.remove("sidebar-open");
+  }
+
+  /* ---------------------------------------------------------
+     Modals
+  --------------------------------------------------------- */
+
+  function openModal(modal) {
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.add("active");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+  }
+
+  function closeModal(modal) {
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+
+    if (
+      !document.querySelector(
+        ".modal.active"
+      )
+    ) {
+      document.body.classList.remove(
+        "modal-open"
+      );
+    }
+  }
+
+  function closeAllModals() {
+    document
+      .querySelectorAll(".modal.active")
+      .forEach((modal) => {
+        closeModal(modal);
+      });
+  }
+
+  function openSettingsModal() {
+    if (elements.temporaryChats) {
+      elements.temporaryChats.checked =
+        state.temporaryChats;
+    }
+
+    if (elements.animationsEnabled) {
+      elements.animationsEnabled.checked =
+        state.animationsEnabled;
+    }
+
+    openModal(elements.settingsModal);
+  }
+
+  /* ---------------------------------------------------------
+     Settings
+  --------------------------------------------------------- */
+
+  function updateSettings() {
+    if (elements.temporaryChats) {
       state.temporaryChats =
-        temporaryChats.checked;
-
-      localStorage.setItem(
-        STORAGE_KEYS.temporary,
-        String(state.temporaryChats)
-      );
-
-      loadChats();
+        elements.temporaryChats.checked;
     }
-  );
 
-  animationsEnabled?.addEventListener(
-    "change",
-    () => {
+    if (elements.animationsEnabled) {
       state.animationsEnabled =
-        animationsEnabled.checked;
-
-      localStorage.setItem(
-        STORAGE_KEYS.animations,
-        String(state.animationsEnabled)
-      );
-
-      applyAnimationSetting();
+        elements.animationsEnabled.checked;
     }
-  );
-}
 
-function applyAnimationSetting() {
-  document.documentElement.dataset.animations =
-    state.animationsEnabled
-      ? "on"
-      : "off";
-}
+    document.body.classList.toggle(
+      "no-animations",
+      !state.animationsEnabled
+    );
 
-/* =========================================================
-   TOASTS
-   ========================================================= */
-
-function showToast(message) {
-  if (!toastContainer) return;
-
-  const toast =
-    document.createElement("div");
-
-  toast.className = "toast";
-  toast.textContent = message;
-
-  toastContainer.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform =
-      "translateY(8px)";
-
-    setTimeout(() => {
-      toast.remove();
-    }, 200);
-  }, 3500);
-}
-
-/* =========================================================
-   KEYBOARD / PAGE
-   ========================================================= */
-
-window.addEventListener(
-  "resize",
-  () => {
-    autoResizeTextarea();
+    if (state.temporaryChats) {
+      state.chats = [];
+      renderChatHistory();
+    }
   }
-);
 
-window.addEventListener(
-  "online",
-  () => {
-    showToast("Соединение восстановлено.");
-  }
-);
+  /* ---------------------------------------------------------
+     Input
+  --------------------------------------------------------- */
 
-window.addEventListener(
-  "offline",
-  () => {
-    showToast("Нет подключения к интернету.");
+  function updateInputHeight() {
+    const input = elements.messageInput;
+
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "auto";
+
+    const maxHeight = 180;
+
+    input.style.height =
+      `${Math.min(input.scrollHeight, maxHeight)}px`;
   }
-);
+
+  /* ---------------------------------------------------------
+     Event binding
+  --------------------------------------------------------- */
+
+  function bindEvents() {
+    elements.authForm?.addEventListener(
+      "submit",
+      login
+    );
+
+    elements.loginButton?.addEventListener(
+      "click",
+      login
+    );
+
+    elements.registerButton?.addEventListener(
+      "click",
+      register
+    );
+
+    elements.logoutButton?.addEventListener(
+      "click",
+      logout
+    );
+
+    elements.profileLogoutButton?.addEventListener(
+      "click",
+      logout
+    );
+
+    elements.profileButton?.addEventListener(
+      "click",
+      openProfileModal
+    );
+
+    elements.settingsButton?.addEventListener(
+      "click",
+      openSettingsModal
+    );
+
+    elements.newChatButton?.addEventListener(
+      "click",
+      () => createNewChat(true)
+    );
+
+    elements.openSidebarButton?.addEventListener(
+      "click",
+      openSidebar
+    );
+
+    elements.closeSidebarButton?.addEventListener(
+      "click",
+      closeSidebar
+    );
+
+    elements.sidebarOverlay?.addEventListener(
+      "click",
+      closeSidebar
+    );
+
+    elements.sendButton?.addEventListener(
+      "click",
+      sendMessage
+    );
+
+    elements.messageInput?.addEventListener(
+      "input",
+      updateInputHeight
+    );
+
+    elements.messageInput?.addEventListener(
+      "keydown",
+      (event) => {
+        if (
+          event.key === "Enter" &&
+          !event.shiftKey
+        ) {
+          event.preventDefault();
+          sendMessage();
+        }
+      }
+    );
+
+    elements.attachButton?.addEventListener(
+      "click",
+      openFilePicker
+    );
+
+    elements.fileInput?.addEventListener(
+      "change",
+      handleFileChange
+    );
+
+    elements.voiceButton?.addEventListener(
+      "click",
+      toggleVoice
+    );
+
+    elements.toolRunButton?.addEventListener(
+      "click",
+      runTool
+    );
+
+    elements.temporaryChats?.addEventListener(
+      "change",
+      updateSettings
+    );
+
+    elements.animationsEnabled?.addEventListener(
+      "change",
+      updateSettings
+    );
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target;
+
+        if (
+          target instanceof HTMLElement &&
+          target.matches("[data-close-modal]")
+        ) {
+          const modal = target.closest(".modal");
+
+          if (modal) {
+            closeModal(modal);
+          }
+        }
+      }
+    );
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") {
+          closeAllModals();
+          closeSidebar();
+        }
+      }
+    );
+
+    /*
+     * Поддержка кнопок инструментов из HTML.
+     * Пример:
+     * data-tool="image"
+     * data-tool="video"
+     * data-tool="music"
+     * data-tool="model3d"
+     * data-tool="website"
+     */
+    document.addEventListener(
+      "click",
+      (event) => {
+        const button =
+          event.target.closest("[data-tool]");
+
+        if (!button) {
+          return;
+        }
+
+        const toolName =
+          button.getAttribute("data-tool");
+
+        if (toolName) {
+          openTool(toolName);
+        }
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     Initialization
+  --------------------------------------------------------- */
+
+  async function init() {
+    bindEvents();
+
+    document.body.classList.add(
+      "neuro-chat"
+    );
+
+    /*
+     * Убираем системное выделение старого логотипа
+     * только если CSS/HTML уже предоставляет новый вариант.
+     * Сам текст "Нейро-чат" будет установлен в index.html,
+     * чтобы не создавать дубликаты через JS.
+     */
+
+    await restoreSession();
+  }
+
+  if (
+    document.readyState === "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      init,
+      { once: true }
+    );
+  } else {
+    init();
+  }
+
+  /* ---------------------------------------------------------
+     Public API
+  --------------------------------------------------------- */
+
+  window.NeuroChat = {
+    login,
+    register,
+    logout,
+    sendMessage,
+    createNewChat,
+    openTool,
+    openSettingsModal,
+    openProfileModal,
+    showToast
+  };
+})();
