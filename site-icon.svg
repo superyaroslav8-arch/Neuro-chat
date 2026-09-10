@@ -1,60 +1,16 @@
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 512 512"
-  role="img"
-  aria-label="Нейро-чат"
->
-  <!-- Чёрный фон -->
-  <rect
-    width="512"
-    height="512"
-    rx="112"
-    fill="#000000"
-  />
-  <!-- Современный графический акцент -->
-  <rect
-    x="72"
-    y="72"
-    width="368"
-    height="368"
-    rx="82"
-    fill="none"
-    stroke="#FFFFFF"
-    stroke-width="12"
-  />
-  <!-- NEURO -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#000000"/>
+  <!-- Нейро-чат -->
   <text
     x="256"
-    y="222"
+    y="280"
     text-anchor="middle"
     fill="#FFFFFF"
-    font-family="Arial, Helvetica, sans-serif"
-    font-size="82"
-    font-weight="800"
-    letter-spacing="-5"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="61"
+    font-weight="900"
+    letter-spacing="-4"
   >
-    НЕЙРО
+    Нейро-чат
   </text>
-  <!-- CHAT -->
-  <text
-    x="256"
-    y="310"
-    text-anchor="middle"
-    fill="#FFFFFF"
-    font-family="Arial, Helvetica, sans-serif"
-    font-size="82"
-    font-weight="800"
-    letter-spacing="-5"
-  >
-    ЧАТ
-  </text>
-  <!-- Нижний акцент -->
-  <rect
-    x="166"
-    y="354"
-    width="180"
-    height="10"
-    rx="5"
-    fill="#FFFFFF"
-  />
 </svg>
