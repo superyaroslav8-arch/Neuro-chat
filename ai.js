@@ -1,99 +1,67 @@
-/**
- * ai.js
- * Нейро-чат — AI engine
- *
- * Поддерживаемые режимы:
- *   neuro    -> автоматический выбор доступного AI
- *   chatgpt  -> OpenAI API
- *   gemini   -> Google Gemini API
- *   grok     -> xAI API
- *   alice-1  -> пока не подключён к публичному API
- *
- * ВАЖНО:
- * API-ключи НЕ хранятся в этом файле.
- *
- * Ожидаемые Worker secrets:
- *   OPENAI_API_KEY
- *   GOOGLE_API_KEY
- *   XAI_API_KEY
- *
- * Для Cloudflare Workers AI:
- *   env.AI
- *
- * Этот файл отвечает только за AI.
- * Авторизация, пользователи, чаты и база данных
- * находятся в auth.js / database.js.
- */
-
-const DEFAULT_SYSTEM_PROMPT = `
-Ты — Нейро, AI-помощник сервиса «Нейро-чат».
-
-Отвечай на языке пользователя.
-По умолчанию используй русский язык, если пользователь пишет по-русски.
-
-Будь точным, полезным и понятным.
-Не выдумывай факты, ссылки, API, возможности сервисов или результаты действий.
-Если информации недостаточно — честно сообщи об этом.
-
-Не утверждай, что ты выполнил действие, если действие реально не выполнялось.
-`;
-
-const MODEL_CONFIG = {
+const MODELS = {
   neuro: {
-    label: "Нейро",
-    type: "automatic",
+    id: "neuro",
+    name: "Нейро",
+    provider: "cloudflare"
   },
 
   chatgpt: {
-    label: "ChatGPT",
-    type: "openai",
-    envKey: "OPENAI_API_KEY",
-    defaultModel: "gpt-5.6",
+    id: "chatgpt",
+    name: "ChatGPT",
+    provider: "openai"
   },
 
   gemini: {
-    label: "Gemini",
-    type: "gemini",
-    envKey: "GOOGLE_API_KEY",
-    defaultModel: "gemini-2.5-flash",
+    id: "gemini",
+    name: "Gemini",
+    provider: "google"
   },
 
   grok: {
-    label: "Grok",
-    type: "xai",
-    envKey: "XAI_API_KEY",
-    defaultModel: "grok-4.6",
+    id: "grok",
+    name: "Grok",
+    provider: "xai"
   },
 
   "alice-1": {
-    label: "Алиса 1",
-    type: "unavailable",
-  },
+    id: "alice-1",
+    name: "Алиса 1",
+    provider: "alice"
+  }
 };
 
-const CLOUDFLARE_AI_MODEL =
+const DEFAULT_CLOUDFLARE_MODEL =
   "@cf/meta/llama-3.1-8b-instruct";
 
-const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LENGTH = 12000;
-const MAX_TOTAL_INPUT_LENGTH = 100000;
+const MAX_HISTORY = 30;
 
-/* -------------------------------------------------------------------------- */
-/* Общие функции                                                              */
-/* -------------------------------------------------------------------------- */
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store"
+    }
+  });
+}
 
-function cleanString(value, fallback = "") {
-  if (typeof value !== "string") {
-    return fallback;
-  }
-
-  return value.trim();
+function fail(message, status = 400) {
+  return json(
+    {
+      ok: false,
+      error: message
+    },
+    status
+  );
 }
 
 function normalizeModel(model) {
-  const value = cleanString(model, "neuro").toLowerCase();
+  const value = String(model || "neuro")
+    .trim()
+    .toLowerCase();
 
-  if (MODEL_CONFIG[value]) {
+  if (MODELS[value]) {
     return value;
   }
 
@@ -105,985 +73,488 @@ function normalizeMessages(messages) {
     return [];
   }
 
-  const result = [];
+  return messages
+    .slice(-MAX_HISTORY)
+    .map((message) => {
+      const role =
+        message?.role === "assistant"
+          ? "assistant"
+          : "user";
 
-  for (const item of messages.slice(-MAX_MESSAGES)) {
-    if (!item || typeof item !== "object") {
-      continue;
+      const content = String(
+        message?.content ||
+        message?.text ||
+        ""
+      )
+        .trim()
+        .slice(0, MAX_MESSAGE_LENGTH);
+
+      return {
+        role,
+        content
+      };
+    })
+    .filter((message) => message.content);
+}
+
+function getLastUserMessage(messages) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "user") {
+      return messages[i].content;
     }
-
-    const role = cleanString(item.role).toLowerCase();
-    const content = cleanString(item.content);
-
-    if (
-      !content ||
-      content.length > MAX_MESSAGE_LENGTH
-    ) {
-      continue;
-    }
-
-    if (
-      role !== "user" &&
-      role !== "assistant" &&
-      role !== "system"
-    ) {
-      continue;
-    }
-
-    result.push({
-      role,
-      content,
-    });
   }
 
-  return result;
+  return "";
 }
 
-function totalMessageLength(messages) {
-  return messages.reduce(
-    (total, message) =>
-      total + message.content.length,
-    0,
-  );
+function makeSystemPrompt() {
+  return [
+    "Ты — Нейро, AI-помощник проекта «Нейро-чат».",
+    "Отвечай на русском языке, если пользователь не попросил другой язык.",
+    "Отвечай точно, понятно и по делу.",
+    "Не утверждай, что выполнил действие, если оно реально не было выполнено.",
+    "Не придумывай ссылки, файлы, результаты инструментов или факты.",
+    "Если для выполнения действия требуется разрешение пользователя, сначала попроси подтверждение.",
+    "Если информации недостаточно, честно скажи об этом."
+  ].join(" ");
 }
 
-function createAIError(
-  message,
-  code = "AI_ERROR",
-  status = 500,
-) {
-  const error = new Error(message);
-
-  error.code = code;
-  error.status = status;
-
-  return error;
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
 }
 
-async function readJsonResponse(response) {
-  const text = await response.text();
-
-  if (!text) {
+async function getUserSettings(env, userId) {
+  if (!userId || !env.getUserSettings) {
     return {};
   }
 
   try {
-    return JSON.parse(text);
+    return (
+      (await env.getUserSettings(userId)) || {}
+    );
   } catch {
-    return {
-      raw: text,
-    };
+    return {};
   }
 }
 
-function extractTextFromOpenAI(data) {
-  if (
-    typeof data?.output_text === "string" &&
-    data.output_text.trim()
-  ) {
-    return data.output_text.trim();
+function extractApiKey(settings, provider) {
+  if (!settings || typeof settings !== "object") {
+    return null;
   }
 
-  const output = Array.isArray(data?.output)
-    ? data.output
-    : [];
+  const keys = settings.apiKeys;
 
-  const parts = [];
-
-  for (const item of output) {
-    if (!Array.isArray(item?.content)) {
-      continue;
-    }
-
-    for (const content of item.content) {
-      if (
-        content?.type === "output_text" &&
-        typeof content.text === "string"
-      ) {
-        parts.push(content.text);
-      }
-    }
+  if (!keys || typeof keys !== "object") {
+    return null;
   }
 
-  return parts.join("\n").trim();
+  const key = keys[provider];
+
+  if (!key) {
+    return null;
+  }
+
+  return String(key).trim() || null;
 }
 
-function extractTextFromGemini(data) {
-  const candidates = Array.isArray(data?.candidates)
-    ? data.candidates
-    : [];
-
-  const parts = [];
-
-  for (const candidate of candidates) {
-    const candidateParts = candidate?.content?.parts;
-
-    if (!Array.isArray(candidateParts)) {
-      continue;
-    }
-
-    for (const part of candidateParts) {
-      if (typeof part?.text === "string") {
-        parts.push(part.text);
-      }
-    }
-  }
-
-  return parts.join("\n").trim();
-}
-
-function extractTextFromXAI(data) {
-  const choices = Array.isArray(data?.choices)
-    ? data.choices
-    : [];
-
-  const first = choices[0];
-
-  const content =
-    first?.message?.content ??
-    first?.message?.text ??
-    "";
-
-  if (typeof content === "string") {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (typeof part === "string") {
-          return part;
-        }
-
-        return part?.text || "";
-      })
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-  }
-
-  return "";
-}
-
-function extractTextFromCloudflare(data) {
-  if (typeof data === "string") {
-    return data.trim();
-  }
-
-  if (
-    typeof data?.response === "string"
-  ) {
-    return data.response.trim();
-  }
-
-  if (
-    typeof data?.result?.response === "string"
-  ) {
-    return data.result.response.trim();
-  }
-
-  if (
-    typeof data?.result?.text === "string"
-  ) {
-    return data.result.text.trim();
-  }
-
-  if (
-    typeof data?.text === "string"
-  ) {
-    return data.text.trim();
-  }
-
-  return "";
-}
-
-function assertSuccessfulResponse(
-  response,
-  data,
-  provider,
-) {
-  if (response.ok) {
-    return;
-  }
-
-  let message =
-    data?.error?.message ||
-    data?.message ||
-    data?.error ||
-    "";
-
-  if (typeof message !== "string") {
-    message = "";
-  }
-
-  if (!message) {
-    message =
-      `${provider} API вернул ошибку ${response.status}.`;
-  }
-
-  const status =
-    response.status >= 400 &&
-    response.status < 600
-      ? response.status
-      : 502;
-
-  throw createAIError(
-    message,
-    "AI_PROVIDER_ERROR",
-    status,
-  );
-}
-
-function validateMessages(messages) {
-  if (!messages.length) {
-    throw createAIError(
-      "Не переданы сообщения для AI.",
-      "EMPTY_MESSAGES",
-      400,
-    );
-  }
-
-  const totalLength =
-    totalMessageLength(messages);
-
-  if (totalLength > MAX_TOTAL_INPUT_LENGTH) {
-    throw createAIError(
-      "Слишком большой объём сообщения.",
-      "INPUT_TOO_LARGE",
-      413,
-    );
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Cloudflare Workers AI                                                      */
-/* -------------------------------------------------------------------------- */
-
-async function callCloudflareAI(
-  env,
-  messages,
-  options = {},
-) {
-  if (!env?.AI || typeof env.AI.run !== "function") {
-    throw createAIError(
-      "Cloudflare Workers AI не подключён.",
-      "CLOUDFLARE_AI_NOT_CONFIGURED",
-      503,
+async function cloudflareChat(env, messages) {
+  if (!env.AI) {
+    throw new Error(
+      "Cloudflare AI не подключён к Worker."
     );
   }
 
   const model =
-    options.model ||
-    env.NEURO_CLOUDFLARE_MODEL ||
-    CLOUDFLARE_AI_MODEL;
+    env.NEURO_AI_MODEL ||
+    DEFAULT_CLOUDFLARE_MODEL;
 
-  const cleanMessages =
-    messages.filter(
-      (message) =>
-        message.role === "user" ||
-        message.role === "assistant" ||
-        message.role === "system",
-    );
-
-  const request = {
-    messages: cleanMessages,
-  };
-
-  let result;
-
-  try {
-    result = await env.AI.run(
-      model,
-      request,
-    );
-  } catch (error) {
-    throw createAIError(
-      error?.message ||
-        "Cloudflare Workers AI не смог обработать запрос.",
-      "CLOUDFLARE_AI_ERROR",
-      502,
-    );
-  }
-
-  const text =
-    extractTextFromCloudflare(result);
-
-  if (!text) {
-    throw createAIError(
-      "Cloudflare Workers AI вернул пустой ответ.",
-      "EMPTY_AI_RESPONSE",
-      502,
-    );
-  }
-
-  return {
-    text,
-    provider: "cloudflare",
-    model,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* OpenAI                                                                      */
-/* -------------------------------------------------------------------------- */
-
-async function callOpenAI(
-  env,
-  messages,
-  options = {},
-) {
-  const apiKey =
-    cleanString(env?.OPENAI_API_KEY);
-
-  if (!apiKey) {
-    throw createAIError(
-      "OPENAI_API_KEY не настроен.",
-      "OPENAI_NOT_CONFIGURED",
-      503,
-    );
-  }
-
-  const model =
-    options.model ||
-    env.OPENAI_MODEL ||
-    MODEL_CONFIG.chatgpt.defaultModel;
-
-  const input = messages.map(
-    (message) => ({
-      role: message.role,
-      content: message.content,
-    }),
-  );
-
-  let response;
-
-  try {
-    response = await fetch(
-      "https://api.openai.com/v1/responses",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-          Authorization:
-            `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          instructions:
-            options.systemPrompt ||
-            DEFAULT_SYSTEM_PROMPT,
-          input,
-          store: false,
-          max_output_tokens:
-            options.maxOutputTokens || 2048,
-        }),
-      },
-    );
-  } catch (error) {
-    throw createAIError(
-      error?.message ||
-        "Не удалось подключиться к OpenAI.",
-      "OPENAI_NETWORK_ERROR",
-      502,
-    );
-  }
-
-  const data =
-    await readJsonResponse(response);
-
-  assertSuccessfulResponse(
-    response,
-    data,
-    "OpenAI",
-  );
-
-  const text =
-    extractTextFromOpenAI(data);
-
-  if (!text) {
-    throw createAIError(
-      "OpenAI вернул пустой ответ.",
-      "OPENAI_EMPTY_RESPONSE",
-      502,
-    );
-  }
-
-  return {
-    text,
-    provider: "openai",
-    model,
-    responseId: data?.id || null,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Google Gemini                                                               */
-/* -------------------------------------------------------------------------- */
-
-function convertMessagesToGemini(messages) {
-  return messages
-    .filter(
-      (message) =>
-        message.role === "user" ||
-        message.role === "assistant",
-    )
-    .map((message) => ({
-      role:
-        message.role === "assistant"
-          ? "model"
-          : "user",
-      parts: [
-        {
-          text: message.content,
-        },
-      ],
-    }));
-}
-
-async function callGemini(
-  env,
-  messages,
-  options = {},
-) {
-  const apiKey =
-    cleanString(env?.GOOGLE_API_KEY);
-
-  if (!apiKey) {
-    throw createAIError(
-      "GOOGLE_API_KEY не настроен.",
-      "GEMINI_NOT_CONFIGURED",
-      503,
-    );
-  }
-
-  const model =
-    options.model ||
-    env.GEMINI_MODEL ||
-    MODEL_CONFIG.gemini.defaultModel;
-
-  const contents =
-    convertMessagesToGemini(messages);
-
-  if (!contents.length) {
-    throw createAIError(
-      "Gemini не получил сообщений.",
-      "GEMINI_EMPTY_INPUT",
-      400,
-    );
-  }
-
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-  let response;
-
-  try {
-    response = await fetch(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  options.systemPrompt ||
-                  DEFAULT_SYSTEM_PROMPT,
-              },
-            ],
-          },
-
-          contents,
-
-          generationConfig: {
-            maxOutputTokens:
-              options.maxOutputTokens || 2048,
-          },
-        }),
-      },
-    );
-  } catch (error) {
-    throw createAIError(
-      error?.message ||
-        "Не удалось подключиться к Gemini.",
-      "GEMINI_NETWORK_ERROR",
-      502,
-    );
-  }
-
-  const data =
-    await readJsonResponse(response);
-
-  assertSuccessfulResponse(
-    response,
-    data,
-    "Gemini",
-  );
-
-  const text =
-    extractTextFromGemini(data);
-
-  if (!text) {
-    throw createAIError(
-      "Gemini вернул пустой ответ.",
-      "GEMINI_EMPTY_RESPONSE",
-      502,
-    );
-  }
-
-  return {
-    text,
-    provider: "gemini",
-    model,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* xAI / Grok                                                                 */
-/* -------------------------------------------------------------------------- */
-
-async function callGrok(
-  env,
-  messages,
-  options = {},
-) {
-  const apiKey =
-    cleanString(env?.XAI_API_KEY);
-
-  if (!apiKey) {
-    throw createAIError(
-      "XAI_API_KEY не настроен.",
-      "GROK_NOT_CONFIGURED",
-      503,
-    );
-  }
-
-  const model =
-    options.model ||
-    env.XAI_MODEL ||
-    MODEL_CONFIG.grok.defaultModel;
-
-  const input = [
+  const prompt = [
     {
       role: "system",
-      content:
-        options.systemPrompt ||
-        DEFAULT_SYSTEM_PROMPT,
+      content: makeSystemPrompt()
     },
-    ...messages,
+    ...messages
   ];
 
-  let response;
+  const result = await env.AI.run(model, {
+    messages: prompt
+  });
+
+  const text =
+    result?.response ||
+    result?.result?.response ||
+    result?.output_text ||
+    "";
+
+  if (!text) {
+    throw new Error(
+      "Модель «Нейро» не вернула ответ."
+    );
+  }
+
+  return String(text).trim();
+}
+
+async function openAIChat(apiKey, messages) {
+  if (!apiKey) {
+    throw new Error(
+      "Добавьте API-ключ OpenAI в настройках."
+    );
+  }
+
+  const response = await fetch(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: makeSystemPrompt()
+          },
+          ...messages
+        ],
+        temperature: 0.7
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ||
+      "OpenAI не принял запрос."
+    );
+  }
+
+  const text =
+    data?.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error(
+      "OpenAI не вернул текст ответа."
+    );
+  }
+
+  return String(text).trim();
+}
+
+async function geminiChat(apiKey, messages) {
+  if (!apiKey) {
+    throw new Error(
+      "Добавьте API-ключ Gemini в настройках."
+    );
+  }
+
+  const contents = messages.map((message) => ({
+    role:
+      message.role === "assistant"
+        ? "model"
+        : "user",
+    parts: [
+      {
+        text: message.content
+      }
+    ]
+  }));
+
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text: makeSystemPrompt()
+            }
+          ]
+        },
+        contents
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ||
+      "Gemini не принял запрос."
+    );
+  }
+
+  const text =
+    data?.candidates?.[0]?.content?.parts
+      ?.map((part) => part?.text || "")
+      .join("")
+      .trim();
+
+  if (!text) {
+    throw new Error(
+      "Gemini не вернул текст ответа."
+    );
+  }
+
+  return text;
+}
+
+async function xaiChat(apiKey, messages) {
+  if (!apiKey) {
+    throw new Error(
+      "Добавьте API-ключ Grok в настройках."
+    );
+  }
+
+  const response = await fetch(
+    "https://api.x.ai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "grok-3-mini",
+        messages: [
+          {
+            role: "system",
+            content: makeSystemPrompt()
+          },
+          ...messages
+        ],
+        temperature: 0.7
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ||
+      "Grok не принял запрос."
+    );
+  }
+
+  const text =
+    data?.choices?.[0]?.message?.content;
+
+  if (!text) {
+    throw new Error(
+      "Grok не вернул текст ответа."
+    );
+  }
+
+  return String(text).trim();
+}
+
+async function aliceChat(apiKey, messages) {
+  if (!apiKey) {
+    throw new Error(
+      "Для Алисы сначала подключите соответствующий API-доступ в настройках."
+    );
+  }
+
+  /*
+   * Универсальный режим для Алисы.
+   *
+   * Конкретный API-адрес Алисы не подставляется
+   * автоматически, потому что разные продукты
+   * Яндекса используют разные API и авторизацию.
+   *
+   * Ключ сохраняется в настройках, но запрос
+   * отправляется только после подключения
+   * совместимого endpoint.
+   */
+
+  void messages;
+
+  throw new Error(
+    "Для Алисы требуется подключение API Яндекса с поддерживаемым endpoint."
+  );
+}
+
+export async function chat({
+  env,
+  model = "neuro",
+  messages = [],
+  userId = null
+}) {
+  const selectedModel = normalizeModel(model);
+  const normalizedMessages =
+    normalizeMessages(messages);
+
+  if (!normalizedMessages.length) {
+    throw new Error(
+      "Сообщение для AI не найдено."
+    );
+  }
+
+  const settings = await getUserSettings(
+    env,
+    userId
+  );
+
+  const provider =
+    MODELS[selectedModel].provider;
+
+  let text;
 
   try {
-    response = await fetch(
-      "https://api.x.ai/v1/responses",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json",
-          Authorization:
-            `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          input,
-        }),
-      },
-    );
+    switch (provider) {
+      case "cloudflare":
+        text = await cloudflareChat(
+          env,
+          normalizedMessages
+        );
+        break;
+
+      case "openai":
+        text = await openAIChat(
+          extractApiKey(settings, "openai"),
+          normalizedMessages
+        );
+        break;
+
+      case "google":
+        text = await geminiChat(
+          extractApiKey(settings, "google"),
+          normalizedMessages
+        );
+        break;
+
+      case "xai":
+        text = await xaiChat(
+          extractApiKey(settings, "xai"),
+          normalizedMessages
+        );
+        break;
+
+      case "alice":
+        text = await aliceChat(
+          extractApiKey(settings, "alice"),
+          normalizedMessages
+        );
+        break;
+
+      default:
+        throw new Error(
+          "Неизвестный AI-провайдер."
+        );
+    }
   } catch (error) {
-    throw createAIError(
-      error?.message ||
-        "Не удалось подключиться к xAI.",
-      "GROK_NETWORK_ERROR",
-      502,
+    console.error(
+      `[AI:${selectedModel}]`,
+      error
     );
-  }
 
-  const data =
-    await readJsonResponse(response);
-
-  assertSuccessfulResponse(
-    response,
-    data,
-    "xAI",
-  );
-
-  let text =
-    extractTextFromOpenAI(data);
-
-  if (!text) {
-    text =
-      extractTextFromXAI(data);
-  }
-
-  if (!text) {
-    throw createAIError(
-      "Grok вернул пустой ответ.",
-      "GROK_EMPTY_RESPONSE",
-      502,
+    throw new Error(
+      error?.message ||
+      "AI не смог обработать запрос."
     );
   }
 
   return {
-    text,
-    provider: "xai",
-    model,
-    responseId: data?.id || null,
+    model: selectedModel,
+    modelName: MODELS[selectedModel].name,
+    provider,
+    message: text
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* Автоматический режим «Нейро»                                               */
-/* -------------------------------------------------------------------------- */
-
-function getAvailableProviders(env) {
-  const providers = [];
-
-  if (
-    env?.AI &&
-    typeof env.AI.run === "function"
-  ) {
-    providers.push("cloudflare");
-  }
-
-  if (cleanString(env?.OPENAI_API_KEY)) {
-    providers.push("openai");
-  }
-
-  if (cleanString(env?.GOOGLE_API_KEY)) {
-    providers.push("gemini");
-  }
-
-  if (cleanString(env?.XAI_API_KEY)) {
-    providers.push("xai");
-  }
-
-  return providers;
-}
-
-async function callNeuro(
+export async function generateImage({
   env,
-  messages,
-  options = {},
-) {
-  const providers =
-    getAvailableProviders(env);
-
-  if (!providers.length) {
-    throw createAIError(
-      "Нейро пока не настроен: подключите Cloudflare Workers AI или один из AI API.",
-      "AI_NOT_CONFIGURED",
-      503,
+  prompt
+}) {
+  if (!env.AI) {
+    throw new Error(
+      "Cloudflare AI не подключён."
     );
   }
 
-  /*
-   * Приоритет:
-   *
-   * 1. Cloudflare Workers AI
-   * 2. OpenAI
-   * 3. Gemini
-   * 4. Grok
-   *
-   * Это настоящий fallback:
-   * если первый доступный провайдер временно
-   * не отвечает, пробуем следующий.
-   */
+  const text = String(prompt || "").trim();
 
-  const attempts = [];
-
-  for (const provider of providers) {
-    try {
-      if (provider === "cloudflare") {
-        return await callCloudflareAI(
-          env,
-          messages,
-          options,
-        );
-      }
-
-      if (provider === "openai") {
-        return await callOpenAI(
-          env,
-          messages,
-          options,
-        );
-      }
-
-      if (provider === "gemini") {
-        return await callGemini(
-          env,
-          messages,
-          options,
-        );
-      }
-
-      if (provider === "xai") {
-        return await callGrok(
-          env,
-          messages,
-          options,
-        );
-      }
-    } catch (error) {
-      attempts.push({
-        provider,
-        message:
-          error?.message ||
-          "Неизвестная ошибка.",
-      });
-    }
+  if (!text) {
+    throw new Error(
+      "Введите описание изображения."
+    );
   }
 
-  const details = attempts
-    .map(
-      (item) =>
-        `${item.provider}: ${item.message}`,
-    )
-    .join("; ");
-
-  throw createAIError(
-    `Нейро не смог получить ответ ни от одного доступного AI-провайдера. ${details}`,
-    "ALL_AI_PROVIDERS_FAILED",
-    502,
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Главная функция чата                                                       */
-/* -------------------------------------------------------------------------- */
-
-export async function chat(
-  env,
-  options = {},
-) {
   const model =
-    normalizeModel(options.model);
+    env.IMAGE_AI_MODEL ||
+    "@cf/black-forest-labs/flux-1-schnell";
 
-  const messages =
-    normalizeMessages(
-      options.messages,
-    );
+  const result = await env.AI.run(model, {
+    prompt: text
+  });
 
-  validateMessages(messages);
-
-  const systemPrompt =
-    cleanString(
-      options.systemPrompt,
-      DEFAULT_SYSTEM_PROMPT,
-    );
-
-  const aiOptions = {
-    ...options,
-    systemPrompt,
+  return {
+    model,
+    result
   };
+}
 
-  if (model === "neuro") {
-    return callNeuro(
-      env,
-      messages,
-      aiOptions,
-    );
-  }
-
-  if (model === "chatgpt") {
-    return callOpenAI(
-      env,
-      messages,
-      aiOptions,
-    );
-  }
-
-  if (model === "gemini") {
-    return callGemini(
-      env,
-      messages,
-      aiOptions,
-    );
-  }
-
-  if (model === "grok") {
-    return callGrok(
-      env,
-      messages,
-      aiOptions,
-    );
-  }
-
-  if (model === "alice-1") {
-    throw createAIError(
-      "«Алиса 1» пока не подключена к публичному AI API в этом проекте.",
-      "ALICE_NOT_CONFIGURED",
-      503,
-    );
-  }
-
-  throw createAIError(
-    "Неизвестный AI-режим.",
-    "UNKNOWN_MODEL",
-    400,
+export async function generateVideo() {
+  throw new Error(
+    "Для генерации видео необходимо подключить видеопровайдер через настройки."
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Генерация изображений                                                      */
-/* -------------------------------------------------------------------------- */
-
-export async function generateImage(
-  env,
-  options = {},
-) {
-  const prompt =
-    cleanString(options.prompt);
-
-  if (!prompt) {
-    throw createAIError(
-      "Для создания изображения нужен prompt.",
-      "EMPTY_IMAGE_PROMPT",
-      400,
-    );
-  }
-
-  /*
-   * На этом этапе специально не имитируем
-   * генерацию изображения.
-   *
-   * Когда подключим реальный image provider,
-   * сюда добавляется официальный API-вызов.
-   */
-
-  throw createAIError(
-    "Генерация изображений ещё не подключена к реальному image API.",
-    "IMAGE_PROVIDER_NOT_CONFIGURED",
-    503,
+export async function generateMusic() {
+  throw new Error(
+    "Для генерации музыки необходимо подключить музыкальный провайдер через настройки."
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Генерация видео                                                             */
-/* -------------------------------------------------------------------------- */
-
-export async function generateVideo(
-  env,
-  options = {},
-) {
-  const prompt =
-    cleanString(options.prompt);
-
-  if (!prompt) {
-    throw createAIError(
-      "Для создания видео нужен prompt.",
-      "EMPTY_VIDEO_PROMPT",
-      400,
-    );
-  }
-
-  throw createAIError(
-    "Генерация видео ещё не подключена к реальному video API.",
-    "VIDEO_PROVIDER_NOT_CONFIGURED",
-    503,
+export async function generate3D() {
+  throw new Error(
+    "Для генерации 3D-моделей необходимо подключить 3D-провайдер через настройки."
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Генерация музыки                                                            */
-/* -------------------------------------------------------------------------- */
-
-export async function generateMusic(
-  env,
-  options = {},
-) {
-  const prompt =
-    cleanString(options.prompt);
-
-  if (!prompt) {
-    throw createAIError(
-      "Для создания музыки нужен prompt.",
-      "EMPTY_MUSIC_PROMPT",
-      400,
-    );
-  }
-
-  throw createAIError(
-    "Генерация музыки ещё не подключена к реальному music API.",
-    "MUSIC_PROVIDER_NOT_CONFIGURED",
-    503,
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Генерация 3D-модели                                                        */
-/* -------------------------------------------------------------------------- */
-
-export async function generate3D(
-  env,
-  options = {},
-) {
-  const prompt =
-    cleanString(options.prompt);
-
-  if (!prompt) {
-    throw createAIError(
-      "Для создания 3D-модели нужен prompt.",
-      "EMPTY_3D_PROMPT",
-      400,
-    );
-  }
-
-  throw createAIError(
-    "Генерация 3D-моделей ещё не подключена к реальному 3D API.",
-    "THREE_D_PROVIDER_NOT_CONFIGURED",
-    503,
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Информация о доступных AI                                                   */
-/* -------------------------------------------------------------------------- */
 
 export function getAIStatus(env) {
-  const available =
-    getAvailableProviders(env);
-
   return {
-    neuro: available.length > 0,
+    ok: true,
 
-    cloudflare:
-      available.includes("cloudflare"),
+    models: Object.values(MODELS).map(
+      (model) => ({
+        id: model.id,
+        name: model.name,
+        provider: model.provider,
+        available:
+          model.provider === "cloudflare"
+            ? Boolean(env.AI)
+            : true
+      })
+    ),
 
-    chatgpt:
-      available.includes("openai"),
-
-    gemini:
-      available.includes("gemini"),
-
-    grok:
-      available.includes("xai"),
-
-    alice1: false,
-
-    providers: available,
+    generation: {
+      image: Boolean(env.AI),
+      video: false,
+      music: false,
+      "3d": false
+    }
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* Экспорт агрегированного объекта                                            */
-/* -------------------------------------------------------------------------- */
-
-export const ai = {
-  chat,
-  generateImage,
-  generateVideo,
-  generateMusic,
-  generate3D,
-  getAIStatus,
+export {
+  MODELS,
+  normalizeModel,
+  normalizeMessages,
+  getLastUserMessage
 };
-
-export default ai;
