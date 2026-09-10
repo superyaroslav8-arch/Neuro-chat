@@ -1,6 +1,6 @@
 {
   "name": "neuro-chat",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Нейро-чат — AI-чат с несколькими AI-провайдерами.",
   "type": "module",
