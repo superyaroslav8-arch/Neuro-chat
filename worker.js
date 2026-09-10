@@ -1,45 +1,66 @@
-const APP_NAME = "Нейро-чат";
+import {
+  createUser,
+  findUserByUsername,
+  findUserById,
+  createSession,
+  findSession,
+  deleteSession,
+  deleteUserSessions,
+  createChat,
+  listChats,
+  getChat,
+  renameChat,
+  deleteChat,
+  createMessage,
+  listMessages,
+  getSettings,
+  saveSettings,
+  getPermissions,
+  savePermissions,
+  getPlugins,
+  savePlugins
+} from "./database.js";
 
-const DEFAULT_MODELS = {
-  neuro: "Нейро",
-  chatgpt: "ChatGPT",
-  gemini: "Gemini",
-  grok: "Grok",
-  alice: "Алиса",
-  dedai: "Дед ИИ"
+import {
+  register,
+  login,
+  me,
+  logout,
+  logoutAll,
+  getCurrentUser
+} from "./auth.js";
+
+import {
+  chat,
+  generateImage,
+  generateVideo,
+  generateMusic,
+  generate3D,
+  getAIStatus
+} from "./ai.js";
+
+import { routeRequest } from "./router.js";
+
+const JSON_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "no-store"
 };
-
-const sessions = new Map();
-const users = new Map();
-const chats = new Map();
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store"
-    }
+    headers: JSON_HEADERS
   });
 }
 
-function ok(data = {}) {
-  return json({
-    ok: true,
-    success: true,
-    ...data
-  });
-}
-
-function fail(message, status = 400, code = "ERROR") {
-  return json({
-    ok: false,
-    success: false,
-    error: {
-      code,
-      message
-    }
-  }, status);
+function error(message, status = 400) {
+  return json(
+    {
+      ok: false,
+      error: message
+    },
+    status
+  );
 }
 
 async function body(request) {
@@ -50,46 +71,8 @@ async function body(request) {
   }
 }
 
-function id(prefix = "id") {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
-
-function sessionFrom(request) {
-  const cookie = request.headers.get("Cookie") || "";
-
-  const match = cookie.match(
-    /(?:^|;\s*)neuro_session=([^;]+)/
-  );
-
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function currentUser(request) {
-  const sessionId = sessionFrom(request);
-
-  if (!sessionId) {
-    return null;
-  }
-
-  const userId = sessions.get(sessionId);
-
-  if (!userId) {
-    return null;
-  }
-
-  return users.get(userId) || null;
-}
-
-function authCookie(value) {
-  return `neuro_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=2592000`;
-}
-
-function clearAuthCookie() {
-  return "neuro_session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0";
-}
-
-function protectedUser(request) {
-  const user = currentUser(request);
+async function requireUser(request, env) {
+  const user = await getCurrentUser(request, env);
 
   if (!user) {
     return null;
@@ -98,605 +81,939 @@ function protectedUser(request) {
   return user;
 }
 
-async function register(request) {
+function publicUser(user) {
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    username: user.username,
+    createdAt: user.createdAt
+  };
+}
+
+async function handleChat(request, env) {
+  const data = await body(request);
+  const user = await requireUser(request, env);
+
+  const model = data.model || "neuro";
+  const messages = Array.isArray(data.messages)
+    ? data.messages
+    : [];
+
+  const result = await chat({
+    env,
+    model,
+    messages,
+    userId: user?.id || null
+  });
+
+  return json({
+    ok: true,
+    message: result.message,
+    model: result.model,
+    modelName: result.modelName,
+    provider: result.provider
+  });
+}
+
+async function handleCreateChat(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Для сохранения чатов войдите в аккаунт.", 401);
+  }
+
   const data = await body(request);
 
-  const username =
-    typeof data.username === "string"
-      ? data.username.trim().toLowerCase()
-      : "";
+  const title =
+    String(data.title || "Новый чат")
+      .trim()
+      .slice(0, 100) || "Новый чат";
 
-  const password =
-    typeof data.password === "string"
-      ? data.password
-      : "";
+  const chatData = await createChat(env, {
+    id: crypto.randomUUID(),
+    userId: user.id,
+    title,
+    model: data.model || "neuro",
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  });
 
-  if (!username || !password) {
-    return fail(
-      "Введите логин и пароль.",
-      400,
-      "AUTH_DATA_REQUIRED"
-    );
+  return json({
+    ok: true,
+    chat: chatData
+  }, 201);
+}
+
+async function handleListChats(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return json({
+      ok: true,
+      chats: []
+    });
   }
 
-  if (username.length < 3) {
-    return fail(
-      "Логин должен содержать минимум 3 символа.",
-      400,
-      "USERNAME_TOO_SHORT"
-    );
+  return json({
+    ok: true,
+    chats: await listChats(env, user.id)
+  });
+}
+
+async function handleMessages(request, env, chatId) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
   }
 
-  if (password.length < 6) {
-    return fail(
-      "Пароль должен содержать минимум 6 символов.",
-      400,
-      "PASSWORD_TOO_SHORT"
-    );
+  const chatData = await getChat(
+    env,
+    chatId,
+    user.id
+  );
+
+  if (!chatData) {
+    return error("Чат не найден.", 404);
   }
 
-  for (const user of users.values()) {
-    if (user.username === username) {
-      return fail(
-        "Пользователь уже существует.",
-        409,
-        "USER_EXISTS"
+  if (request.method === "GET") {
+    return json({
+      ok: true,
+      messages: await listMessages(
+        env,
+        chatId,
+        user.id
+      )
+    });
+  }
+
+  const data = await body(request);
+
+  const message = await createMessage(env, {
+    id: crypto.randomUUID(),
+    chatId,
+    userId: user.id,
+    role: data.role || "user",
+    content: String(data.content || "").slice(0, 20000),
+    createdAt: Date.now()
+  });
+
+  return json({
+    ok: true,
+    message
+  }, 201);
+}
+
+async function handleDeleteChat(request, env, chatId) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  await deleteChat(
+    env,
+    chatId,
+    user.id
+  );
+
+  return json({
+    ok: true
+  });
+}
+
+async function handleRenameChat(request, env, chatId) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  const data = await body(request);
+
+  const title =
+    String(data.title || "Новый чат")
+      .trim()
+      .slice(0, 100);
+
+  if (!title) {
+    return error("Название чата не может быть пустым.");
+  }
+
+  const result = await renameChat(
+    env,
+    chatId,
+    user.id,
+    title
+  );
+
+  return json({
+    ok: true,
+    chat: result
+  });
+}
+
+async function handleSettingsGet(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  return json({
+    ok: true,
+    settings: await getSettings(env, user.id)
+  });
+}
+
+async function handleSettingsSave(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  const data = await body(request);
+
+  const settings = {
+    ...(data.settings || {})
+  };
+
+  return json({
+    ok: true,
+    settings: await saveSettings(
+      env,
+      user.id,
+      settings
+    )
+  });
+}
+
+async function handlePermissionsGet(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  return json({
+    ok: true,
+    permissions: await getPermissions(
+      env,
+      user.id
+    )
+  });
+}
+
+async function handlePermissionsSave(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  const data = await body(request);
+
+  return json({
+    ok: true,
+    permissions: await savePermissions(
+      env,
+      user.id,
+      data.permissions || {}
+    )
+  });
+}
+
+async function handlePluginsGet(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return json({
+      ok: true,
+      plugins: {}
+    });
+  }
+
+  return json({
+    ok: true,
+    plugins: await getPlugins(
+      env,
+      user.id
+    )
+  });
+}
+
+async function handlePluginsSave(request, env) {
+  const user = await requireUser(request, env);
+
+  if (!user) {
+    return error("Требуется авторизация.", 401);
+  }
+
+  const data = await body(request);
+
+  return json({
+    ok: true,
+    plugins: await savePlugins(
+      env,
+      user.id,
+      data.plugins || {}
+    )
+  });
+}
+
+async function handleHealth() {
+  return json({
+    ok: true,
+    service: "Нейро-чат",
+    version: "2.0.0",
+    time: new Date().toISOString()
+  });
+}
+
+function createHandlers(env) {
+  return {
+    health: handleHealth,
+
+    auth: {
+      register,
+      login,
+      me,
+      logout,
+      logoutAll
+    },
+
+    chats: {
+      list: handleListChats,
+      create: handleCreateChat,
+
+      messages: handleMessages,
+      sendMessage: handleMessages,
+
+      delete: handleDeleteChat,
+      rename: handleRenameChat
+    },
+
+    chat: {
+      send: handleChat
+    },
+
+    generate: {
+      image: async (request, env) => {
+        const data = await body(request);
+
+        const result = await generateImage({
+          env,
+          prompt: data.prompt
+        });
+
+        return json({
+          ok: true,
+          ...result
+        });
+      },
+
+      video: async () => {
+        const result = await generateVideo();
+
+        return json({
+          ok: true,
+          ...result
+        });
+      },
+
+      music: async () => {
+        const result = await generateMusic();
+
+        return json({
+          ok: true,
+          ...result
+        });
+      },
+
+      "3d": async () => {
+        const result = await generate3D();
+
+        return json({
+          ok: true,
+          ...result
+        });
+      }
+    },
+
+    settings: {
+      get: handleSettingsGet,
+      save: handleSettingsSave
+    },
+
+    permissions: {
+      get: handlePermissionsGet,
+      save: handlePermissionsSave
+    },
+
+    plugins: {
+      get: handlePluginsGet,
+      save: handlePluginsSave
+    },
+
+    ai: {
+      status: async (request, env) => {
+        return json({
+          ok: true,
+          ...getAIStatus(env)
+        });
+      }
+    }
+  };
+}
+
+/* --------------------------------------------------
+   Durable Object
+-------------------------------------------------- */
+
+export class NeuroState {
+  constructor(state) {
+    this.state = state;
+    this.sql = state.storage.sql;
+    this.ready = this.initialize();
+  }
+
+  async initialize() {
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS chats (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        model TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS user_data (
+        user_id TEXT PRIMARY KEY,
+        settings TEXT NOT NULL DEFAULT '{}',
+        permissions TEXT NOT NULL DEFAULT '{}',
+        plugins TEXT NOT NULL DEFAULT '{}'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_user
+      ON sessions(user_id);
+
+      CREATE INDEX IF NOT EXISTS idx_chats_user
+      ON chats(user_id);
+
+      CREATE INDEX IF NOT EXISTS idx_messages_chat
+      ON messages(chat_id);
+    `);
+  }
+
+  async fetch(request) {
+    await this.ready;
+
+    if (request.method !== "POST") {
+      return new Response("OK");
+    }
+
+    const input = await request.json();
+
+    try {
+      const result = await this.execute(
+        input.action,
+        input.payload || {}
+      );
+
+      return Response.json({
+        result
+      });
+    } catch (error) {
+      console.error(error);
+
+      return Response.json(
+        {
+          error:
+            error?.message ||
+            "Ошибка хранилища."
+        },
+        {
+          status: 500
+        }
       );
     }
   }
 
-  const user = {
-    id: id("user"),
-    username,
-    createdAt: new Date().toISOString()
-  };
+  async execute(action, data) {
+    switch (action) {
+      case "init":
+        return true;
 
-  users.set(user.id, user);
+      case "createUser":
+        this.sql.exec(
+          `
+          INSERT INTO users
+          (id, username, password_hash, password_salt, created_at)
+          VALUES (?, ?, ?, ?, ?)
+          `,
+          data.id,
+          data.username,
+          data.passwordHash,
+          data.passwordSalt,
+          data.createdAt
+        );
 
-  const sessionId = id("session");
+        return data;
 
-  sessions.set(sessionId, user.id);
+      case "findUserByUsername": {
+        const row = this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              username,
+              password_hash AS passwordHash,
+              password_salt AS passwordSalt,
+              created_at AS createdAt
+            FROM users
+            WHERE username = ?
+            LIMIT 1
+            `,
+            data.username
+          )
+          .toArray()[0];
 
-  return json(
-    {
-      ok: true,
-      success: true,
-      user
-    },
-    201,
-    {
-      "Set-Cookie": authCookie(sessionId)
-    }
-  );
-}
-
-async function login(request) {
-  const data = await body(request);
-
-  const username =
-    typeof data.username === "string"
-      ? data.username.trim().toLowerCase()
-      : "";
-
-  const password =
-    typeof data.password === "string"
-      ? data.password
-      : "";
-
-  if (!username || !password) {
-    return fail(
-      "Введите логин и пароль.",
-      400,
-      "AUTH_DATA_REQUIRED"
-    );
-  }
-
-  /*
-   * Для этой автоматической версии аккаунта
-   * данные находятся в памяти Worker.
-   * Пароль используется только для текущей
-   * сессии в рамках работающего экземпляра.
-   *
-   * Для настоящего постоянного аккаунта
-   * потребуется внешнее persistent storage.
-   */
-
-  let user = null;
-
-  for (const item of users.values()) {
-    if (item.username === username) {
-      user = item;
-      break;
-    }
-  }
-
-  if (!user) {
-    return fail(
-      "Пользователь не найден. Сначала зарегистрируйтесь.",
-      401,
-      "USER_NOT_FOUND"
-    );
-  }
-
-  const sessionId = id("session");
-
-  sessions.set(sessionId, user.id);
-
-  return json(
-    {
-      ok: true,
-      success: true,
-      user
-    },
-    200,
-    {
-      "Set-Cookie": authCookie(sessionId)
-    }
-  );
-}
-
-async function logout(request) {
-  const sessionId = sessionFrom(request);
-
-  if (sessionId) {
-    sessions.delete(sessionId);
-  }
-
-  return json(
-    {
-      ok: true,
-      success: true
-    },
-    200,
-    {
-      "Set-Cookie": clearAuthCookie()
-    }
-  );
-}
-
-async function me(request) {
-  const user = currentUser(request);
-
-  if (!user) {
-    return fail(
-      "Пользователь не авторизован.",
-      401,
-      "NOT_AUTHENTICATED"
-    );
-  }
-
-  return ok({ user });
-}
-
-async function createChat(request) {
-  const user = protectedUser(request);
-
-  if (!user) {
-    return fail(
-      "Для сохранения чатов войдите в аккаунт.",
-      401,
-      "NOT_AUTHENTICATED"
-    );
-  }
-
-  const data = await body(request);
-
-  const chat = {
-    id: id("chat"),
-    userId: user.id,
-    title:
-      typeof data.title === "string" &&
-      data.title.trim()
-        ? data.title.trim().slice(0, 100)
-        : "Новый чат",
-    model:
-      typeof data.model === "string"
-        ? data.model
-        : "neuro",
-    temporary: Boolean(data.temporary),
-    createdAt: new Date().toISOString(),
-    messages: []
-  };
-
-  chats.set(chat.id, chat);
-
-  return json(
-    {
-      ok: true,
-      success: true,
-      chat
-    },
-    201
-  );
-}
-
-async function listChats(request) {
-  const user = protectedUser(request);
-
-  if (!user) {
-    return fail(
-      "Пользователь не авторизован.",
-      401,
-      "NOT_AUTHENTICATED"
-    );
-  }
-
-  const result = [];
-
-  for (const chat of chats.values()) {
-    if (chat.userId === user.id) {
-      result.push({
-        id: chat.id,
-        title: chat.title,
-        model: chat.model,
-        temporary: chat.temporary,
-        createdAt: chat.createdAt
-      });
-    }
-  }
-
-  result.sort(
-    (a, b) =>
-      new Date(b.createdAt) -
-      new Date(a.createdAt)
-  );
-
-  return ok({
-    chats: result
-  });
-}
-
-async function sendChat(request) {
-  const data = await body(request);
-
-  const message =
-    typeof data.message === "string"
-      ? data.message.trim()
-      : "";
-
-  if (!message) {
-    return fail(
-      "Введите сообщение.",
-      400,
-      "EMPTY_MESSAGE"
-    );
-  }
-
-  const model =
-    typeof data.model === "string"
-      ? data.model
-      : "neuro";
-
-  const user = currentUser(request);
-
-  let answer;
-
-  /*
-   * Это локальный безопасный fallback.
-   * Он позволяет интерфейсу работать даже без
-   * внешнего AI API.
-   */
-  if (model === "neuro") {
-    answer =
-      `Я получил ваше сообщение: «${message}»\n\n` +
-      `Модель: ${DEFAULT_MODELS.neuro}.\n` +
-      `Чтобы подключить полноценную внешнюю AI-модель, ` +
-      `её API можно добавить в настройках Нейро-чата.`;
-  } else {
-    answer =
-      `Запрос получен.\n\n` +
-      `Выбрана модель: ${
-        DEFAULT_MODELS[model] || model
-      }.\n\n` +
-      `Сообщение: ${message}`;
-  }
-
-  if (
-    user &&
-    typeof data.chatId === "string"
-  ) {
-    const chat = chats.get(data.chatId);
-
-    if (
-      chat &&
-      chat.userId === user.id
-    ) {
-      chat.messages.push({
-        role: "user",
-        content: message,
-        createdAt: new Date().toISOString()
-      });
-
-      chat.messages.push({
-        role: "assistant",
-        content: answer,
-        createdAt: new Date().toISOString()
-      });
-    }
-  }
-
-  return ok({
-    data: {
-      text: answer,
-      message: answer,
-      model
-    }
-  });
-}
-
-async function deleteChat(request) {
-  const user = protectedUser(request);
-
-  if (!user) {
-    return fail(
-      "Пользователь не авторизован.",
-      401,
-      "NOT_AUTHENTICATED"
-    );
-  }
-
-  const data = await body(request);
-
-  const chatId =
-    typeof data.chatId === "string"
-      ? data.chatId
-      : "";
-
-  const chat = chats.get(chatId);
-
-  if (!chat || chat.userId !== user.id) {
-    return fail(
-      "Чат не найден.",
-      404,
-      "CHAT_NOT_FOUND"
-    );
-  }
-
-  chats.delete(chatId);
-
-  return ok({
-    deleted: true
-  });
-}
-
-async function generate(request, type) {
-  const data = await body(request);
-
-  const prompt =
-    typeof data.prompt === "string"
-      ? data.prompt.trim()
-      : "";
-
-  if (!prompt) {
-    return fail(
-      "Введите описание.",
-      400,
-      "PROMPT_REQUIRED"
-    );
-  }
-
-  /*
-   * Единый интерфейс генераторов.
-   * Внешний провайдер подключается через API key
-   * из настроек пользователя.
-   */
-
-  return ok({
-    data: {
-      type,
-      status: "accepted",
-      prompt,
-      message:
-        `Задача на ${type} принята.`,
-      providerConfigured: false
-    }
-  });
-}
-
-async function api(request, env) {
-  const url = new URL(request.url);
-  const path = url.pathname;
-
-  if (path === "/api/health") {
-    return ok({
-      data: {
-        status: "ok",
-        service: APP_NAME,
-        version: "2.0.0",
-        time: new Date().toISOString()
+        return row || null;
       }
-    });
-  }
 
-  if (path === "/api/auth/me") {
-    return me(request);
-  }
+      case "findUserById": {
+        const row = this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              username,
+              password_hash AS passwordHash,
+              password_salt AS passwordSalt,
+              created_at AS createdAt
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+            `,
+            data.userId
+          )
+          .toArray()[0];
 
-  if (path === "/api/auth/session") {
-    return me(request);
-  }
+        return row || null;
+      }
 
-  if (
-    path === "/api/auth/register" &&
-    request.method === "POST"
-  ) {
-    return register(request);
-  }
+      case "createSession":
+        this.sql.exec(
+          `
+          INSERT INTO sessions
+          (id, user_id, created_at, expires_at)
+          VALUES (?, ?, ?, ?)
+          `,
+          data.id,
+          data.userId,
+          data.createdAt,
+          data.expiresAt
+        );
 
-  if (
-    path === "/api/auth/login" &&
-    request.method === "POST"
-  ) {
-    return login(request);
-  }
+        return data;
 
-  if (
-    path === "/api/auth/logout" &&
-    request.method === "POST"
-  ) {
-    return logout(request);
-  }
+      case "findSession": {
+        const row = this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              user_id AS userId,
+              created_at AS createdAt,
+              expires_at AS expiresAt
+            FROM sessions
+            WHERE id = ?
+            LIMIT 1
+            `,
+            data.sessionId
+          )
+          .toArray()[0];
 
-  if (
-    path === "/api/chats" &&
-    request.method === "GET"
-  ) {
-    return listChats(request);
-  }
+        return row || null;
+      }
 
-  if (
-    path === "/api/chats" &&
-    request.method === "POST"
-  ) {
-    return createChat(request);
-  }
+      case "deleteSession":
+        this.sql.exec(
+          `
+          DELETE FROM sessions
+          WHERE id = ?
+          `,
+          data.sessionId
+        );
 
-  if (
-    path === "/api/chats/delete" &&
-    request.method === "POST"
-  ) {
-    return deleteChat(request);
-  }
+        return true;
 
-  if (
-    path === "/api/chat" &&
-    request.method === "POST"
-  ) {
-    return sendChat(request);
-  }
+      case "deleteUserSessions":
+        this.sql.exec(
+          `
+          DELETE FROM sessions
+          WHERE user_id = ?
+          `,
+          data.userId
+        );
 
-  if (
-    path === "/api/generate/image" &&
-    request.method === "POST"
-  ) {
-    return generate(request, "изображение");
-  }
+        return true;
 
-  if (
-    path === "/api/generate/video" &&
-    request.method === "POST"
-  ) {
-    return generate(request, "видео");
-  }
+      case "createChat":
+        this.sql.exec(
+          `
+          INSERT INTO chats
+          (id, user_id, title, model, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          data.id,
+          data.userId,
+          data.title,
+          data.model,
+          data.createdAt,
+          data.updatedAt
+        );
 
-  if (
-    path === "/api/generate/music" &&
-    request.method === "POST"
-  ) {
-    return generate(request, "музыка");
-  }
+        return data;
 
-  if (
-    path === "/api/generate/3d" &&
-    request.method === "POST"
-  ) {
-    return generate(request, "3D-модель");
-  }
+      case "listChats":
+        return this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              user_id AS userId,
+              title,
+              model,
+              created_at AS createdAt,
+              updated_at AS updatedAt
+            FROM chats
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            `,
+            data.userId
+          )
+          .toArray();
 
-  if (
-    path === "/api/generate/website" &&
-    request.method === "POST"
-  ) {
-    return generate(request, "сайт");
-  }
+      case "getChat":
+        return (
+          this.sql
+            .exec(
+              `
+              SELECT
+                id,
+                user_id AS userId,
+                title,
+                model,
+                created_at AS createdAt,
+                updated_at AS updatedAt
+              FROM chats
+              WHERE id = ?
+              AND user_id = ?
+              LIMIT 1
+              `,
+              data.chatId,
+              data.userId
+            )
+            .toArray()[0] || null
+        );
 
-  if (
-    path === "/api/models" &&
-    request.method === "GET"
-  ) {
-    return ok({
-      models: DEFAULT_MODELS
-    });
-  }
+      case "renameChat":
+        this.sql.exec(
+          `
+          UPDATE chats
+          SET title = ?, updated_at = ?
+          WHERE id = ?
+          AND user_id = ?
+          `,
+          data.title,
+          Date.now(),
+          data.chatId,
+          data.userId
+        );
 
-  return null;
-}
+        return this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              user_id AS userId,
+              title,
+              model,
+              created_at AS createdAt,
+              updated_at AS updatedAt
+            FROM chats
+            WHERE id = ?
+            AND user_id = ?
+            LIMIT 1
+            `,
+            data.chatId,
+            data.userId
+          )
+          .toArray()[0] || null;
 
-function security(response) {
-  const headers = new Headers(
-    response.headers
-  );
+      case "deleteChat":
+        this.sql.exec(
+          `
+          DELETE FROM messages
+          WHERE chat_id = ?
+          AND user_id = ?
+          `,
+          data.chatId,
+          data.userId
+        );
 
-  headers.set(
-    "X-Content-Type-Options",
-    "nosniff"
-  );
+        this.sql.exec(
+          `
+          DELETE FROM chats
+          WHERE id = ?
+          AND user_id = ?
+          `,
+          data.chatId,
+          data.userId
+        );
 
-  headers.set(
-    "X-Frame-Options",
-    "SAMEORIGIN"
-  );
+        return true;
 
-  headers.set(
-    "Referrer-Policy",
-    "strict-origin-when-cross-origin"
-  );
+      case "createMessage":
+        this.sql.exec(
+          `
+          INSERT INTO messages
+          (id, chat_id, user_id, role, content, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          data.id,
+          data.chatId,
+          data.userId,
+          data.role,
+          data.content,
+          data.createdAt
+        );
 
-  return new Response(
-    response.body,
-    {
-      status: response.status,
-      statusText: response.statusText,
-      headers
+        this.sql.exec(
+          `
+          UPDATE chats
+          SET updated_at = ?
+          WHERE id = ?
+          AND user_id = ?
+          `,
+          Date.now(),
+          data.chatId,
+          data.userId
+        );
+
+        return data;
+
+      case "listMessages":
+        return this.sql
+          .exec(
+            `
+            SELECT
+              id,
+              chat_id AS chatId,
+              user_id AS userId,
+              role,
+              content,
+              created_at AS createdAt
+            FROM messages
+            WHERE chat_id = ?
+            AND user_id = ?
+            ORDER BY created_at ASC
+            `,
+            data.chatId,
+            data.userId
+          )
+          .toArray();
+
+      case "getSettings":
+        return this.getUserData(
+          data.userId
+        ).settings;
+
+      case "saveSettings":
+        return this.saveUserData(
+          data.userId,
+          "settings",
+          data.settings
+        );
+
+      case "getPermissions":
+        return this.getUserData(
+          data.userId
+        ).permissions;
+
+      case "savePermissions":
+        return this.saveUserData(
+          data.userId,
+          "permissions",
+          data.permissions
+        );
+
+      case "getPlugins":
+        return this.getUserData(
+          data.userId
+        ).plugins;
+
+      case "savePlugins":
+        return this.saveUserData(
+          data.userId,
+          "plugins",
+          data.plugins
+        );
+
+      default:
+        throw new Error(
+          `Неизвестная операция: ${action}`
+        );
     }
-  );
+  }
+
+  getUserData(userId) {
+    const row = this.sql
+      .exec(
+        `
+        SELECT
+          settings,
+          permissions,
+          plugins
+        FROM user_data
+        WHERE user_id = ?
+        LIMIT 1
+        `,
+        userId
+      )
+      .toArray()[0];
+
+    if (!row) {
+      this.sql.exec(
+        `
+        INSERT INTO user_data
+        (user_id, settings, permissions, plugins)
+        VALUES (?, '{}', '{}', '{}')
+        `,
+        userId
+      );
+
+      return {
+        settings: {},
+        permissions: {},
+        plugins: {}
+      };
+    }
+
+    return {
+      settings: JSON.parse(row.settings || "{}"),
+      permissions: JSON.parse(row.permissions || "{}"),
+      plugins: JSON.parse(row.plugins || "{}")
+    };
+  }
+
+  saveUserData(userId, field, value) {
+    const current = this.getUserData(userId);
+
+    current[field] = value || {};
+
+    this.sql.exec(
+      `
+      INSERT INTO user_data
+      (user_id, settings, permissions, plugins)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id)
+      DO UPDATE SET
+        settings = excluded.settings,
+        permissions = excluded.permissions,
+        plugins = excluded.plugins
+      `,
+      userId,
+      JSON.stringify(current.settings),
+      JSON.stringify(current.permissions),
+      JSON.stringify(current.plugins)
+    );
+
+    return current[field];
+  }
 }
 
 export default {
   async fetch(request, env) {
     try {
-      const url = new URL(request.url);
+      const apiResponse = await routeRequest(
+        request,
+        {
+          ...env,
 
-      if (
-        url.pathname.startsWith("/api/")
-      ) {
-        const response =
-          await api(request, env);
-
-        if (response) {
-          return security(response);
-        }
-
-        return security(
-          fail(
-            "API-маршрут не найден.",
-            404,
-            "API_NOT_FOUND"
-          )
-        );
-      }
-
-      if (
-        env.ASSETS &&
-        typeof env.ASSETS.fetch ===
-          "function"
-      ) {
-        return security(
-          await env.ASSETS.fetch(request)
-        );
-      }
-
-      return security(
-        new Response(
-          "Нейро-чат",
-          {
-            status: 200,
-            headers: {
-              "Content-Type":
-                "text/plain; charset=utf-8"
-            }
-          }
-        )
+          getUserSettings: async (userId) =>
+            getSettings(env, userId)
+        },
+        createHandlers(env)
       );
-    } catch (error) {
-      console.error(error);
 
-      return security(
-        fail(
-          "Внутренняя ошибка Нейро-чата.",
-          500,
-          "INTERNAL_SERVER_ERROR"
-        )
+      if (apiResponse) {
+        return apiResponse;
+      }
+
+      if (env.ASSETS) {
+        return env.ASSETS.fetch(request);
+      }
+
+      return new Response(
+        "Нейро-чат",
+        {
+          status: 200,
+          headers: {
+            "content-type": "text/plain; charset=utf-8"
+          }
+        }
+      );
+    } catch (err) {
+      console.error(err);
+
+      if (
+        new URL(request.url).pathname.startsWith("/api/")
+      ) {
+        return error(
+          err?.message ||
+            "Внутренняя ошибка сервера.",
+          500
+        );
+      }
+
+      return new Response(
+        "Нейро-чат временно недоступен.",
+        {
+          status: 500,
+          headers: {
+            "content-type": "text/plain; charset=utf-8"
+          }
+        }
       );
     }
   }
