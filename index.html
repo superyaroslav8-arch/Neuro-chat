@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <meta name="theme-color" content="#050505">
+  <meta
+    name="description"
+    content="Нейро-чат — современный AI-помощник"
+  >
+
+  <title>Нейро-чат</title>
+
+  <link rel="icon" href="./site-icon.svg">
+  <link rel="manifest" href="./site.webmanifest">
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+<div id="app">
+
+  <aside class="sidebar" id="sidebar">
+
+    <div class="brand">
+      <img
+        src="./site-icon.svg"
+        class="brand-logo"
+        alt="Логотип Нейро-чата"
+      >
+
+      <div class="brand-copy">
+        <div class="brand-title">Нейро-чат</div>
+        <div class="brand-subtitle">AI-помощник</div>
+      </div>
+    </div>
+
+    <button
+      class="new-chat-btn"
+      id="newChatBtn"
+      type="button"
+    >
+      <span class="button-icon">＋</span>
+      <span>Новый чат</span>
+    </button>
+
+    <div class="sidebar-title">Чаты</div>
+
+    <div id="chatList" class="chat-list"></div>
+
+    <div class="sidebar-bottom">
+
+      <button class="side-btn" id="toolsBtn" type="button">
+        <span class="side-icon">✦</span>
+        <span>Инструменты</span>
+      </button>
+
+      <button class="side-btn" id="settingsBtn" type="button">
+        <span class="side-icon">⚙</span>
+        <span>Настройки</span>
+      </button>
+
+      <button class="side-btn danger" id="logoutBtn" type="button">
+        <span class="side-icon">↪</span>
+        <span>Выйти</span>
+      </button>
+
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <header class="topbar">
+
+      <button
+        id="menuBtn"
+        class="icon-btn mobile-only"
+        type="button"
+        aria-label="Открыть меню"
+      >
+        ☰
+      </button>
+
+      <div class="model-selector">
+
+        <button
+          id="modelBtn"
+          class="model-btn"
+          type="button"
+          aria-expanded="false"
+        >
+          <span class="status-dot"></span>
+          <span id="modelName">Нейро AI</span>
+          <span class="model-arrow">⌄</span>
+        </button>
+
+        <div id="modelMenu" class="dropdown hidden">
+
+          <button type="button" data-model="neuro">
+            <span class="model-option-title">Нейро AI</span>
+            <span class="model-option-description">Cloudflare AI</span>
+          </button>
+
+          <button type="button" data-model="local">
+            <span class="model-option-title">Автономный режим</span>
+            <span class="model-option-description">Без внешнего API</span>
+          </button>
+
+        </div>
+      </div>
+
+      <div class="top-actions">
+
+        <button
+          id="temporaryBtn"
+          class="icon-btn"
+          type="button"
+          title="Временный чат"
+          aria-label="Временный чат"
+        >
+          ◇
+        </button>
+
+        <button
+          id="clearBtn"
+          class="icon-btn"
+          type="button"
+          title="Очистить чат"
+          aria-label="Очистить чат"
+        >
+          ⌫
+        </button>
+
+      </div>
+
+    </header>
+
+    <section id="messages" class="messages" aria-live="polite">
+
+      <div id="welcome" class="welcome">
+
+        <div class="welcome-logo">
+          <img src="./site-icon.svg" alt="Нейро-чат">
+        </div>
+
+        <div class="welcome-label">Нейро-чат</div>
+
+        <h1>Чем могу помочь?</h1>
+
+        <p>
+          Задавай вопросы, создавай идеи, работай с кодом
+          и используй возможности Нейро-чата.
+        </p>
+
+        <div class="quick-grid">
+
+          <button
+            type="button"
+            class="quick-card"
+            data-prompt="Придумай идею для проекта"
+          >
+            <span class="quick-icon">✦</span>
+            <b>Идея проекта</b>
+            <small>Помоги придумать что-нибудь новое</small>
+          </button>
+
+          <button
+            type="button"
+            class="quick-card"
+            data-prompt="Помоги мне написать код"
+          >
+            <span class="quick-icon code-icon">&lt;/&gt;</span>
+            <b>Написать код</b>
+            <small>Создание и исправление кода</small>
+          </button>
+
+          <button
+            type="button"
+            class="quick-card"
+            data-prompt="Объясни сложную тему простыми словами"
+          >
+            <span class="quick-icon">?</span>
+            <b>Объяснить</b>
+            <small>Разберём сложную тему</small>
+          </button>
+
+          <button
+            type="button"
+            class="quick-card"
+            data-tool="website"
+          >
+            <span class="quick-icon">▣</span>
+            <b>Создать сайт</b>
+            <small>HTML, CSS и JavaScript</small>
+          </button>
+
+        </div>
+      </div>
+
+    </section>
+
+    <div class="composer-area">
+
+      <div id="attachmentPreview" class="attachment-preview"></div>
+
+      <div class="composer">
+
+        <input
+          id="fileInput"
+          type="file"
+          hidden
+          multiple
+        >
+
+        <button
+          id="attachBtn"
+          class="composer-btn"
+          type="button"
+          title="Добавить файл"
+          aria-label="Добавить файл"
+        >
+          ＋
+        </button>
+
+        <textarea
+          id="messageInput"
+          rows="1"
+          maxlength="12000"
+          placeholder="Сообщение Нейро-чату..."
+          autocomplete="off"
+        ></textarea>
+
+        <button
+          id="voiceBtn"
+          class="composer-btn"
+          type="button"
+          title="Голосовой ввод"
+          aria-label="Голосовой ввод"
+        >
+          ◉
+        </button>
+
+        <button
+          id="sendBtn"
+          class="send-btn"
+          type="button"
+          title="Отправить"
+          aria-label="Отправить"
+        >
+          ↑
+        </button>
+
+      </div>
+
+      <div class="composer-note">
+        Нейро-чат может ошибаться. Проверяй важную информацию.
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+
+<!-- АВТОРИЗАЦИЯ -->
+
+<div id="authModal" class="modal-overlay">
+
+  <div class="modal auth-modal">
+
+    <div class="auth-logo">
+      <img src="./site-icon.svg" alt="Нейро-чат">
+    </div>
+
+    <div class="auth-brand">Нейро-чат</div>
+
+    <h2 id="authTitle">Вход в Нейро-чат</h2>
+
+    <p id="authDescription">
+      Войди или создай аккаунт.
+    </p>
+
+    <form id="authForm">
+
+      <input
+        id="usernameInput"
+        type="text"
+        autocomplete="username"
+        placeholder="Логин"
+        maxlength="100"
+        required
+      >
+
+      <input
+        id="passwordInput"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Пароль"
+        maxlength="200"
+        required
+      >
+
+      <div id="authError" class="form-error" role="alert"></div>
+
+      <button
+        id="authSubmit"
+        class="primary-btn"
+        type="submit"
+      >
+        Войти
+      </button>
+
+    </form>
+
+    <button id="authSwitch" class="text-btn" type="button">
+      Создать аккаунт
+    </button>
+
+    <button id="guestBtn" class="secondary-btn" type="button">
+      Продолжить без аккаунта
+    </button>
+
+  </div>
+</div>
+
+
+<!-- НАСТРОЙКИ -->
+
+<div id="settingsModal" class="modal-overlay hidden">
+
+  <div class="modal">
+
+    <button
+      class="modal-close"
+      data-close="settingsModal"
+      type="button"
+      aria-label="Закрыть"
+    >
+      ×
+    </button>
+
+    <h2>Настройки</h2>
+
+    <label class="setting-row">
+      <span>
+        <b>Временные чаты</b>
+        <small>Не сохранять историю чата</small>
+      </span>
+
+      <input id="temporarySetting" type="checkbox">
+    </label>
+
+    <label class="setting-row">
+      <span>
+        <b>Расширенные функции</b>
+        <small>Инструменты создания контента</small>
+      </span>
+
+      <input id="advancedSetting" type="checkbox" checked>
+    </label>
+
+    <div id="settingsError" class="form-error"></div>
+
+    <button
+      id="saveSettingsBtn"
+      class="primary-btn"
+      type="button"
+    >
+      Сохранить
+    </button>
+
+  </div>
+</div>
+
+
+<!-- ИНСТРУМЕНТЫ -->
+
+<div id="toolsModal" class="modal-overlay hidden">
+
+  <div class="modal tools-modal">
+
+    <button
+      class="modal-close"
+      data-close="toolsModal"
+      type="button"
+      aria-label="Закрыть"
+    >
+      ×
+    </button>
+
+    <h2>Инструменты</h2>
+
+    <p class="modal-description">
+      Выбери функцию, с которой хочешь работать.
+    </p>
+
+    <div class="tools-grid">
+
+      <button type="button" class="tool-card" data-tool="image">
+        <span>▧</span>
+        <b>Фото</b>
+        <small>Создание изображений</small>
+      </button>
+
+      <button type="button" class="tool-card" data-tool="video">
+        <span>▶</span>
+        <b>Видео</b>
+        <small>Создание видео</small>
+      </button>
+
+      <button type="button" class="tool-card" data-tool="music">
+        <span>♫</span>
+        <b>Музыка</b>
+        <small>Создание музыки</small>
+      </button>
+
+      <button type="button" class="tool-card" data-tool="model3d">
+        <span>◇</span>
+        <b>3D-модель</b>
+        <small>Подготовка 3D-моделей</small>
+      </button>
+
+      <button type="button" class="tool-card" data-tool="website">
+        <span>▣</span>
+        <b>Сайт</b>
+        <small>HTML, CSS, JS</small>
+      </button>
+
+      <button type="button" class="tool-card" data-tool="code">
+        <span>&lt;/&gt;</span>
+        <b>Код</b>
+        <small>Режим программирования</small>
+      </button>
+
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ФАЙЛ -->
+
+<div id="fileModal" class="modal-overlay hidden">
+
+  <div class="modal">
+
+    <button
+      class="modal-close"
+      data-close="fileModal"
+      type="button"
+      aria-label="Закрыть"
+    >
+      ×
+    </button>
+
+    <h2>Файл добавлен</h2>
+
+    <div id="fileInfo" class="file-info"></div>
+
+    <button
+      id="fileConfirmBtn"
+      class="primary-btn"
+      type="button"
+    >
+      Использовать в чате
+    </button>
+
+  </div>
+</div>
+
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="./script.js" defer></script>
+
+</body>
+</html>
