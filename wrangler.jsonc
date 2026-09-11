@@ -1,22 +1,27 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-
   "name": "neuro-chat",
   "main": "worker.js",
   "compatibility_date": "2026-09-10",
-
   "workers_dev": true,
 
   "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+
+  "ai": {
+    "binding": "AI"
   },
 
   "durable_objects": {
     "bindings": [
       {
-        "name": "STATE",
-        "class_name": "NeuroState"
+        "name": "NEURO_DB",
+        "class_name": "NeuroDB"
       }
     ]
   },
@@ -25,12 +30,8 @@
     {
       "tag": "v1",
       "new_sqlite_classes": [
-        "NeuroState"
+        "NeuroDB"
       ]
     }
-  ],
-
-  "ai": {
-    "binding": "AI"
-  }
+  ]
 }
